@@ -1,0 +1,39 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: Build sdist + wheel
+        run: uv build
+      - name: Build standalone binary
+        run: |
+          uv sync
+          uv run pyinstaller --noconfirm hatty.spec
+          mv dist/hatty "dist/hatty-linux-$(uname -m)"
+      # Plain API calls instead of gitea.com/actions/release-action: that action is
+      # a Go-type action the runner can't execute (exit 126).
+      - name: Create release and attach artifacts
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          case "$TAG" in v0.*) prerelease=true ;; *) prerelease=false ;; esac
+          release_id=$(curl -sSf -X POST "$API/releases" \
+            -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"$TAG\",\"prerelease\":$prerelease}" \
+            | uv run python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          for f in dist/*.whl dist/*.tar.gz dist/hatty-linux-*; do
+            curl -sSf -X POST "$API/releases/$release_id/assets?name=$(basename "$f")" \
+              -H "Authorization: token $TOKEN" -F "attachment=@$f" -o /dev/null
+            echo "attached $f"
+          done

@@ -1,0 +1,168 @@
+# hatty — MIT License. See LICENSE file for details.
+"""Shared application constants.
+
+Single home for the HA-domain/state knowledge and display defaults that were
+previously scattered across whichever module first needed them. This module
+must not import anything from the app so it stays cycle-safe.
+"""
+
+# Domains whose entities can be flipped with a plain homeassistant.toggle-style
+# turn_on/turn_off pair (enter on the entities table). "media_player" is also here,
+# but its enter behavior is media_play_pause, not turn_on/turn_off — see the
+# media_player carve-out at the top of HACLI.toggle_entity.
+TOGGLABLE_DOMAINS = {"switch", "light", "fan", "media_player"}
+
+# Domains with an attribute-editing UI. "light" and "media_player" are routed to
+# their own dedicated live-apply screens (ui/controls/light_screen.py,
+# ui/controls/media_player_screen.py) by main.py; the EntityControlPopup handles
+# the remaining simple field-based domains.
+CONTROLLABLE_DOMAINS = {"light", "fan", "climate", "cover", "input_number", "lock", "media_player"}
+
+# Home Assistant MediaPlayerEntityFeature bitmask (only the flags we gate on).
+MEDIA_FEAT = {
+    "pause": 1,
+    "seek": 2,
+    "volume_set": 4,
+    "volume_mute": 8,
+    "previous_track": 16,
+    "next_track": 32,
+    "turn_on": 128,
+    "turn_off": 256,
+    "volume_step": 1024,
+    "select_source": 2048,
+    "stop": 4096,
+    "play": 16384,
+    "shuffle_set": 32768,
+    "select_sound_mode": 65536,
+    "repeat_set": 262144,
+}
+
+
+def media_supports(features: int | None, flag: str) -> bool:
+    """Whether a media_player's supported_features bitmask has `flag` set."""
+    return bool((features or 0) & MEDIA_FEAT[flag])
+
+
+# Home Assistant WeatherEntityFeature bitmask — which weather.get_forecasts
+# `type` values (used verbatim as the service call's "type" field) an entity
+# supports. Order here doubles as the preferred default when several are set.
+WEATHER_FEAT = {
+    "forecast_daily": 1,
+    "forecast_hourly": 2,
+    "forecast_twice_daily": 4,
+}
+
+
+def weather_supports(features: int | None, flag: str) -> bool:
+    """Whether a weather entity's supported_features bitmask has `flag` set."""
+    return bool((features or 0) & WEATHER_FEAT[flag])
+
+
+def supported_forecast_types(features: int | None) -> list[str]:
+    """The weather.get_forecasts `type` strings this entity's supported_features
+    bitmask advertises, in preferred-default order (daily, twice_daily, hourly).
+    Empty when the entity advertises no forecast support at all."""
+    types = []
+    if weather_supports(features, "forecast_daily"):
+        types.append("daily")
+    if weather_supports(features, "forecast_twice_daily"):
+        types.append("twice_daily")
+    if weather_supports(features, "forecast_hourly"):
+        types.append("hourly")
+    return types
+
+
+NUMERIC_INPUT_TYPES = {"integer", "number"}
+
+# Binary entity states -> graphable values; anything else
+# (unavailable/unknown) is dropped.
+BINARY_STATE_MAP = {"on": 1.0, "off": 0.0}
+
+# Dashboard slot widget types offered by DashboardSlotPopup ("split" is not
+# assignable — split slots are created via SplitSlotPopup).
+WIDGET_TYPES = [
+    "graph",
+    "gauge",
+    "switch",
+    "light",
+    "fan",
+    "thermostat",
+    "cover",
+    "lock",
+    "media_player",
+    "sensor",
+    "binary_sensor",
+    "weather",
+    "panel",
+]
+
+# widget_type -> domain its entity picker should be restricted to; absent = unrestricted (panel),
+# "graph"/"gauge" are handled separately since they filter by numeric state rather than domain.
+# Every new WIDGET_TYPES entry must get a mapping here or an explicit carve-out above.
+WIDGET_TYPE_DOMAINS = {
+    "switch": "switch",
+    "light": "light",
+    "fan": "fan",
+    "thermostat": "climate",
+    "cover": "cover",
+    "lock": "lock",
+    "media_player": "media_player",
+    "sensor": "sensor",
+    "binary_sensor": "binary_sensor",
+    "weather": "weather",
+}
+
+# Entity table columns shown when the config carries no "columns" key.
+DEFAULT_COLUMNS = ["name", "value", "last_changed", "in_list"]
+
+# Fallback for the global "graph_hours" config value.
+DEFAULT_GRAPH_HOURS = 4
+
+# Canonical names for the top-level app_config keys, so a rename is one edit and a
+# typo is a NameError instead of a silent None. config.default_config() and
+# storage.PERSISTED reference these, keeping them the single literal definition.
+# NOTE: "graph_type"/"hours" also appear as keys *inside* saved-graph entry dicts
+# (a different namespace — storage.py, controllers/graphs.py); do NOT reuse
+# CONFIG_KEY_GRAPH_TYPE there.
+CONFIG_KEY_HOME_ASSISTANT = "home_assistant"
+CONFIG_KEY_URL = "url"
+CONFIG_KEY_TOKEN = "token"
+CONFIG_KEY_COLUMNS = "columns"
+CONFIG_KEY_THEME = "theme"
+CONFIG_KEY_GRAPH_TYPE = "graph_type"
+CONFIG_KEY_GRAPH_HOURS = "graph_hours"
+CONFIG_KEY_LISTS = "lists"
+CONFIG_KEY_DEFAULT_LIST = "default_list"
+CONFIG_KEY_DASHBOARDS = "dashboards"
+CONFIG_KEY_DEFAULT_DASHBOARD = "default_dashboard"
+CONFIG_KEY_SAVED_GRAPHS = "saved_graphs"
+CONFIG_KEY_ENTITY_NAMES = "entity_names"
+CONFIG_KEY_MANUAL_LISTS = "manual_lists"
+CONFIG_KEY_NOTIFICATIONS = "notifications"
+CONFIG_KEY_TERMINAL_TITLE_ENABLED = "terminal_title_enabled"
+CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
+
+# Fallback/default value for the "terminal_title" config key (issue: set tmux
+# title to hatty or pref).
+DEFAULT_TERMINAL_TITLE = "hatty"
+
+# Reserved list name (issue #224) holding the entities watched for change alerts.
+# Reuses the entity_lists schema (space to add/remove, undo/redo, etc.) but can't
+# be renamed or deleted (see ListController/ListSelectionPopup guards), and is only
+# shown in list_names while notifications are enabled (NotificationController.sync).
+NOTIFY_LIST_NAME = "\U0001f514 Notifications"
+
+# Default notification preferences (config key "notifications"), merged over by
+# NotificationController whenever a config predates a given key.
+DEFAULT_NOTIFICATIONS = {
+    "enabled": True,
+    "toast": True,
+    "beep": True,
+    "desktop": False,
+    "ntfy": False,
+    "highlight": True,
+    "ntfy_url": "https://ntfy.sh",
+    "ntfy_topic": "",
+    "ntfy_username": "",
+    "ntfy_password": "",
+}

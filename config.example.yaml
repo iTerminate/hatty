@@ -1,0 +1,13 @@
+# hatty config: connection settings + display preferences only.
+# Your lists, entity-name overrides, dashboards and saved graphs are stored in a
+# SQLite database next to this file (hatty.db) — you don't edit them here.
+# Tip: you can skip this file entirely and let the first-run setup wizard create it.
+home_assistant:
+  # Prefer an https:// URL: with http:// the long-lived token below is sent
+  # unencrypted and anyone on the network path can capture it.
+  url: "http://homeassistant.local:8123"
+  token: "YOUR_LONG_LIVED_ACCESS_TOKEN"
+columns: ["name", "value", "last_changed", "in_list"]
+theme: null
+graph_type: line
+graph_hours: 4

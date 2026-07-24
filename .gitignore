@@ -1,0 +1,14 @@
+.venv
+*.pyc
+dist/
+build/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+config.yaml
+hatty.db
+hatty.db-wal
+hatty.db-shm
+debug.log
+wiki/
