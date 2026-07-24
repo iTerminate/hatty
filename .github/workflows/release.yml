@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - name: Build sdist + wheel
+        run: uv build
+      - name: Build standalone binary
+        run: |
+          sbin/build-binary.sh
+          mv dist/hatty "dist/hatty-linux-$(uname -m)"
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            v0.*) prerelease_flag="--prerelease" ;;
+            *) prerelease_flag="" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.whl dist/*.tar.gz dist/hatty-linux-* \
+            --title "$GITHUB_REF_NAME" $prerelease_flag --generate-notes
