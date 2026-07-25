@@ -144,7 +144,9 @@ class FakeHAClient:
     ) -> list[dict] | None:
         return self._climate_history_data.get(entity_id, [])
 
-    async def fetch_logbook(self, entity_ids: list[str], hours: int = 24) -> list[dict] | None:
+    async def fetch_logbook(
+        self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
+    ) -> list[dict] | None:
         return list(self._logbook_data)
 
     async def fetch_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict] | None:

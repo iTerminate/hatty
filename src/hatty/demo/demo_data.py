@@ -392,17 +392,17 @@ def demo_climate_history(
     return pts
 
 
-def demo_logbook(entity_ids: list[str], hours: int = 24) -> list[dict]:
+def demo_logbook(entity_ids: list[str], hours: float = 24, end: datetime | None = None) -> list[dict]:
     """A handful of plausible activity entries for the given entities."""
     names = {e["entity_id"]: e["attributes"].get("friendly_name", e["entity_id"]) for e in demo_entities()}
     targets = entity_ids or list(names)
     rng = random.Random(1234)
-    end = _now()
+    end = end or _now()
     entries: list[dict] = []
     for entity_id in targets:
         name = names.get(entity_id, entity_id)
         for _ in range(rng.randint(1, 3)):
-            when = end - timedelta(minutes=rng.randint(1, hours * 60))
+            when = end - timedelta(minutes=rng.randint(1, max(1, int(hours * 60))))
             state = rng.choice(["on", "off", "open", "closed"])
             entries.append({"when": _iso(when), "name": name, "state": state})
     entries.sort(key=lambda x: x["when"], reverse=True)

@@ -1,4 +1,13 @@
 # hatty — MIT License. See LICENSE file for details.
+"""The activity log side panel: a docked, togglable log of Home Assistant
+logbook entries, hosted both on the main entity table (`a`/`A`/`i` — list,
+device, single-entity scope) and on the fullscreen graph screen (`a`, its
+events additionally marked on the plot).
+
+The panel itself is dumb — a title, a scrolling `Log`, and a bottom hint line
+(`set_hint`) the host screen fills in with its own keys, since the two hosts
+offer different actions around it (`f` maximize only exists on the main
+screen). Scope, time-window paging and live-append all live on the host."""
 from datetime import datetime, timezone
 
 from textual.app import ComposeResult
@@ -30,14 +39,23 @@ class ActivityLogPanel(Widget):
     ActivityLogPanel #log_widget {
         height: 1fr;
     }
+    ActivityLogPanel #log_hint {
+        dock: bottom;
+        height: 1;
+        color: $text-muted;
+    }
     """
 
     def compose(self) -> ComposeResult:
         yield Label("Activity Log", id="log_title")
         yield Log(max_lines=2000, id="log_widget", auto_scroll=True)
+        yield Label("", id="log_hint")
 
     def set_title(self, text: str) -> None:
         self.query_one("#log_title", Label).update(text)
+
+    def set_hint(self, text: str) -> None:
+        self.query_one("#log_hint", Label).update(text)
 
     def add_entry(self, name: str, state: str, when: str) -> None:
         self.query_one("#log_widget", Log).write_line(f"[{when}] {name} → {state}")

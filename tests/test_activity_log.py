@@ -32,6 +32,17 @@ async def test_a_again_closes_activity_log_panel(make_app):
         assert not panel.has_class("-visible")
 
 
+async def test_activity_log_hint_mentions_maximize_key(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        hint = str(panel.query_one("#log_hint", Label).content)
+        assert "f" in hint and "maximize" in hint
+
+
 async def test_activity_log_title_shows_current_list(make_app):
     app = make_app()
     async with app.run_test() as pilot:

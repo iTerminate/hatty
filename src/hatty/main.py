@@ -762,12 +762,15 @@ class HACLI(App):
             return
         log_panel.toggle_class("-maximized")
 
+    _LOG_HINT = "f maximize · ←/→ older/newer · T timeframe · a/A/i close"
+
     def _open_log_panel(self, entity_ids: list[str], title: str) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         self._log_generation += 1
         current_gen = self._log_generation
         self._log_entity_ids = set(entity_ids)
         log_panel.set_title(title)
+        log_panel.set_hint(self._LOG_HINT)
         log_panel.clear()
         log_panel.remove_class("-maximized")
         log_panel.add_class("-visible")

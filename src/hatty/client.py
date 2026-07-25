@@ -265,10 +265,13 @@ class HAClient:
         forecast = data.get("service_response", {}).get(entity_id, {}).get("forecast")
         return forecast if isinstance(forecast, list) else None
 
-    async def fetch_logbook(self, entity_ids: list[str], hours: int = 24) -> list[dict] | None:
-        start = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    async def fetch_logbook(
+        self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
+    ) -> list[dict] | None:
+        end = end or datetime.now(timezone.utc)
+        start = (end - timedelta(hours=hours)).isoformat()
         url = f"{self.base_url}/api/logbook/{start}"
-        params: dict = {}
+        params: dict = {"end_time": end.isoformat()}
         if entity_ids:
             params["entity_id"] = ",".join(entity_ids)
         data = await self._get_json(url, params, "fetch_logbook")
