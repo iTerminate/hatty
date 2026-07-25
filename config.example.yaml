@@ -11,3 +11,4 @@ columns: ["name", "value", "last_changed", "in_list"]
 theme: null
 graph_type: line
 graph_hours: 4
+log_hours: 24

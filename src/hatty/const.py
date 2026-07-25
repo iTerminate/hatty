@@ -118,6 +118,9 @@ DEFAULT_COLUMNS = ["name", "value", "last_changed", "in_list"]
 # Fallback for the global "graph_hours" config value.
 DEFAULT_GRAPH_HOURS = 4
 
+# Fallback for the global "log_hours" config value (the activity log's window size).
+DEFAULT_LOG_HOURS = 24
+
 # Canonical names for the top-level app_config keys, so a rename is one edit and a
 # typo is a NameError instead of a silent None. config.default_config() and
 # storage.PERSISTED reference these, keeping them the single literal definition.
@@ -131,6 +134,7 @@ CONFIG_KEY_COLUMNS = "columns"
 CONFIG_KEY_THEME = "theme"
 CONFIG_KEY_GRAPH_TYPE = "graph_type"
 CONFIG_KEY_GRAPH_HOURS = "graph_hours"
+CONFIG_KEY_LOG_HOURS = "log_hours"
 CONFIG_KEY_LISTS = "lists"
 CONFIG_KEY_DEFAULT_LIST = "default_list"
 CONFIG_KEY_DASHBOARDS = "dashboards"

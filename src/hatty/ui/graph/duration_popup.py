@@ -50,9 +50,10 @@ class GraphDurationPopup(PopupScreen):
     }
     """
 
-    def __init__(self, current_hours: float):
+    def __init__(self, current_hours: float, title: str = "Graph Timeframe"):
         super().__init__()
         self._current_hours = current_hours
+        self._title = title
         self._preset_hours = {h for h, _ in _DURATION_OPTIONS}
 
     def compose(self) -> ComposeResult:
@@ -60,7 +61,7 @@ class GraphDurationPopup(PopupScreen):
         custom_hours, custom_minutes = ("", "") if is_preset else _split_hours(self._current_hours)
 
         with Container(id="duration_container", classes="popup-container"):
-            yield Label("Graph Timeframe")
+            yield Label(self._title)
             with RadioSet():
                 for hours, label in _DURATION_OPTIONS:
                     yield RadioButton(label, value=(is_preset and hours == self._current_hours))

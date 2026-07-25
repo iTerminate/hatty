@@ -1,5 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -21,6 +22,7 @@ from hatty.const import (
     CONFIG_KEY_GRAPH_TYPE,
     CONFIG_KEY_HOME_ASSISTANT,
     CONFIG_KEY_LISTS,
+    CONFIG_KEY_LOG_HOURS,
     CONFIG_KEY_MANUAL_LISTS,
     CONFIG_KEY_SAVED_GRAPHS,
     CONFIG_KEY_TERMINAL_TITLE,
@@ -31,6 +33,7 @@ from hatty.const import (
     CONTROLLABLE_DOMAINS,
     DEFAULT_COLUMNS,
     DEFAULT_GRAPH_HOURS,
+    DEFAULT_LOG_HOURS,
     DEFAULT_TERMINAL_TITLE,
     TOGGLABLE_DOMAINS,
 )
@@ -98,7 +101,10 @@ class HACLI(App):
         Binding("c", "show_column_config", "Columns", show=False),
         Binding("a", "toggle_activity_log", "Activity Log", show=False),
         Binding("A", "toggle_device_log", "Device Log", show=False),
+        Binding("i", "toggle_entity_log", "Entity Log", show=False),
         Binding("f", "maximize_log", "Maximize Log", show=False),
+        Binding("left", "log_older", "Older Events", show=False, priority=True),
+        Binding("right", "log_newer", "Newer Events", show=False, priority=True),
         Binding("g", "toggle_graph", "Graph", show=False),
         Binding("G", "graph_fullscreen", "Full Graph", show=False),
         Binding("+", "add_to_graph", "Compare", show=False),
@@ -148,8 +154,11 @@ class HACLI(App):
         self.ha_url = ""
         self.current_view = "entities"
         self._log_entity_ids: set[str] = set()
+        self._log_query_ids: list[str] = []
         self._log_generation: int = 0
-        self._log_mode: str = "entity"
+        self._log_mode: str = "list"
+        self._log_title_base: str = ""
+        self._log_end: datetime | None = None
         self._update_pending = False
         self.pending_call_status: dict[str, str] = {}
         self._pending_call_timers: dict[str, Timer] = {}
@@ -179,6 +188,10 @@ class HACLI(App):
     @property
     def graph_hours(self) -> float:
         return self.app_config.get(CONFIG_KEY_GRAPH_HOURS, DEFAULT_GRAPH_HOURS)
+
+    @property
+    def log_hours(self) -> float:
+        return self.app_config.get(CONFIG_KEY_LOG_HOURS, DEFAULT_LOG_HOURS)
 
     # ── Domain state lives on the controllers; these proxies preserve the app's
     #    historical surface — screens and tests read *and assign* these directly.
@@ -753,7 +766,9 @@ class HACLI(App):
         log_panel.remove_class("-visible")
         log_panel.remove_class("-maximized")
         self._log_entity_ids.clear()
-        self._log_mode = "entity"
+        self._log_query_ids = []
+        self._log_mode = "list"
+        self._log_end = None
         self.refresh_bindings()
 
     def action_maximize_log(self) -> None:
@@ -764,18 +779,56 @@ class HACLI(App):
 
     _LOG_HINT = "f maximize · ←/→ older/newer · T timeframe · a/A/i close"
 
+    @staticmethod
+    def _format_log_hours(hours: float) -> str:
+        return f"{int(hours)}h" if hours == int(hours) else f"{hours:.1f}h"
+
+    def _log_range_suffix(self) -> str:
+        """`(last Xh)` while live, or the paged-back window's full start–end
+        range — mirrors the fullscreen graph's window-status suffix."""
+        from hatty.ui.graph.plot_time import ts_to_full
+
+        if self._log_end is None:
+            return f"  (last {self._format_log_hours(self.log_hours)})"
+        end = self._log_end
+        start = end - timedelta(hours=self.log_hours)
+        return f"  ({ts_to_full(start.isoformat())} – {ts_to_full(end.isoformat())})"
+
+    def _set_log_title(self) -> None:
+        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
+        log_panel.set_title(self._log_title_base + self._log_range_suffix())
+
     def _open_log_panel(self, entity_ids: list[str], title: str) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        self._log_generation += 1
-        current_gen = self._log_generation
         self._log_entity_ids = set(entity_ids)
-        log_panel.set_title(title)
+        self._log_query_ids = list(entity_ids)
+        self._log_end = None
+        self._log_title_base = title
         log_panel.set_hint(self._LOG_HINT)
         log_panel.clear()
         log_panel.remove_class("-maximized")
         log_panel.add_class("-visible")
         self.refresh_bindings()
-        self.spawn(self._load_activity_log(entity_ids, current_gen))
+        self._reload_log()
+
+    def _reload_log(self) -> None:
+        self._log_generation += 1
+        current_gen = self._log_generation
+        self._set_log_title()
+        self.spawn(self._load_activity_log(self._log_query_ids, current_gen))
+
+    def action_log_older(self) -> None:
+        now = datetime.now(timezone.utc)
+        self._log_end = (self._log_end or now) - timedelta(hours=self.log_hours)
+        self._reload_log()
+
+    def action_log_newer(self) -> None:
+        if self._log_end is None:
+            return
+        now = datetime.now(timezone.utc)
+        new_end = self._log_end + timedelta(hours=self.log_hours)
+        self._log_end = None if new_end >= now else new_end
+        self._reload_log()
 
     # A device log covering a whole list can expand to many sibling entities; cap
     # the set so a single logbook GET's entity_id= param can't blow up.
@@ -863,7 +916,7 @@ class HACLI(App):
             self.notify("No entities to log. Select a list or add entities.", severity="warning")
             return
 
-        self._log_mode = "entity"
+        self._log_mode = "list"
         self._open_log_panel(entity_ids, title)
 
     def action_toggle_device_log(self) -> None:
@@ -912,6 +965,27 @@ class HACLI(App):
 
         self._open_log_panel(entity_ids, f"Device Log — {label}")
 
+    def action_toggle_entity_log(self) -> None:
+        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
+
+        if log_panel.has_class("-visible"):
+            self._close_log_panel()
+            return
+
+        if self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
+            self.graph_ctl.close_panel()
+
+        entity_id = self._selected_entity_id()
+        if not entity_id:
+            self.notify("No entity selected.", title="Activity Log", severity="warning")
+            return
+
+        entity = self.find_entity(entity_id)
+        label = get_display_name(entity) if entity else entity_id
+
+        self._log_mode = "entity"
+        self._open_log_panel([entity_id], f"Activity Log — {label}")
+
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         if self._detail_entity_id is None:
             return
@@ -937,7 +1011,7 @@ class HACLI(App):
             self.toggle_or_open_controls(entity_id)
 
     async def _load_activity_log(self, entity_ids: list[str], generation: int) -> None:
-        entries = await self.client.fetch_logbook(entity_ids)
+        entries = await self.client.fetch_logbook(entity_ids, hours=self.log_hours, end=self._log_end)
         panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if not panel.has_class("-visible") or self._log_generation != generation:
             return
@@ -957,6 +1031,13 @@ class HACLI(App):
     def action_show_graph_duration(self) -> None:
         from hatty.ui.graph.duration_popup import GraphDurationPopup
 
+        # The two panels are mutually exclusive (opening either closes the
+        # other), so `T` unambiguously targets whichever is open — the
+        # activity log's timeframe when it's visible, the graph's otherwise.
+        if self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible"):
+            self._show_log_duration_popup()
+            return
+
         current = self.graph_hours
 
         def callback(hours: float | None) -> None:
@@ -967,6 +1048,20 @@ class HACLI(App):
             self._on_graph_hours_changed()
 
         self.push_screen(GraphDurationPopup(current), callback)
+
+    def _show_log_duration_popup(self) -> None:
+        from hatty.ui.graph.duration_popup import GraphDurationPopup
+
+        current = self.log_hours
+
+        def callback(hours: float | None) -> None:
+            if hours is None:
+                return
+            self.app_config[CONFIG_KEY_LOG_HOURS] = hours
+            self.persist()
+            self._reload_log()
+
+        self.push_screen(GraphDurationPopup(current, title="Activity Log Timeframe"), callback)
 
     def _on_graph_hours_changed(self) -> None:
         self.graph_ctl.on_graph_hours_changed()
@@ -1062,7 +1157,10 @@ class HACLI(App):
         "show_column_config",
         "toggle_activity_log",
         "toggle_device_log",
+        "toggle_entity_log",
         "maximize_log",
+        "log_older",
+        "log_newer",
         "toggle_graph",
         "add_to_graph",
         "show_list_selection_popup",
@@ -1122,6 +1220,11 @@ class HACLI(App):
             return panel.has_class("-visible")
         elif action == "maximize_log":
             return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
+        elif action == "log_older":
+            return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
+        elif action == "log_newer":
+            log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
+            return log_panel.has_class("-visible") and self._log_end is not None
         elif action == "toggle_graph":
             panel = self.query_one("#detail_panel", EntityDetailPanel)
             if panel.has_class("-visible"):
@@ -1133,6 +1236,7 @@ class HACLI(App):
             "toggle_list_membership",
             "rename_entity",
             "toggle_device_log",
+            "toggle_entity_log",
         ):
             entity_id = self._selected_entity_id()
             entity = self.find_entity(entity_id) if entity_id else None

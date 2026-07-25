@@ -72,6 +72,7 @@ class FakeHAClient:
         self._history_data: dict = {}
         self._climate_history_data: dict = {}
         self._logbook_data: list[dict] = []
+        self.logbook_calls: list[tuple[list[str], float, "datetime | None"]] = []
         self._forecast_data: dict[str, dict[str, list[dict]]] = {}
         self.forecast_calls: list[tuple[str, str]] = []
         self._closing = False
@@ -147,6 +148,7 @@ class FakeHAClient:
     async def fetch_logbook(
         self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
     ) -> list[dict] | None:
+        self.logbook_calls.append((list(entity_ids), hours, end))
         return list(self._logbook_data)
 
     async def fetch_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict] | None:
