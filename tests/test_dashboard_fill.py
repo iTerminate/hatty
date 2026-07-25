@@ -132,10 +132,11 @@ async def test_fill_cancel_leaves_pane_untouched(make_app, open_dashboard):
         assert app.dashboards["Main"]["slots"] == []
 
 
-async def test_panel_added_box_reorders_with_shift_down(make_app, open_dashboard):
+async def test_panel_added_box_reorders_and_removes(make_app, open_dashboard):
     """The accumulated-entities scroll box (issue #254) is shared by panel and
     fill; exercising it via fill covers both since they funnel through the same
-    _is_multi_add() code path."""
+    _is_multi_add() code path. Reorder and remove are exercised back to back
+    on the same popup since neither leaves state the other depends on."""
     app = make_app()
     async with app.run_test() as pilot:
         await open_dashboard(pilot)
@@ -168,28 +169,15 @@ async def test_panel_added_box_reorders_with_shift_down(make_app, open_dashboard
         await pilot.pause()
         assert popup._panel_entity_ids == ["light.kitchen_light", "light.living_room_lamp"]
 
-
-async def test_panel_added_box_removes_with_delete(make_app, open_dashboard):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await open_dashboard(pilot)
-        await pilot.press("E")
-        await pilot.press("f")
-        await pilot.pause()
-        popup = app.screen
-        assert isinstance(popup, DashboardSlotPopup)
-
-        await _fill_two_lights(pilot, popup)
-
-        list_view = popup.query_one("#panel_added_list", ListView)
+        # delete removes the focused entry from the box.
         list_view.focus()
         list_view.index = 0
         await pilot.pause()
         await pilot.press("delete")
         await pilot.pause()
 
-        assert popup._panel_entity_ids == ["light.kitchen_light"]
-        assert _panel_list_labels(popup) == ["Kitchen Light"]
+        assert popup._panel_entity_ids == ["light.living_room_lamp"]
+        assert _panel_list_labels(popup) == ["Living Room Lamp"]
 
         await pilot.press("delete")
         await pilot.pause()

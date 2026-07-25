@@ -99,36 +99,24 @@ async def test_e_noop_for_noncontrollable_nonnumeric_entity(make_app, sample_ent
         assert not isinstance(app.screen, EntityControlPopup)
 
 
-async def test_check_action_expand_entity_false_for_noncontrollable_nonnumeric(make_app, sample_entities):
+async def test_check_action_expand_entity_by_row_kind(make_app, sample_entities):
+    """check_action is read-only, so one boot can walk the cursor across rows
+    of each kind rather than booting separately per row."""
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(0, 0)  # switch.fan
-        await pilot.pause()
 
+        table.cursor_coordinate = Coordinate(0, 0)  # switch.fan: noncontrollable, nonnumeric
+        await pilot.pause()
         assert app.check_action("expand_entity", ()) is False
 
-
-async def test_check_action_expand_entity_true_for_numeric_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature: numeric
         await pilot.pause()
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
-        await pilot.pause()
-
         assert app.check_action("expand_entity", ()) is True
 
-
-async def test_check_action_expand_entity_true_for_controllable_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
+        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light: controllable
         await pilot.pause()
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light
-        await pilot.pause()
-
         assert app.check_action("expand_entity", ()) is True
 
 
@@ -260,7 +248,22 @@ async def test_cursor_follow_backfills_history_for_new_entity(make_app):
         assert len(history) >= 4
 
 
-async def test_t_cycles_graph_type_label(make_app, sample_entities):
+async def test_t_check_action_false_when_panel_closed(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.check_action("cycle_graph_type", ()) is False
+
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+
+        assert app.check_action("cycle_graph_type", ()) is True
+
+
+async def test_t_cycles_graph_modes_and_title_label(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -283,19 +286,31 @@ async def test_t_cycles_graph_type_label(make_app, sample_entities):
 
         panel = app.query_one(EntityDetailPanel)
         title = panel.query_one("#detail_title")
+        sparkline = panel.query_one("#detail_sparkline", Sparkline)
+
+        # starts at mode 3 (plotext Line), sparkline hidden
         assert "[Line]" in str(title.content)
+        assert panel._mode_index == 3
+        assert not sparkline.display
 
         await pilot.press("t")
         await pilot.pause()
         assert "[Scatter]" in str(title.content)
+        assert panel._mode_index == 4
 
+        # wraps into the first sparkline mode (Max), sparkline shown again
         await pilot.press("t")
         await pilot.pause()
         assert "[Max]" in str(title.content)
+        assert panel._mode_index == 0
+        assert sparkline.display
+        assert sparkline.summary_function is max
 
         await pilot.press("t")
         await pilot.pause()
         assert "[Min]" in str(title.content)
+        assert panel._mode_index == 1
+        assert sparkline.summary_function is min
 
         await pilot.press("t")
         await pilot.pause()
@@ -305,53 +320,4 @@ async def test_t_cycles_graph_type_label(make_app, sample_entities):
         await pilot.press("t")
         await pilot.pause()
         assert "[Line]" in str(title.content)
-
-
-async def test_t_check_action_false_when_panel_closed(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        assert app.check_action("cycle_graph_type", ()) is False
-
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
-        await pilot.pause()
-        await pilot.press("g")
-        await pilot.pause()
-
-        assert app.check_action("cycle_graph_type", ()) is True
-
-
-async def test_t_cycles_graph_modes(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
-        await pilot.pause()
-        await pilot.press("g")
-        await pilot.pause()
-
-        panel = app.query_one(EntityDetailPanel)
-        # starts at mode 3 (plotext Line), sparkline hidden
         assert panel._mode_index == 3
-        sparkline = panel.query_one("#detail_sparkline", Sparkline)
-        assert not sparkline.display
-
-        # cycle through the remaining plotext modes
-        await pilot.press("t")
-        await pilot.pause()
-        assert panel._mode_index == 4  # Scatter
-
-        # wraps into the first sparkline mode (Max), sparkline shown again
-        await pilot.press("t")
-        await pilot.pause()
-        assert panel._mode_index == 0  # sparkline Max
-        assert sparkline.display
-        assert sparkline.summary_function is max
-
-        # cycle to mode 1 (sparkline Min)
-        await pilot.press("t")
-        await pilot.pause()
-        assert panel._mode_index == 1
-        assert sparkline.summary_function is min
