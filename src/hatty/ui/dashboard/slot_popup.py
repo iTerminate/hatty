@@ -1,4 +1,18 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Two-step widget-type + entity picker for assigning a dashboard slot.
+
+One `ModalScreen`, `self._step` is `"type"` or `"entity"`. Step 1 shows only
+the widget-type `Select`; advancing switches to step 2, a live-filtered
+entity picker (reusing `EntitiesTable` for its virtualized rendering) over
+`self.parent.all_entities`, plus a synthetic "no entity" row. `escape` in step
+2 returns to step 1 rather than dismissing the popup.
+
+When the chosen type is `"panel"`, picking a row doesn't dismiss the popup —
+it appends the entity to a running list and keeps the picker open ("pick one,
+add, continue"); a separate done button finishes the flow and dismisses with
+`entity_ids` instead of a single `entity_id`.
+"""
+
 from typing import TYPE_CHECKING, cast
 
 from textual.app import ComposeResult

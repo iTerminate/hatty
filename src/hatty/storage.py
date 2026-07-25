@@ -10,6 +10,19 @@ The app keeps these as in-memory dicts (the same shapes it always used); this
 module is only the load/save boundary. Writes replace a whole collection in one
 transaction — the collections are small (tens of rows), so diffing isn't worth
 it, and a full replace can never leave a half-updated dashboard.
+
+Shapes (see `_SCHEMA` for the actual columns):
+
+- `dashboards`: dict keyed by name, each `{rows, cols, slots: [...]}` — a flat
+  list of `{row, col, widget_type, entity_id}` for occupied cells only. A
+  `panel` slot carries `entity_ids` instead of `entity_id`; a `gauge` slot may
+  add `gauge_min`/`gauge_max`; any slot may add `row_span`/`col_span` (absent =
+  1); a `split` slot carries a `children` fragment — a nested `{rows, cols,
+  slots}` mini-grid whose own slots can't span or nest further.
+- `saved_graphs`: dict keyed by name, each `{entity_ids, graph_type, hours,
+  colors}` — `colors` (optional) maps entity_id → plotext color name.
+- `manual_lists`: a set of list names currently in manual-sort order rather
+  than the default alphabetical-by-display-name sort.
 """
 
 import json
