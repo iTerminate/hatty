@@ -1,4 +1,26 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Dedicated media_player control screen, pushed by `e`.
+
+Modeled on `light_screen.py`'s live-apply approach: no Save/Cancel, `escape`
+flushes any pending debounced field then dismisses. Every control is
+capability-gated by `const.media_supports(supported_features, flag)` against
+HA's `MediaPlayerEntityFeature` bitmask — an unsupported control (a transport
+button, shuffle/repeat, `s` for stop) simply isn't composed or is released via
+`check_action`, so the footer never advertises something the entity can't do.
+
+Layout: title with state glyph + now-playing, a debounced volume slider
+(mirrors the light screen's brightness slider), a transport button row
+(previous/play-pause/stop/next, dispatched immediately, not debounced), and
+`Select` fields for source/sound_mode.
+
+`left`/`right` are pure focus navigation (cycling within the
+transport/toggle button rows, wrapping) rather than value adjustment — except
+for the volume slider and an expanded `Select`'s overlay, which keep their own
+native handling. `up`/`down` are a priority binding that always steps focus
+the same way, so a focused volume slider never swallows them as a value
+change.
+"""
+
 from typing import TYPE_CHECKING
 
 from textual import events

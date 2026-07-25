@@ -1,4 +1,34 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Dashboard grid view, a full (non-modal) `Screen` pushed via `d`.
+
+Renders a `Grid` of slot widgets for the current dashboard. Use mode: arrows
+move a selection cursor (skipping a spanned slot's whole footprint), `enter`
+toggles the slot's entity, `e` opens its controls, `E` enters layout Edit
+mode. Edit mode: `a` assigns a slot's widget type + entity, `delete` clears
+it, `ctrl+arrows` grow/shrink `col_span`/`row_span` (refused on overlap or
+out-of-bounds), grab-move (`enter`) moves a slot's whole footprint and
+refuses misfitting drops.
+
+Some widgets repurpose these keys for in-widget interaction instead of grid
+navigation: `ThermostatSlotWidget` takes `up`/`down` for setpoint, `FanSlotWidget`
+for speed, `PanelSlotWidget` for its internal row cursor (+`enter` to toggle
+the highlighted row), `MediaPlayerSlotWidget` takes `up`/`down` for volume
+*and* `left`/`right` for prev/next track — the only widget that repurposes
+horizontal movement too.
+
+**Split panes**: `s` in edit mode splits the pane at the cursor into a nested
+mini-grid (`SplitSlotPopup`: `v` left/right, `h` top/bottom, `q` quarters);
+the existing widget moves into child (0,0). The cursor becomes a path
+(`_cursor_path`) once inside a split; `enter` descends in Use mode, `a` on a
+split descends in Edit mode (split isn't itself assignable), `escape` ascends
+one level. A grab started outside a split can be carried across split
+boundaries without releasing it (only a top-level `escape` releases a grab) —
+dropping on an empty cell moves, on an occupied one swaps, across grids via
+`DashboardController.move_slot_across`. Splits can't nest and can't land
+inside a child grid. `u` in edit mode unsplits when at most one child is
+occupied.
+"""
+
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING

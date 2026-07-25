@@ -1,20 +1,31 @@
 # hatty — MIT License. See LICENSE file for details.
-"""Device / area tree view (issue #124).
+"""Device / area tree view.
 
-A full-screen `Tree` over the Home Assistant registries with two toggleable
-grouping modes (cycled with `g`):
+A full-screen `Tree` over the Home Assistant registries with three toggleable
+grouping modes (cycled with `v`):
 
-- **device** — a flat Device → Entity tree.
-- **area**   — a nested Area → Device → Entity tree.
+- **device**      — a flat Device → Entity tree.
+- **area**        — a nested Area → Device → Entity tree.
+- **integration** — a nested Integration → Device → Entity tree, keyed off the
+  entity registry's `platform` field.
 
 Areas contain *devices*, not entities, so the area grouping walks
 area → device.area_id → device → entity. An entity's device comes from the
 entity registry's `device_id`; a device's area from the device registry's
-`area_id`. Devices/entities without an area land in an "Unassigned" bucket and
-entities with no backing device in a "No device" bucket.
+`area_id`. Devices/entities without an area/device/platform land in an
+"Unassigned"/"No device"/"No integration" bucket respectively. Areas and
+integrations collapse by default, only auto-expanding under an active filter.
 
-`m` on a device node reassigns it to another area via a real
-`config/device_registry/update` write (see `AreaPickerPopup`).
+`/` opens an embedded search that live-filters the tree; `ctrl+s` cycles the
+match *scope* (all/area/device/entity/integration) so the term can be
+restricted to one node level rather than matching anywhere. `m` on a device
+node reassigns it to another area via a real `config/device_registry/update`
+write (see `AreaPickerPopup`); `a`/`r` create/rename an area (area mode only).
+`n` on an area node quick-creates a dashboard populated from that area's
+entities. `i` opens a read-only registry/device-info popup. Entity leaves:
+`enter` toggles or falls back to opening controls for non-togglable domains,
+`e` opens controls directly, `G` pushes the fullscreen graph, `space` toggles
+list membership without touching the main table's selection.
 """
 
 from typing import TYPE_CHECKING

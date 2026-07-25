@@ -1,4 +1,27 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Dedicated light control screen, pushed by `e` on a light entity.
+
+Live-apply model: every change is queued and dispatched through
+`HACLI.dispatch_entity_control` after a debounce — there is no Save/Cancel,
+`escape` flushes and closes. Since only the touched field is queued, white and
+color edits never send a conflicting `kelvin` + `rgb_color` pair in the same
+call.
+
+Layout: title with power state (`space` toggles), a live color/brightness
+preview bar, an always-visible brightness slider, then a `TabbedContent` with
+only the tabs the light supports — White (kelvin slider + presets), Color
+(swatches + picker), Effects (filtered list). Capability detection reads
+`supported_color_modes`, a fixed attribute present even while the light is
+off — unlike `brightness`/`color_temp`, which only appear once it's on — so
+the available tabs don't flicker based on current power state.
+
+`t` cycles tabs; `left`/`right` adjust a focused slider or cycle within a
+button row when the row itself is focused, but hand off to `Tabs`'/`Input`'s
+own native handling when one of those is focused instead. `up`/`down` are a
+priority binding that always moves focus one step (or one row-block) rather
+than being swallowed by a slider's own arrow handling.
+"""
+
 from typing import TYPE_CHECKING
 
 from textual import events

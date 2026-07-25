@@ -1,4 +1,28 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Fullscreen graph screen, opened with `G`.
+
+Mirrors `graph/entity_detail.py`'s numeric-vs-climate split. Takes a list of
+`entity_ids` (a comparison graph shows several), a `colors` dict (`tab` picks
+the active line, `c` cycles its color, `C` opens the full color picker), and
+an optional `saved_graph_name` (adds the `u` update-in-place action alongside
+`S` save-as).
+
+`GraphWindow` (`window.py`) tracks the paging/live-anchor state: `None` end
+means anchored to "now" with live refresh on incoming state changes; paging
+away from live suppresses those refreshes until paging forward reaches the
+original anchor again. `left`/`right` page by half a window (50% overlap for
+visual continuity); `shift+left`/`shift+right` page by several full windows.
+`+`/`-` zoom the visible span via a screen-local override of the global
+`graph_hours` (never persisted, but carried into `S`/`u` saves); zooming
+always freezes the window and a zoomed window never re-enters live mode when
+paged forward — only `home` snaps back to live and clears the zoom.
+
+`enter` toggles cursor/inspect mode: drops a marker at the selected sample and
+swaps the stats line for every plotted entity's nearest value at that
+timestamp, repurposing `left`/`right`/`shift+left`/`shift+right` to move the
+marker instead of paging (unavailable for climate graphs).
+"""
+
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
