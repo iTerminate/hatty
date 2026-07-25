@@ -77,14 +77,16 @@ def render_numeric(
     width: int,
     *,
     cursor_index: int | None = None,
-) -> None:
+) -> datetime:
     """Plot a numeric line/scatter trace for `primary` plus any non-empty
     `extras`, all sharing one x-origin and time axis.
 
     Owns the shared draw both graph surfaces used to hand-roll: the shared
     x-origin over primary+extras, the `apply_time_axis`, and the per-series
     `plot_numeric_series` calls. When `cursor_index` is given, drops a white
-    inspection vline at the primary series' sample at that index (clamped)."""
+    inspection vline at the primary series' sample at that index (clamped).
+    Returns t0 (the x-origin) so a caller can place further marks (e.g. the
+    fullscreen graph's activity-log event overlay)."""
     _, primary_data, primary_color = primary
     t0 = earliest_t0(primary_data, *(data for _, data, _ in extras))
     to_secs = secs_since(t0)
@@ -104,6 +106,8 @@ def render_numeric(
     if cursor_index is not None and indices:
         cursor_index = max(0, min(len(indices) - 1, cursor_index))
         plt.vline(indices[cursor_index], color="white")
+
+    return t0
 
 
 def set_binary_axis(plt) -> None:
@@ -135,6 +139,26 @@ def render_binary(plt, primary: BinarySeries, extras, *, extend_to: str | None) 
         plt.plot([to_secs(ts) for ts, _ in steps], [v for _, v in steps], label=label, color=color)
     set_binary_axis(plt)
     return t0
+
+
+def render_event_marks(plt, t0: datetime, event_ts: list[str], *, color: str = "magenta", limit: int = 200) -> None:
+    """Vertical markers for logbook events at their x-position relative to
+    `t0` — the fullscreen graph's "events on the graph" overlay (issue #2).
+    Timestamps before `t0` (outside the plotted window) are skipped; a busy
+    window is capped at `limit` marks so it doesn't blanket the plot."""
+    to_secs = secs_since(t0)
+    drawn = 0
+    for ts in event_ts:
+        if drawn >= limit:
+            break
+        try:
+            secs = to_secs(ts)
+        except (ValueError, TypeError):
+            continue
+        if secs < 0:
+            continue
+        plt.vline(secs, color=color)
+        drawn += 1
 
 
 def numeric_stats_line(values: list[float], unit: str) -> str:

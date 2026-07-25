@@ -48,7 +48,16 @@ class ActivityLogPanel(Widget):
 
     def compose(self) -> ComposeResult:
         yield Label("Activity Log", id="log_title")
-        yield Log(max_lines=2000, id="log_widget", auto_scroll=True)
+        log = Log(max_lines=2000, id="log_widget", auto_scroll=True)
+        # Log/ScrollableContainer defaults to can_focus=True with its own
+        # left/right/home/end scroll bindings — a host screen's auto-focus
+        # (Textual scans descendants regardless of `display`, so even hidden
+        # counts) would land here and swallow those keys before the host's
+        # own paging bindings ever see them (the fullscreen graph's `left`/
+        # `right` page the window, not this log). The log is never meant to
+        # take keyboard focus, so keep it out of the focus chain entirely.
+        log.can_focus = False
+        yield log
         yield Label("", id="log_hint")
 
     def set_title(self, text: str) -> None:

@@ -21,6 +21,13 @@ paged forward — only `home` snaps back to live and clears the zoom.
 swaps the stats line for every plotted entity's nearest value at that
 timestamp, repurposing `left`/`right`/`shift+left`/`shift+right` to move the
 marker instead of paging (unavailable for climate graphs).
+
+`a` toggles a docked activity log for the plotted entities (issue #2),
+fetched for the same window the graph is currently showing; paging/zooming
+the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
+it to match. While open, each logged event is additionally marked on the
+plot itself (`plot_render.render_event_marks`) — numeric and binary graphs
+only; climate graphs still show the log list but skip the marks.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -33,6 +40,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Label
 from textual_plotext import PlotextPlot
 
+from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import entity_title, entity_unit, get_display_name
 from hatty.ui.graph.binary_history import binary_stats, value_to_state
 from hatty.ui.graph.plot_render import (
@@ -46,6 +54,7 @@ from hatty.ui.graph.plot_render import (
     plot_width,
     render_binary,
     render_climate,
+    render_event_marks,
     render_numeric,
 )
 from hatty.ui.graph.plot_time import secs_since
@@ -113,6 +122,7 @@ class GraphPreviewScreen(Screen):
         Binding("c", "cycle_color", "Color"),
         Binding("C", "pick_color", "Color Picker"),
         Binding("l", "show_list_popup", "Back to List", show=False),
+        Binding("a", "toggle_event_log", "Activity Log"),
         Binding("question_mark", "show_help", "Help"),
         Binding("escape", "go_back", "Back"),
         Binding("q", "go_back", "Back", show=False),
@@ -151,6 +161,7 @@ class GraphPreviewScreen(Screen):
         self._active_entity_index = 0
         self._cursor_mode = False
         self._cursor_index = 0
+        self._events: list[dict] = []
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -199,6 +210,7 @@ class GraphPreviewScreen(Screen):
         yield Label("", id="preview_title")
         yield PlotextPlot(id="preview_plot")
         yield Label("", id="preview_stats")
+        yield ActivityLogPanel(id="preview_log_panel")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -247,6 +259,7 @@ class GraphPreviewScreen(Screen):
         self._apply_live_window()
         entity = self.app.find_entity(self._entity_id)
         self._update_display(entity)
+        await self._refresh_events_if_open()
 
     async def _load_window(self, end: datetime) -> None:
         hours = self._window_hours()
@@ -258,6 +271,7 @@ class GraphPreviewScreen(Screen):
         self._data = self._all_data.get(self._entity_id, [])
         entity = self.app.find_entity(self._entity_id)
         self._update_display(entity)
+        await self._refresh_events_if_open()
 
     async def _load_climate_and_render(self, preserve_zoom: bool = False) -> None:
         self._window.reset_live(preserve_zoom=preserve_zoom)
@@ -270,6 +284,7 @@ class GraphPreviewScreen(Screen):
             self._climate_data = list(self.app.climate_history.get(self._entity_id, []))
         self._apply_live_climate_window()
         self._update_climate_display()
+        await self._refresh_events_if_open()
 
     def _apply_live_climate_window(self) -> None:
         """Climate analogue of `_apply_live_window` (keyed on the `"ts"` field)."""
@@ -283,6 +298,7 @@ class GraphPreviewScreen(Screen):
         values = await self.app.client.fetch_climate_history(self._entity_id, hours=hours, end=end)
         self._climate_data = values or []
         self._update_climate_display()
+        await self._refresh_events_if_open()
 
     def action_scroll_back(self) -> None:
         if self._cursor_mode:
@@ -479,6 +495,7 @@ class GraphPreviewScreen(Screen):
             if self._cursor_mode:
                 self._cursor_index = max(0, min(len(self._data) - 1, self._cursor_index))
                 plt.vline(secs_since(t0)(self._data[self._cursor_index][0]), color="white")
+            self._draw_event_marks(plt, t0)
             return binary_end_iso
 
         extras = []
@@ -492,7 +509,7 @@ class GraphPreviewScreen(Screen):
             self._cursor_index = max(0, min(len(self._data) - 1, self._cursor_index))
             cursor_index = self._cursor_index
 
-        render_numeric(
+        t0 = render_numeric(
             plt,
             kind,
             (primary_label, self._data, self._colors.get(self._entity_id)),
@@ -500,7 +517,18 @@ class GraphPreviewScreen(Screen):
             self._plot_width(),
             cursor_index=cursor_index,
         )
+        self._draw_event_marks(plt, t0)
         return None
+
+    def _draw_event_marks(self, plt, t0: datetime) -> None:
+        """Mark each logged event's timestamp on the plot, only while the
+        event log is open (issue #2's graph/log integration)."""
+        if not self._events:
+            return
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if not log_panel.has_class("-visible"):
+            return
+        render_event_marks(plt, t0, [e.get("when", "") for e in self._events])
 
     def _stats_text(self, entity: "Entity | None", unit: str, binary_end_iso: str | None) -> str:
         if self._cursor_mode:
@@ -638,7 +666,56 @@ class GraphPreviewScreen(Screen):
             entity = self.app.find_entity(self._entity_id)
             self._update_display(entity)
             return
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if log_panel.has_class("-visible"):
+            log_panel.remove_class("-visible")
+            self._redraw()
+            return
         self.dismiss()
+
+    def _redraw(self) -> None:
+        if self._is_climate:
+            self._update_climate_display()
+        else:
+            entity = self.app.find_entity(self._entity_id)
+            self._update_display(entity)
+
+    def action_toggle_event_log(self) -> None:
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if log_panel.has_class("-visible"):
+            log_panel.remove_class("-visible")
+            self._redraw()
+            return
+
+        entity = self.app.find_entity(self._entity_id)
+        label = get_display_name(entity) if entity else self._entity_id
+        if len(self._entity_ids) > 1:
+            label += f" +{len(self._entity_ids) - 1} more"
+        log_panel.set_title(f"Activity Log — {label}")
+        log_panel.set_hint("a close · ←/→ page with the graph")
+        log_panel.clear()
+        log_panel.add_class("-visible")
+        self.run_worker(self._load_events(), exclusive=True, group="events")
+
+    async def _refresh_events_if_open(self) -> None:
+        if self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible"):
+            await self._load_events()
+
+    async def _load_events(self) -> None:
+        end = self._window_end or datetime.now(timezone.utc)
+        hours = self._window_hours()
+        entries = await self.app.client.fetch_logbook(self._entity_ids, hours=hours, end=end)
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if not log_panel.has_class("-visible"):
+            return  # closed while the fetch was in flight
+        if entries is None:
+            self.notify("Failed to load activity log from Home Assistant.", title="Activity Log", severity="error")
+            self._events = []
+            log_panel.load_history([])
+        else:
+            self._events = entries
+            log_panel.load_history(entries)
+        self._redraw()
 
     def action_show_list_popup(self) -> None:
         # Mirror DashboardScreen: dismiss the fullscreen graph and jump straight back
