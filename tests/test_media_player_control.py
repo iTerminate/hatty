@@ -93,14 +93,10 @@ async def _open(pilot, app) -> MediaPlayerControlScreen:
     return app.screen
 
 
-async def test_e_opens_media_player_control_screen(make_app):
-    app = make_app(entities=_FULL_MEDIA_PLAYER, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await _open(pilot, app)
-
-
-async def test_full_featured_shows_every_control(make_app):
+async def test_full_featured_shows_every_control_and_now_playing(make_app):
+    """e opening the screen, every control it should show for a fully-featured
+    player, and the now-playing label are all read-only — one boot covers
+    them (`_open`'s own assert already confirms the screen opens)."""
     app = make_app(entities=_FULL_MEDIA_PLAYER, config_data=_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -115,14 +111,8 @@ async def test_full_featured_shows_every_control(make_app):
         assert len(screen.query("#field_sound_mode")) == 1
         assert len(screen.query("#btn_shuffle")) == 1
         assert len(screen.query("#btn_repeat")) == 1
-
-
-async def test_now_playing_shows_title_and_artist(make_app):
-    app = make_app(entities=_FULL_MEDIA_PLAYER, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = await _open(pilot, app)
         assert str(screen.query_one("#now_playing", Static).render()) == "Song Title — Artist Name"
+        assert screen.query_one("#field_volume", PercentageSlider).value == 60
 
 
 async def test_volume_only_hides_transport_and_selects(make_app):
@@ -136,14 +126,6 @@ async def test_volume_only_hides_transport_and_selects(make_app):
         assert len(screen.query("#field_source")) == 0
         assert len(screen.query("#field_sound_mode")) == 0
         assert len(screen.query("#toggle_buttons")) == 0
-
-
-async def test_volume_prefilled_from_entity(make_app):
-    app = make_app(entities=_FULL_MEDIA_PLAYER, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = await _open(pilot, app)
-        assert screen.query_one("#field_volume", PercentageSlider).value == 60
 
 
 async def test_volume_change_live_dispatches_after_debounce(make_app):
@@ -324,7 +306,7 @@ async def test_no_source_player_hides_select_fields(make_app):
 # source/sound_mode. Fixed by using `Select.NULL` instead.
 
 
-async def test_missing_source_does_not_crash_and_shows_blank_select(make_app):
+async def test_missing_source_does_not_crash_shows_blank_select_and_does_not_dispatch(make_app):
     app = make_app(entities=_BLANK_SOURCE_MEDIA_PLAYER, config_data=_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -334,14 +316,6 @@ async def test_missing_source_does_not_crash_and_shows_blank_select(make_app):
         assert len(screen.query("#field_sound_mode")) == 1
         assert screen.query_one("#field_source", Select).value is Select.NULL
         assert screen.query_one("#field_sound_mode", Select).value is Select.NULL
-
-
-async def test_missing_source_does_not_dispatch_on_mount(make_app):
-    app = make_app(entities=_BLANK_SOURCE_MEDIA_PLAYER, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await _open(pilot, app)
-
         assert app.client.call_service_calls == []
 
 

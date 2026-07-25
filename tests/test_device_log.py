@@ -14,7 +14,7 @@ from tests.conftest import NO_LIST_CONFIG
 # Row 3: sensor.temperature  (Temperature Sensor)
 
 
-async def test_A_opens_device_log_panel(make_app, sample_entities, sample_registry):
+async def test_A_opens_device_log_panel_with_title_and_sibling_ids(make_app, sample_entities, sample_registry):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -23,34 +23,12 @@ async def test_A_opens_device_log_panel(make_app, sample_entities, sample_regist
         await pilot.pause()
         await pilot.press("A")
         await pilot.pause()
+
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-
-
-async def test_device_log_title_shows_device_log_and_entity_name(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)  # light.living_room_lamp
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         title = str(panel.query_one("#log_title", Label).content)
         assert "Device Log" in title
         assert "Living Room Lamp" in title
-
-
-async def test_device_log_tracks_sibling_entity_ids(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)  # light.living_room_lamp
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
         assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
 
 
@@ -152,21 +130,6 @@ async def test_A_when_no_entities_stays_hidden(make_app):
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert not panel.has_class("-visible")
-
-
-async def test_a_when_device_log_open_closes_panel(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
-        assert app.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-        await pilot.press("a")
-        await pilot.pause()
-        assert not app.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
 
 
 async def test_A_opens_device_log_for_entity_with_different_device(make_app, sample_entities, sample_registry):

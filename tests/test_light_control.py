@@ -124,27 +124,23 @@ async def _open(pilot, app) -> LightControlScreen:
     return app.screen
 
 
-async def test_e_opens_light_control_screen_for_light(make_app):
-    app = make_app(entities=_WHITE_LIGHT, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await _open(pilot, app)
-
-
-async def test_light_control_initially_focuses_brightness_slider(make_app):
+async def test_e_opens_light_control_screen_focused_and_prefilled(make_app):
+    """e opening the screen (with its initial focus and brightness/kelvin
+    prefill for a white-mode light) is read-only, so one boot covers it —
+    `_open`'s own assert already confirms the screen opens for any light."""
     app = make_app(entities=_WHITE_LIGHT, config_data=_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = await _open(pilot, app)
         assert app.focused is screen.query_one("#field_brightness", PercentageSlider)
-
-
-async def test_brightness_prefilled_from_entity(make_app):
-    app = make_app(entities=_WHITE_LIGHT, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = await _open(pilot, app)
         assert screen.query_one("#field_brightness", PercentageSlider).value == 50  # round(128/255*100)
+        assert len(screen.query("#field_kelvin")) == 1
+        assert len(screen.query("#btn_pick_color")) == 0
+
+        slider = screen.query_one("#field_kelvin", KelvinSlider)
+        assert slider.value == 4200
+        assert slider.min_value == 2200
+        assert slider.max_value == 6500
 
 
 async def test_onoff_light_has_no_brightness_or_tabs(make_app):
@@ -154,15 +150,6 @@ async def test_onoff_light_has_no_brightness_or_tabs(make_app):
         screen = await _open(pilot, app)
         assert len(screen.query("#field_brightness")) == 0
         assert len(screen.query(TabbedContent)) == 0
-
-
-async def test_white_only_light_has_white_tab_but_no_color_tab(make_app):
-    app = make_app(entities=_WHITE_LIGHT, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = await _open(pilot, app)
-        assert len(screen.query("#field_kelvin")) == 1
-        assert len(screen.query("#btn_pick_color")) == 0
 
 
 async def test_color_only_light_has_color_tab_but_no_kelvin(make_app):
@@ -184,17 +171,6 @@ async def test_dual_mode_light_has_both_tabs_and_starts_on_white(make_app):
         assert len(screen.query("#field_kelvin")) == 1
         assert len(screen.query("#btn_pick_color")) == 1
         assert screen.query_one(TabbedContent).active == "tab_white"
-
-
-async def test_kelvin_slider_prefilled_from_native_kelvin(make_app):
-    app = make_app(entities=_WHITE_LIGHT, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = await _open(pilot, app)
-        slider = screen.query_one("#field_kelvin", KelvinSlider)
-        assert slider.value == 4200
-        assert slider.min_value == 2200
-        assert slider.max_value == 6500
 
 
 async def test_kelvin_slider_prefilled_from_mireds(make_app):

@@ -11,7 +11,7 @@ from hatty.ui.graph.entity_detail import EntityDetailPanel
 from tests.conftest import NO_LIST_CONFIG
 
 
-async def test_a_opens_activity_log_panel(make_app):
+async def test_a_opens_activity_log_panel_and_a_again_closes_it(make_app):
     app = make_app()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -20,39 +20,14 @@ async def test_a_opens_activity_log_panel(make_app):
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
 
-
-async def test_a_again_closes_activity_log_panel(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("a")
-        await pilot.pause()
-        await pilot.press("a")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
-        assert not panel.has_class("-visible")
-
-
-async def test_activity_log_hint_mentions_maximize_key(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("a")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         hint = str(panel.query_one("#log_hint", Label).content)
         assert "f" in hint and "maximize" in hint
-
-
-async def test_activity_log_title_shows_current_list(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("a")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         title = str(panel.query_one("#log_title", Label).content)
         assert "my_list" in title
+
+        await pilot.press("a")
+        await pilot.pause()
+        assert not panel.has_class("-visible")
 
 
 async def test_activity_log_title_shows_all_entities_when_no_list(make_app):
@@ -113,7 +88,7 @@ async def test_opening_graph_closes_activity_log(make_app, sample_entities):
         assert app.query_one("#detail_panel", EntityDetailPanel).has_class("-visible")
 
 
-async def test_i_opens_single_entity_activity_log(make_app, sample_entities):
+async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -128,19 +103,8 @@ async def test_i_opens_single_entity_activity_log(make_app, sample_entities):
         title = str(panel.query_one("#log_title", Label).content)
         assert "Temperature Sensor" in title
 
-
-async def test_i_again_closes_activity_log_panel(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(3, 0)
-        await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert not panel.has_class("-visible")
 
 
