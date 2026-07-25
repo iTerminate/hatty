@@ -50,7 +50,8 @@ uv tool install hatty   # or run without installing: uvx hatty
 pipx install hatty
 ```
 
-Or grab the standalone binary (no Python required) from this repository's Releases page:
+Or grab the standalone binary (no Python required) from this repository's Releases page —
+`hatty-linux-aarch64` (Raspberry Pi / ARM64) or `hatty-linux-x86_64`:
 
 ```bash
 curl -LO <releases-page>/download/vX.Y.Z/hatty-linux-aarch64
@@ -58,7 +59,8 @@ chmod +x hatty-linux-aarch64
 ./hatty-linux-aarch64
 ```
 
-Each tagged release ships an sdist, a wheel, and a standalone binary built by the release workflow.
+Each tagged release ships an sdist, a wheel, and standalone binaries for both architectures, all
+built by the release workflow.
 
 ## Configuration
 
