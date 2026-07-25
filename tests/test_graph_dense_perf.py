@@ -7,9 +7,7 @@ from textual.widgets import Label
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.downsample import minmax_downsample
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 def _dense(n):
@@ -32,7 +30,7 @@ async def _open_graph(pilot, app, points):
 
 
 async def test_dense_graph_keeps_full_reading_count_in_stats(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph(pilot, app, _dense(3000))
@@ -43,7 +41,7 @@ async def test_dense_graph_keeps_full_reading_count_in_stats(make_app, sample_en
 
 
 async def test_downsample_helper_reduces_points_for_render(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph(pilot, app, _dense(3000))
@@ -58,7 +56,7 @@ async def test_downsample_helper_reduces_points_for_render(make_app, sample_enti
 
 
 async def test_cursor_mode_freezes_live_refresh(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph(pilot, app, _dense(100))

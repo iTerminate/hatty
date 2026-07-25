@@ -9,9 +9,7 @@ from textual.widgets import Label
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def _open_preview_on_temperature(pilot, app) -> GraphPreviewScreen:
@@ -28,7 +26,7 @@ async def _open_preview_on_temperature(pilot, app) -> GraphPreviewScreen:
 
 
 async def test_a_opens_event_log_on_fullscreen_graph(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -43,7 +41,7 @@ async def test_a_opens_event_log_on_fullscreen_graph(make_app, sample_entities):
 
 
 async def test_a_again_closes_event_log(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -59,7 +57,7 @@ async def test_a_again_closes_event_log(make_app, sample_entities):
 
 
 async def test_event_log_title_names_the_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -74,7 +72,7 @@ async def test_event_log_title_names_the_entity(make_app, sample_entities):
 
 
 async def test_paging_graph_refetches_event_log(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -94,7 +92,7 @@ async def test_paging_graph_refetches_event_log(make_app, sample_entities):
 
 
 async def test_escape_closes_event_log_before_leaving_graph(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}

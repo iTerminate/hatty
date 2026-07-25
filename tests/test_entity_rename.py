@@ -4,16 +4,14 @@ from textual.widgets import Button, Input
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.rename_entity_popup import RenameEntityPopup
-from tests.conftest import make_config, notified
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, notified
 
 # Alphabetical order for sample_entities (see tests/conftest.py):
 # Row 0: Fan Switch, 1: Kitchen Light, 2: Living Room Lamp, 3: Temperature Sensor
 
 
 async def test_local_name_override_applied_on_initial_load(make_app, sample_entities):
-    config_data = dict(_NO_LIST_CONFIG)
+    config_data = dict(NO_LIST_CONFIG)
     config_data["entity_names"] = {"light.living_room_lamp": "Reading Light"}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
@@ -25,7 +23,7 @@ async def test_local_name_override_applied_on_initial_load(make_app, sample_enti
 
 
 async def test_name_override_survives_state_changed_event(make_app, sample_entities):
-    config_data = dict(_NO_LIST_CONFIG)
+    config_data = dict(NO_LIST_CONFIG)
     config_data["entity_names"] = {"switch.fan": "Overhead Fan"}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
@@ -46,7 +44,7 @@ async def test_name_override_survives_state_changed_event(make_app, sample_entit
 
 
 async def test_r_opens_rename_popup_with_current_name_prefilled(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -59,7 +57,7 @@ async def test_r_opens_rename_popup_with_current_name_prefilled(make_app, sample
 
 
 async def test_r_opens_rename_popup_without_override_indicator(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -72,7 +70,7 @@ async def test_r_opens_rename_popup_without_override_indicator(make_app, sample_
 
 
 async def test_r_opens_rename_popup_with_override_indicator(make_app, sample_entities):
-    config_data = dict(_NO_LIST_CONFIG)
+    config_data = dict(NO_LIST_CONFIG)
     config_data["entity_names"] = {"light.living_room_lamp": "Reading Light"}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
@@ -87,7 +85,7 @@ async def test_r_opens_rename_popup_with_override_indicator(make_app, sample_ent
 
 
 async def test_revert_button_clears_override_and_restores_ha_name(make_app, sample_entities):
-    config_data = dict(_NO_LIST_CONFIG)
+    config_data = dict(NO_LIST_CONFIG)
     config_data["entity_names"] = {"light.living_room_lamp": "Reading Light"}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
@@ -109,7 +107,7 @@ async def test_revert_button_clears_override_and_restores_ha_name(make_app, samp
 
 
 async def test_save_locally_updates_table_display_immediately(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -130,7 +128,7 @@ async def test_save_locally_updates_table_display_immediately(make_app, sample_e
 
 
 async def test_save_locally_persists_to_config_file(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -149,7 +147,7 @@ async def test_save_locally_persists_to_config_file(make_app, sample_entities):
 
 
 async def test_save_locally_with_blank_name_clears_override(make_app, sample_entities):
-    config_data = dict(_NO_LIST_CONFIG)
+    config_data = dict(NO_LIST_CONFIG)
     config_data["entity_names"] = {"light.living_room_lamp": "Reading Light"}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
@@ -172,7 +170,7 @@ async def test_save_locally_with_blank_name_clears_override(make_app, sample_ent
 
 
 async def test_escape_in_rename_popup_does_not_change_name(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -193,7 +191,7 @@ async def test_escape_in_rename_popup_does_not_change_name(make_app, sample_enti
 
 
 async def test_rename_noop_on_empty_table(make_app):
-    app = make_app(entities=[], config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=[], config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("r")
@@ -202,7 +200,7 @@ async def test_rename_noop_on_empty_table(make_app):
 
 
 async def test_save_to_ha_dispatches_update_entity_registry_call(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -220,7 +218,7 @@ async def test_save_to_ha_dispatches_update_entity_registry_call(make_app, sampl
 
 
 async def test_save_to_ha_does_not_change_local_display_until_event_arrives(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -240,7 +238,7 @@ async def test_save_to_ha_does_not_change_local_display_until_event_arrives(make
 
 
 async def test_state_changed_event_after_ha_rename_updates_display(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -270,7 +268,7 @@ async def test_state_changed_event_after_ha_rename_updates_display(make_app, sam
 
 
 async def test_save_to_ha_with_blank_name_sends_none(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -288,7 +286,7 @@ async def test_save_to_ha_with_blank_name_sends_none(make_app, sample_entities):
 
 
 async def test_failed_ha_rename_notifies_error(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client.inject_failed_result("update_entity_registry")

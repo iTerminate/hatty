@@ -2,9 +2,7 @@
 from textual.coordinate import Coordinate
 
 from hatty.ui.entity_table import EntitiesTable
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 # Alphabetical order with no list:
 # Row 0: Fan Switch (switch.fan, off)
@@ -14,7 +12,7 @@ _NO_LIST_CONFIG = make_config(lists={})
 
 
 async def test_enter_calls_turn_on_for_off_switch(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -27,7 +25,7 @@ async def test_enter_calls_turn_on_for_off_switch(make_app, sample_entities):
 
 
 async def test_enter_calls_turn_off_for_on_light(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -40,7 +38,7 @@ async def test_enter_calls_turn_off_for_on_light(make_app, sample_entities):
 
 
 async def test_enter_does_nothing_for_sensor(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -52,7 +50,7 @@ async def test_enter_does_nothing_for_sensor(make_app, sample_entities):
 
 
 async def test_state_change_event_updates_table(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)

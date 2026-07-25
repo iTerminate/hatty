@@ -8,9 +8,7 @@ from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
 from hatty.ui.graph.entity_detail import EntityDetailPanel
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_a_opens_activity_log_panel(make_app):
@@ -58,7 +56,7 @@ async def test_activity_log_title_shows_current_list(make_app):
 
 
 async def test_activity_log_title_shows_all_entities_when_no_list(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
@@ -80,7 +78,7 @@ async def test_activity_log_loads_logbook_history(make_app):
 
 
 async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -98,7 +96,7 @@ async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities
 
 
 async def test_opening_graph_closes_activity_log(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
@@ -116,7 +114,7 @@ async def test_opening_graph_closes_activity_log(make_app, sample_entities):
 
 
 async def test_i_opens_single_entity_activity_log(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -132,7 +130,7 @@ async def test_i_opens_single_entity_activity_log(make_app, sample_entities):
 
 
 async def test_i_again_closes_activity_log_panel(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)

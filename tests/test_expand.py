@@ -5,9 +5,7 @@ from textual.widgets import Sparkline
 from hatty.ui.controls.control_popup import EntityControlPopup
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.entity_detail import EntityDetailPanel
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 # Alphabetical order with no list:
 # Row 0: Fan Switch (switch.fan, off)
@@ -17,7 +15,7 @@ _NO_LIST_CONFIG = make_config(lists={})
 
 
 async def test_e_opens_graph_for_numeric_noncontrollable_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -36,7 +34,7 @@ async def test_e_opens_graph_for_numeric_noncontrollable_entity(make_app, sample
 async def test_enter_opens_graph_for_nontogglable_entity(make_app, sample_entities):
     """Issue #150: enter on a sensor falls back to open-controls (graph here),
     not a dead key."""
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -52,7 +50,7 @@ async def test_enter_opens_graph_for_nontogglable_entity(make_app, sample_entiti
 
 
 async def test_enter_still_toggles_togglable_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -70,7 +68,7 @@ async def test_enter_still_toggles_togglable_entity(make_app, sample_entities):
 async def test_e_still_opens_control_screen_for_controllable_entity(make_app, sample_entities):
     from hatty.ui.controls.light_screen import LightControlScreen
 
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -86,7 +84,7 @@ async def test_e_still_opens_control_screen_for_controllable_entity(make_app, sa
 
 
 async def test_e_noop_for_noncontrollable_nonnumeric_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -102,7 +100,7 @@ async def test_e_noop_for_noncontrollable_nonnumeric_entity(make_app, sample_ent
 
 
 async def test_check_action_expand_entity_false_for_noncontrollable_nonnumeric(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -113,7 +111,7 @@ async def test_check_action_expand_entity_false_for_noncontrollable_nonnumeric(m
 
 
 async def test_check_action_expand_entity_true_for_numeric_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -124,7 +122,7 @@ async def test_check_action_expand_entity_true_for_numeric_entity(make_app, samp
 
 
 async def test_check_action_expand_entity_true_for_controllable_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -176,7 +174,7 @@ _TWO_SENSOR_ENTITIES = [
 
 
 async def test_cursor_follow_updates_panel_to_new_numeric_entity(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -198,7 +196,7 @@ async def test_cursor_follow_updates_panel_to_new_numeric_entity(make_app):
 
 
 async def test_cursor_follow_shows_placeholder_for_nongraphable_entity(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -219,7 +217,7 @@ async def test_cursor_follow_shows_placeholder_for_nongraphable_entity(make_app)
 
 
 async def test_cursor_follow_inactive_when_panel_not_open(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -234,7 +232,7 @@ async def test_cursor_follow_inactive_when_panel_not_open(make_app):
 
 
 async def test_cursor_follow_backfills_history_for_new_entity(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -263,7 +261,7 @@ async def test_cursor_follow_backfills_history_for_new_entity(make_app):
 
 
 async def test_t_cycles_graph_type_label(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -310,7 +308,7 @@ async def test_t_cycles_graph_type_label(make_app, sample_entities):
 
 
 async def test_t_check_action_false_when_panel_closed(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.check_action("cycle_graph_type", ()) is False
@@ -325,7 +323,7 @@ async def test_t_check_action_false_when_panel_closed(make_app, sample_entities)
 
 
 async def test_t_cycles_graph_modes(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)

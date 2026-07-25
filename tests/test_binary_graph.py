@@ -5,9 +5,7 @@ from textual.widgets import Label
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.entity_detail import EntityDetailPanel
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 _BINARY_ENTITIES = [
     {
@@ -51,7 +49,7 @@ def _label_text(widget) -> str:
 
 
 async def test_g_opens_binary_history_panel(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"binary_sensor.front_door": list(_DOOR_HISTORY)}
@@ -73,7 +71,7 @@ async def test_g_opens_binary_history_panel(make_app):
 
 
 async def test_fullscreen_binary_graph_renders_with_binary_stats(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"binary_sensor.front_door": list(_DOOR_HISTORY)}
@@ -98,7 +96,7 @@ async def test_fullscreen_binary_graph_renders_with_binary_stats(make_app):
 
 
 async def test_binary_cursor_mode_shows_on_off_values(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"binary_sensor.front_door": list(_DOOR_HISTORY)}
@@ -119,7 +117,7 @@ async def test_binary_cursor_mode_shows_on_off_values(make_app):
 
 
 async def test_binary_cannot_be_added_to_numeric_comparison(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -149,7 +147,7 @@ async def test_binary_cannot_be_added_to_numeric_comparison(make_app):
 
 
 async def test_binary_plus_binary_comparison_is_allowed(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -172,7 +170,7 @@ async def test_binary_plus_binary_comparison_is_allowed(make_app):
 
 
 async def test_binary_state_changes_append_to_history_live(make_app):
-    app = make_app(entities=_BINARY_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_BINARY_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"binary_sensor.front_door": list(_DOOR_HISTORY)}

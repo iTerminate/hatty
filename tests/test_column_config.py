@@ -4,13 +4,11 @@ from textual.widgets import SelectionList
 
 from hatty.ui.column_config_popup import ColumnConfigPopup
 from hatty.ui.entity_table import EntitiesTable
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_c_opens_column_config_popup(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("c")
@@ -19,7 +17,7 @@ async def test_c_opens_column_config_popup(make_app):
 
 
 async def test_column_popup_initially_focuses_selection_list(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("c")
@@ -28,7 +26,7 @@ async def test_column_popup_initially_focuses_selection_list(make_app):
 
 
 async def test_escape_saves_and_closes_column_popup(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("c")
@@ -46,7 +44,7 @@ async def test_escape_saves_and_closes_column_popup(make_app, sample_entities):
 
 
 async def test_enter_saves_and_closes_column_popup(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("c")
@@ -65,7 +63,7 @@ async def test_enter_saves_and_closes_column_popup(make_app, sample_entities):
 
 
 async def test_column_toggle_persists_to_config_file(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("c")
@@ -85,7 +83,7 @@ async def test_column_toggle_persists_to_config_file(make_app, sample_entities):
 
 
 async def test_existing_column_order_preserved_when_unchanged(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         original_order = list(app.columns)
@@ -99,7 +97,7 @@ async def test_existing_column_order_preserved_when_unchanged(make_app, sample_e
 
 
 async def test_newly_added_column_appended_after_existing_order(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         original_order = list(app.columns)  # name, value, last_changed, in_list
@@ -117,7 +115,7 @@ async def test_newly_added_column_appended_after_existing_order(make_app, sample
 
 async def test_shift_down_reorders_column(make_app, sample_entities):
     """Shift+↓ moves the highlighted column down one slot in display order (#202)."""
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         original_order = list(app.columns)  # name, value, last_changed, in_list
@@ -141,7 +139,7 @@ async def test_shift_down_reorders_column(make_app, sample_entities):
 async def test_reorder_then_toggle_keeps_new_order(make_app, sample_entities):
     """Reordering and toggling compose: a moved column that stays enabled keeps
     its new position, and disabled columns drop out (#202)."""
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
 

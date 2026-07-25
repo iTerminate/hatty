@@ -16,9 +16,13 @@ def make_config(url=FAKE_URL, token=FAKE_TOKEN, **overrides):
     """The single source of truth for a test config dict: the shared
     home_assistant stanza (url/token overridable) plus any top-level overrides
     (lists, dashboards, saved_graphs, …). Importable
-    (`from tests.conftest import make_config`) for module-level constants; also
-    surfaced as the config_data / no_list_config fixtures."""
+    (`from tests.conftest import make_config`) for module-level constants."""
     return {"home_assistant": {"url": url, "token": token}, **overrides}
+
+
+# The ubiquitous "connected but no lists" config, shared by every module that
+# used to define its own identical `_NO_LIST_CONFIG = make_config(lists={})`.
+NO_LIST_CONFIG = make_config(lists={})
 
 
 @pytest.fixture(autouse=True)
@@ -226,15 +230,14 @@ def _build_client_factory(entities, registry, devices=None, areas=None):
 
 
 @pytest.fixture
-def config_data():
-    """The make_config builder, as a fixture for tests that prefer injection."""
-    return make_config
-
-
-@pytest.fixture
-def no_list_config():
-    """The ubiquitous 'connected but no lists' config."""
-    return make_config(lists={})
+def sample_registry():
+    """Shared entity->device registry fixture (device log tests)."""
+    return [
+        {"entity_id": "light.living_room_lamp", "device_id": "dev_abc"},
+        {"entity_id": "light.kitchen_light", "device_id": "dev_abc"},
+        {"entity_id": "sensor.temperature", "device_id": "dev_xyz"},
+        {"entity_id": "switch.fan", "device_id": None},
+    ]
 
 
 @pytest.fixture

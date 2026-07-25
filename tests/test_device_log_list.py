@@ -1,21 +1,12 @@
 # hatty — MIT License. See LICENSE file for details.
 """Device log expands a whole list to its devices' entities (issue #69)."""
 
-import pytest
 from textual.widgets import Label
 
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from tests.conftest import make_config
 
-
-@pytest.fixture
-def sample_registry():
-    return [
-        {"entity_id": "light.living_room_lamp", "device_id": "dev_abc"},
-        {"entity_id": "light.kitchen_light", "device_id": "dev_abc"},
-        {"entity_id": "sensor.temperature", "device_id": "dev_xyz"},
-        {"entity_id": "switch.fan", "device_id": None},
-    ]
+# sample_registry fixture is shared from tests/conftest.py.
 
 
 def _list_config(list_entities):

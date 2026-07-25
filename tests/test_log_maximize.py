@@ -2,13 +2,11 @@
 """Maximize toggle for the activity/device log panel (issue #70)."""
 
 from hatty.ui.activity_log_panel import ActivityLogPanel
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_f_toggles_maximized_class(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
@@ -26,7 +24,7 @@ async def test_f_toggles_maximized_class(make_app):
 
 
 async def test_f_is_a_noop_when_log_hidden(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
@@ -40,7 +38,7 @@ async def test_f_is_a_noop_when_log_hidden(make_app):
 
 
 async def test_escape_unmaximizes_before_closing(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
@@ -57,7 +55,7 @@ async def test_escape_unmaximizes_before_closing(make_app):
 
 
 async def test_reopening_log_is_not_maximized(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")

@@ -5,9 +5,7 @@ import hatty.main as main_module
 from hatty.main import HACLI
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.splash_screen import SplashScreen
-from tests.conftest import FakeHAClient, make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, FakeHAClient, make_config
 
 
 class _HoldingClient(FakeHAClient):
@@ -44,7 +42,7 @@ def _http_warning_count(app):
 async def test_http_token_warning_fires_once(make_app, sample_entities):
     # A cleartext http:// URL warns the user their token is sent unencrypted (#158),
     # but only once per run — a later reconnect must not re-warn.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert _http_warning_count(app) == 1
@@ -61,7 +59,7 @@ async def test_https_url_does_not_warn(make_app, sample_entities):
 
 
 async def test_app_boots_and_shows_entities(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.query_one(EntitiesTable).row_count == len(sample_entities)
@@ -97,7 +95,7 @@ async def test_app_parse_error_shows_in_subtitle(tmp_path):
 
 
 async def test_app_shows_all_entities_when_no_list_configured(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.current_list_name is None
@@ -105,7 +103,7 @@ async def test_app_shows_all_entities_when_no_list_configured(make_app, sample_e
 
 
 async def test_app_subtitle_shows_connected_url_when_no_list(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert "fake.ha.local" in app.sub_title
@@ -121,7 +119,7 @@ async def test_app_state_initialized_on_mount(make_app):
 
 
 async def test_splash_shown_until_states_arrive_then_auto_dismissed(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     app._client_factory = _holding_factory(sample_entities)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -135,7 +133,7 @@ async def test_splash_shown_until_states_arrive_then_auto_dismissed(make_app, sa
 
 
 async def test_splash_dismissed_early_by_keypress(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     app._client_factory = _holding_factory(sample_entities)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -154,7 +152,7 @@ async def test_splash_dismissed_early_by_keypress(make_app, sample_entities):
 
 
 async def test_splash_shows_connection_retry_status(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     app._client_factory = _holding_factory(sample_entities)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -206,7 +204,7 @@ async def test_demo_splash_still_key_dismissable_during_hold(monkeypatch):
 
 
 async def test_auth_failure_dismisses_splash(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     app._client_factory = _holding_factory(sample_entities)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -230,7 +228,7 @@ async def test_onboarding_path_never_shows_splash():
 
 async def test_connect_failed_message_shows_retry_status(make_app, sample_entities):
     # Reconnect status is surfaced in the sub_title (issue #71), not a dead end.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.handle_ha_message({"type": "ha_connect_failed", "error": "refused", "attempt": 1})
@@ -240,7 +238,7 @@ async def test_connect_failed_message_shows_retry_status(make_app, sample_entiti
 
 
 async def test_reconnecting_message_shows_countdown(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.handle_ha_message({"type": "ha_reconnecting", "attempt": 2, "delay": 10})
@@ -250,7 +248,7 @@ async def test_reconnecting_message_shows_countdown(make_app, sample_entities):
 
 
 async def test_auth_failed_message_prompts_token_fix(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.handle_ha_message({"type": "ha_auth_failed", "error": "invalid"})
@@ -261,7 +259,7 @@ async def test_auth_failed_message_prompts_token_fix(make_app, sample_entities):
 async def test_disconnect_reshows_splash_then_reconnect_dismisses(make_app, sample_entities):
     # Issue #243: a mid-session drop re-shows the splash; a subsequent successful
     # get_states result (mirroring what a real reconnect does) dismisses it again.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert not isinstance(app.screen, SplashScreen)
@@ -282,7 +280,7 @@ async def test_disconnect_reshows_splash_then_reconnect_dismisses(make_app, samp
 
 
 async def test_reconnect_splash_is_key_dismissable_and_not_resticky(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
 

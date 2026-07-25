@@ -3,9 +3,7 @@ from textual.coordinate import Coordinate
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.search_input import SearchInput
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_slash_opens_search_input(make_app):
@@ -29,7 +27,7 @@ async def test_escape_hides_search_input(make_app):
 
 
 async def test_search_filters_entities_by_entity_id(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -42,7 +40,7 @@ async def test_search_filters_entities_by_entity_id(make_app, sample_entities):
 
 
 async def test_search_filters_by_friendly_name(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -54,7 +52,7 @@ async def test_search_filters_by_friendly_name(make_app, sample_entities):
 
 
 async def test_search_multi_word_skips_words(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -69,7 +67,7 @@ async def test_search_multi_word_skips_words(make_app, sample_entities):
 
 
 async def test_search_filters_by_state(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -98,7 +96,7 @@ async def test_escape_after_search_restores_prior_filter(make_app, sample_entiti
 
 
 async def test_subtitle_shows_search_term_after_search(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -110,7 +108,7 @@ async def test_subtitle_shows_search_term_after_search(make_app, sample_entities
 
 
 async def test_subtitle_shows_match_count(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -156,7 +154,7 @@ async def test_jump_mode_subtitle_retains_list_context(make_app, sample_entities
 
 
 async def test_filter_applies_live_before_enter(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -168,7 +166,7 @@ async def test_filter_applies_live_before_enter(make_app, sample_entities):
 
 
 async def test_enter_closes_search_box(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -180,7 +178,7 @@ async def test_enter_closes_search_box(make_app, sample_entities):
 
 
 async def test_tab_toggles_vi_mode(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -198,7 +196,7 @@ async def test_tab_toggles_vi_mode(make_app, sample_entities):
 
 
 async def test_vi_mode_jumps_cursor_without_filtering(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -218,7 +216,7 @@ async def test_vi_mode_jumps_cursor_without_filtering(make_app, sample_entities)
 
 
 async def test_n_and_N_cycle_vi_search_matches_with_wraparound(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -253,7 +251,7 @@ async def test_n_and_N_cycle_vi_search_matches_with_wraparound(make_app, sample_
 
 
 async def test_escape_in_vi_mode_leaves_filter_state_untouched(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")

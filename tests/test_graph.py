@@ -8,14 +8,12 @@ from textual.widgets import Label
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.entity_detail import EntityDetailPanel
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
-from tests.conftest import make_config
+from tests.conftest import NO_LIST_CONFIG
 
 
 def _label_text(widget) -> str:
     return str(widget._Static__content)
 
-
-_NO_LIST_CONFIG = make_config(lists={})
 
 # Alphabetical order with no list:
 # Row 0: Fan Switch (switch.fan, off)
@@ -40,7 +38,7 @@ _TWO_SENSOR_ENTITIES = [
 
 
 async def test_g_opens_detail_panel_for_numeric_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -58,7 +56,7 @@ async def test_g_opens_detail_panel_for_numeric_entity(make_app, sample_entities
 
 
 async def test_g_hides_panel_when_pressed_again(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -77,7 +75,7 @@ async def test_g_hides_panel_when_pressed_again(make_app, sample_entities):
 
 
 async def test_g_shows_warning_for_non_numeric_entity(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -94,7 +92,7 @@ async def test_g_shows_warning_for_non_numeric_entity(make_app, sample_entities)
 async def test_g_closes_panel_from_a_non_graphable_row(make_app, sample_entities):
     # Regression (#188): once the panel is open, moving the cursor onto a
     # non-graphable entity must not disable the g binding — g still closes it.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -116,7 +114,7 @@ async def test_g_closes_panel_from_a_non_graphable_row(make_app, sample_entities
 
 
 async def test_g_uses_prefetched_history(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -142,7 +140,7 @@ async def test_g_uses_prefetched_history(make_app, sample_entities):
 
 
 async def test_repeated_g_open_close_does_not_duplicate_history(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         history_data = [
@@ -173,7 +171,7 @@ async def test_repeated_g_open_close_does_not_duplicate_history(make_app, sample
 
 
 async def test_fullscreen_graph_updates_as_live_state_changes_stream_in(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -214,14 +212,14 @@ async def test_initial_state_snapshot_does_not_seed_entity_history(make_app, sam
     # any history window a real fetch would return. If the initial get_states snapshot
     # seeded entity_history with that point, a later duration change could pull it back
     # in as a "live update" and skew the graph's time axis (issue #24).
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.entity_history == {}
 
 
 async def test_duration_change_does_not_reintroduce_stale_initial_state_point(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -248,7 +246,7 @@ async def test_duration_change_does_not_reintroduce_stale_initial_state_point(ma
 
 
 async def test_left_right_scroll_fullscreen_graph_through_history(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
 
@@ -299,7 +297,7 @@ async def test_shift_left_right_page_by_a_larger_stride(make_app, sample_entitie
     # Regression test for issue #51: left/right only ever paged by one
     # graph_hours window per press, making it slow to travel far back in
     # history. shift+left/shift+right should page by a larger multiple.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
 
@@ -349,7 +347,7 @@ async def test_shift_left_right_page_by_a_larger_stride(make_app, sample_entitie
 
 
 async def test_right_at_live_edge_is_a_no_op(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -380,7 +378,7 @@ async def test_dense_history_is_not_truncated_by_a_fixed_sample_count(make_app, 
     # to silently drop everything but the newest ~120 points, collapsing a
     # multi-hour window down to whatever a chatty entity's real sample rate
     # happened to span (reported as "only the last 10-20 minutes").
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         dense_history = [(f"2024-01-01T08:{i // 60:02d}:{i % 60:02d}+00:00", float(i)) for i in range(130)]
@@ -400,7 +398,7 @@ async def test_dense_history_is_not_truncated_by_a_fixed_sample_count(make_app, 
 
 
 async def test_live_updates_trim_only_points_outside_the_selected_window(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.app_config["graph_hours"] = 1
@@ -443,7 +441,7 @@ async def test_stray_list_bindings_disabled_on_fullscreen_graph(make_app, sample
     # are global App bindings with no local shadow on GraphPreviewScreen, so
     # they used to stay live (and shown in the footer) while viewing a graph,
     # firing against the hidden entity table behind it.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -487,7 +485,7 @@ async def test_stray_list_bindings_disabled_on_fullscreen_graph(make_app, sample
 async def test_live_graph_shows_time_range_in_title(make_app, sample_entities):
     # Regression test: the live/default view showed no time-range indication
     # at all (only scrolled-back windows got a suffix).
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -512,7 +510,7 @@ async def test_live_graph_shows_time_range_in_title(make_app, sample_entities):
 async def test_multi_day_window_uses_dated_tick_labels(make_app, sample_entities):
     # Regression test: tick labels only ever showed HH:MM, so a multi-day
     # window (e.g. the 1 week graph_hours preset) had indistinguishable ticks.
-    config_data = {**_NO_LIST_CONFIG, "graph_hours": 168}
+    config_data = {**NO_LIST_CONFIG, "graph_hours": 168}
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -540,7 +538,7 @@ async def test_multi_day_window_uses_dated_tick_labels(make_app, sample_entities
 
 
 async def test_enter_toggles_cursor_mode_and_left_right_move_cursor(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -589,7 +587,7 @@ async def test_enter_toggles_cursor_mode_and_left_right_move_cursor(make_app, sa
 
 
 async def test_cursor_mode_shows_values_for_all_compared_entities(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -630,7 +628,7 @@ async def test_multi_entity_stats_follow_the_active_entity(make_app):
     # Regression test for issue #52: the non-cursor stats line always summarized
     # the primary (first) entity's data, even after `tab` switched the active
     # entity to a comparison line with completely different values/units.
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {
@@ -679,7 +677,7 @@ async def test_zoom_out_keeps_a_line_whose_wide_fetch_returns_empty(make_app):
     # HAClient reports a failed/empty fetch as None, and the screen used to store
     # `values or []`, silently blanking that entity's line. It must instead fall
     # back to the in-memory history buffer so the line stays visible.
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         now = datetime.now(timezone.utc)
@@ -728,7 +726,7 @@ async def test_zoom_out_keeps_a_line_whose_wide_fetch_returns_empty(make_app):
 
 
 async def test_escape_exits_cursor_mode_before_dismissing_screen(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -770,7 +768,7 @@ async def _open_preview_on_temperature(pilot, app) -> GraphPreviewScreen:
 
 
 async def test_left_pages_by_half_a_window(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -784,7 +782,7 @@ async def test_left_pages_by_half_a_window(make_app, sample_entities):
 
 
 async def test_zoom_in_halves_window_without_touching_global_config(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -816,7 +814,7 @@ async def test_zoom_in_halves_window_without_touching_global_config(make_app, sa
 
 
 async def test_home_snaps_back_to_live_and_clears_zoom(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -836,7 +834,7 @@ async def test_home_snaps_back_to_live_and_clears_zoom(make_app, sample_entities
 
 
 async def test_title_shows_live_and_paged_indicator(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -852,7 +850,7 @@ async def test_title_shows_live_and_paged_indicator(make_app, sample_entities):
 
 
 async def test_zoomed_paging_forward_reenters_live_keeping_zoom(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -871,7 +869,7 @@ async def test_zoomed_paging_forward_reenters_live_keeping_zoom(make_app, sample
 
 
 async def test_zoom_in_stays_live_and_receives_updates(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -897,7 +895,7 @@ async def test_zoom_in_stays_live_and_receives_updates(make_app, sample_entities
 
 
 async def test_zoom_while_paged_back_still_freezes(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -915,7 +913,7 @@ async def test_zoom_while_paged_back_still_freezes(make_app, sample_entities):
 
 
 async def test_saving_a_zoomed_graph_persists_the_zoomed_hours(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}

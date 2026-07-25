@@ -13,13 +13,11 @@ from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_q_closes_fullscreen_graph(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -35,7 +33,7 @@ async def test_q_closes_fullscreen_graph(make_app, sample_entities):
 
 
 async def test_q_closes_duration_popup_when_no_input_focused(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -57,7 +55,7 @@ async def test_q_types_into_focused_input_instead_of_closing(make_app, sample_en
     binding is ever consulted (Textual's Input._on_key stops printable keys
     unconditionally) — the same mechanism that already lets bare letters like
     `r`/`v`/`a` coexist with search/name fields elsewhere in the app."""
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
