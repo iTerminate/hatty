@@ -613,13 +613,35 @@ class HACLI(App):
         from hatty.ui.controls.media_player_screen import MediaPlayerControlScreen
         from hatty.ui.device_tree_screen import DeviceTreeScreen
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
-        from hatty.ui.help_popup import binding_rows
+        from hatty.ui.help_popup import action_name, binding_entries, sectioned_rows
 
-        active_rows = [
-            (active.binding.key, active.binding.description)
-            for active in self.screen.active_bindings.values()
-            if active.binding.description
-        ]
+        def page_rows(screen_cls: type | None, is_active: bool) -> list[tuple[str, str]]:
+            # A screen opting into HELP_ALL_MODES (GraphPreviewScreen) always builds
+            # from its full static BINDINGS plus an app-level "From anywhere" section,
+            # regardless of which mode is active — its help page groups both modes'
+            # bindings side by side instead of only showing whichever is live (#7).
+            if screen_cls is not None and getattr(screen_cls, "HELP_ALL_MODES", False):
+                rows = sectioned_rows(binding_entries(screen_cls.BINDINGS), screen_cls.HELP_SECTIONS)
+                allowed = screen_cls.ALLOWED_APP_ACTIONS
+                app_rows = [(key, desc) for key, desc, action in binding_entries(self.BINDINGS) if action in allowed]
+                if app_rows:
+                    rows = [*rows, ("", "From anywhere"), *app_rows]
+                return rows
+
+            if is_active:
+                entries = [
+                    (active.binding.key, active.binding.description, action_name(active.binding.action))
+                    for active in self.screen.active_bindings.values()
+                    if active.binding.description
+                ]
+            else:
+                static_bindings = self.BINDINGS if screen_cls is None else screen_cls.BINDINGS
+                entries = binding_entries(static_bindings)
+
+            sections = getattr(screen_cls, "HELP_SECTIONS", None) if screen_cls is not None else None
+            if sections:
+                return sectioned_rows(entries, sections)
+            return [(key, desc) for key, desc, _ in entries]
 
         # `None` marks the base (main-table) screen, which isn't a dedicated
         # Screen subclass — the app composes its widgets straight onto the
@@ -641,10 +663,7 @@ class HACLI(App):
             )
             if is_active:
                 active_index = i
-                pages.append((title, active_rows))
-            else:
-                static_bindings = self.BINDINGS if screen_cls is None else screen_cls.BINDINGS
-                pages.append((title, binding_rows(static_bindings)))
+            pages.append((title, page_rows(screen_cls, is_active)))
 
         self.push_screen(HelpPopup(pages, active_index))
 

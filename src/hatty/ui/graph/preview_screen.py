@@ -151,6 +151,48 @@ class GraphPreviewScreen(Screen):
         {"show_dashboard", "show_device_tree", "show_saved_graphs_popup", "show_graph_duration", "quit"}
     )
 
+    # This screen's help page is always built from the full static BINDINGS
+    # rather than whichever mode happens to be active (main.action_show_help),
+    # grouped into these sections — otherwise the inspect-mode twin of every
+    # paging key would never appear on the page unless help was opened from
+    # inside inspect mode (issue #7).
+    HELP_ALL_MODES = True
+    HELP_SECTIONS = (
+        (
+            "Window",
+            frozenset(
+                {
+                    "cycle_plot_type",
+                    "scroll_back",
+                    "scroll_forward",
+                    "scroll_back_fast",
+                    "scroll_forward_fast",
+                    "zoom_in",
+                    "zoom_out",
+                    "snap_live",
+                }
+            ),
+        ),
+        (
+            "Inspect mode (Enter)",
+            frozenset(
+                {
+                    "toggle_cursor_mode",
+                    "cursor_prev",
+                    "cursor_next",
+                    "cursor_prev_fast",
+                    "cursor_next_fast",
+                    "cursor_home",
+                    "cursor_end",
+                    "exit_cursor_mode",
+                }
+            ),
+        ),
+        ("Lines & Colors", frozenset({"next_entity", "cycle_color", "pick_color"})),
+        ("Saving", frozenset({"save_graph", "update_graph"})),
+        ("Other", frozenset({"toggle_event_log", "show_list_popup", "close_event_log", "show_help", "go_back"})),
+    )
+
     def __init__(
         self,
         entity_ids: list[str] | str,
