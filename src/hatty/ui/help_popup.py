@@ -1,5 +1,19 @@
 # hatty — MIT License. See LICENSE file for details.
-from collections.abc import Iterable
+"""Keybinding help, opened with `?`. `HACLI.action_show_help` builds one page per
+screen as a flat `list[(key, description)]` and hands it to `HelpPopup`; a page
+for the currently active screen is built from its live `active_bindings`
+(mode-filtered), any other page from its static `BINDINGS` class attr.
+
+A row with an empty key is a section header, not a binding — no real binding
+has an empty key — rendered bold instead of as a keybinding (`_render_page`,
+`_render_all`). `sectioned_rows` builds these from a screen's `HELP_SECTIONS`
+class attr (a title -> action-names mapping); `GraphPreviewScreen` additionally
+sets `HELP_ALL_MODES` so its page is always built from the full static
+`BINDINGS` — every inspect-mode twin binding alongside its paging counterpart —
+regardless of which mode happens to be active (issue #7).
+"""
+
+from collections.abc import Iterable, Sequence
 
 from rich.table import Table
 from textual.app import ComposeResult
@@ -44,17 +58,71 @@ def dedup_rows(rows: Iterable[tuple[str, str]]) -> list[tuple[str, str]]:
     return result
 
 
+def action_name(action: str) -> str:
+    """Strip a call's `(args)` suffix, e.g. `move_cursor(-1, 0)` -> `move_cursor`,
+    so bindings that pass different args to the same action still group under
+    one HELP_SECTIONS entry."""
+    return action.split("(", 1)[0]
+
+
+def binding_entries(bindings: Iterable[Binding | tuple]) -> list[tuple[str, str, str]]:
+    """Convert a screen's BINDINGS (Binding objects, or the odd plain tuple) into
+    deduped (key, description, action_name) triples — the static-page counterpart
+    to the (key, description) pairs `active_bindings` already yields for the live
+    page, with the action name kept alongside so `sectioned_rows` can group them."""
+
+    def _entry(entry: Binding | tuple) -> tuple[str, str, str]:
+        if isinstance(entry, Binding):
+            return entry.key, entry.description, action_name(entry.action)
+        return (
+            entry[0],
+            entry[2] if len(entry) > 2 else "",
+            action_name(entry[1] if len(entry) > 1 else ""),
+        )
+
+    seen: set[tuple[str, str]] = set()
+    result: list[tuple[str, str, str]] = []
+    for entry in bindings:
+        key, description, action = _entry(entry)
+        if not description or (key, description) in seen:
+            continue
+        seen.add((key, description))
+        result.append((key, description, action))
+    return result
+
+
 def binding_rows(bindings: Iterable[Binding | tuple]) -> list[tuple[str, str]]:
     """Convert a screen's BINDINGS (Binding objects, or the odd plain tuple) into
     deduped (key, description) rows — the static-page counterpart to the
     (key, description) pairs `active_bindings` already yields for the live page."""
+    return [(key, description) for key, description, _ in binding_entries(bindings)]
 
-    def _key_desc(entry: Binding | tuple) -> tuple[str, str]:
-        if isinstance(entry, Binding):
-            return entry.key, entry.description
-        return entry[0], entry[2] if len(entry) > 2 else ""
 
-    return dedup_rows(_key_desc(entry) for entry in bindings)
+def sectioned_rows(
+    entries: Iterable[tuple[str, str, str]], sections: Sequence[tuple[str, frozenset[str]]]
+) -> list[tuple[str, str]]:
+    """Group (key, description, action_name) entries under section headers.
+
+    A row with an empty key is a header (no real binding has an empty key) —
+    `_render_page`/`_render_all` render these bold instead of as a keybinding.
+    Each section keeps its entries in binding-declaration order; an action not
+    claimed by any listed section falls into a trailing "Other" section so a
+    newly added binding can never silently vanish from a sectioned page."""
+    entries = list(entries)
+    claimed: set[str] = set()
+    result: list[tuple[str, str]] = []
+    for title, actions in sections:
+        claimed |= actions
+        rows = dedup_rows((key, desc) for key, desc, action in entries if action in actions)
+        if not rows:
+            continue
+        result.append(("", title))
+        result.extend(rows)
+    leftover = dedup_rows((key, desc) for key, desc, action in entries if action not in claimed)
+    if leftover:
+        result.append(("", "Other"))
+        result.extend(leftover)
+    return result
 
 
 def filter_pages(
@@ -62,11 +130,17 @@ def filter_pages(
 ) -> list[tuple[str, list[tuple[str, str]]]]:
     """Pages reduced to the rows whose key or description contains `term`
     (case-insensitive); a page with no surviving rows is dropped entirely.
-    An empty term matches everything — the unfiltered show-all view reuses this."""
+    An empty term matches everything — the unfiltered show-all view reuses
+    this, section headers included. A real search term drops section-header
+    rows (empty key) before matching — a header's title text isn't a binding
+    and would otherwise show up as an orphaned, key-less "match"."""
     term = term.lower()
     result: list[tuple[str, list[tuple[str, str]]]] = []
     for title, rows in pages:
-        matched = [(key, desc) for key, desc in rows if term in key.lower() or term in desc.lower()] if term else rows
+        if term:
+            matched = [(key, desc) for key, desc in rows if key and (term in key.lower() or term in desc.lower())]
+        else:
+            matched = rows
         if matched:
             result.append((title, matched))
     return result
@@ -138,8 +212,13 @@ class HelpPopup(PopupScreen):
         table = Table.grid(padding=(0, 2))
         table.add_column(justify="right", style="bold", no_wrap=True)
         table.add_column(justify="left")
-        for key, description in rows:
-            table.add_row(display_key(key), description)
+        for i, (key, description) in enumerate(rows):
+            if not key:
+                if i:
+                    table.add_row("", "")  # blank spacer before every header but the first
+                table.add_row("", f"[bold]{description}[/]")
+            else:
+                table.add_row(display_key(key), description)
         return table
 
     def _render_all(self, term: str) -> Table:
@@ -152,7 +231,10 @@ class HelpPopup(PopupScreen):
         for title, rows in matched_pages:
             table.add_row("", f"[bold underline]{title}[/]")
             for key, description in rows:
-                table.add_row(display_key(key), description)
+                if not key:
+                    table.add_row("", f"[bold]{description}[/]")
+                else:
+                    table.add_row(display_key(key), description)
         return table
 
     def _refresh_display(self) -> None:

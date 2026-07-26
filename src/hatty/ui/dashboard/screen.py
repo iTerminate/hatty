@@ -224,6 +224,30 @@ class DashboardScreen(Screen):
         Binding("escape", "go_back", "Back"),
     ]
 
+    # Groups the help page under the same Use/Edit split the bindings above are
+    # already commented with (issue #7); unlike GraphPreviewScreen this page
+    # still switches between active-mode and full-static rows in the usual way
+    # (main.action_show_help) — only the grouping is new.
+    HELP_SECTIONS = (
+        ("Use mode", USE_ONLY_ACTIONS),
+        ("Edit mode", EDIT_ONLY_ACTIONS),
+        (
+            "Both modes",
+            frozenset(
+                {
+                    "move_cursor",
+                    "show_list_popup",
+                    "manage_dashboards",
+                    "show_device_tree",
+                    "cycle_graph_type",
+                    "graph_fullscreen",
+                    "show_help",
+                    "go_back",
+                }
+            ),
+        ),
+    )
+
     DEFAULT_CSS = """
     DashboardScreen #dashboard_mode_banner {
         height: 1;

@@ -608,18 +608,47 @@ class HACLI(App):
 
     # ── Help ──────────────────────────────────────────────────────────────────
 
+    # Textual DataTable bindings that leak into the Main page's active_bindings
+    # via the focused EntitiesTable but mean nothing as hatty keybindings (issue
+    # #7) — ↑/↓/PgUp/PgDn/Ctrl+Home/Ctrl+End stay, they're genuinely useful.
+    _HELP_HIDDEN_ACTIONS = frozenset({"cursor_left", "cursor_right", "select_cursor", "scroll_home", "scroll_end"})
+
     def action_show_help(self) -> None:
         from hatty.ui.controls.light_screen import LightControlScreen
         from hatty.ui.controls.media_player_screen import MediaPlayerControlScreen
         from hatty.ui.device_tree_screen import DeviceTreeScreen
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
-        from hatty.ui.help_popup import binding_rows
+        from hatty.ui.help_popup import action_name, binding_entries, sectioned_rows
 
-        active_rows = [
-            (active.binding.key, active.binding.description)
-            for active in self.screen.active_bindings.values()
-            if active.binding.description
-        ]
+        def active_entries() -> list[tuple[str, str, str]]:
+            return [
+                (active.binding.key, active.binding.description, action_name(active.binding.action))
+                for active in self.screen.active_bindings.values()
+                if active.binding.description and action_name(active.binding.action) not in self._HELP_HIDDEN_ACTIONS
+            ]
+
+        def page_rows(screen_cls: type | None, is_active: bool) -> list[tuple[str, str]]:
+            # A screen opting into HELP_ALL_MODES (GraphPreviewScreen) always builds
+            # from its full static BINDINGS plus an app-level "From anywhere" section,
+            # regardless of which mode is active — its help page groups both modes'
+            # bindings side by side instead of only showing whichever is live (#7).
+            if screen_cls is not None and getattr(screen_cls, "HELP_ALL_MODES", False):
+                rows = sectioned_rows(binding_entries(screen_cls.BINDINGS), screen_cls.HELP_SECTIONS)
+                allowed = screen_cls.ALLOWED_APP_ACTIONS
+                app_rows = [(key, desc) for key, desc, action in binding_entries(self.BINDINGS) if action in allowed]
+                if app_rows:
+                    rows = [*rows, ("", "From anywhere"), *app_rows]
+                return rows
+
+            if is_active:
+                entries = active_entries()
+            else:
+                entries = binding_entries(self.BINDINGS if screen_cls is None else screen_cls.BINDINGS)
+
+            sections = getattr(screen_cls, "HELP_SECTIONS", None) if screen_cls is not None else None
+            if sections:
+                return sectioned_rows(entries, sections)
+            return [(key, desc) for key, desc, _ in entries]
 
         # `None` marks the base (main-table) screen, which isn't a dedicated
         # Screen subclass — the app composes its widgets straight onto the
@@ -635,16 +664,27 @@ class HACLI(App):
 
         pages: list[tuple[str, list[tuple[str, str]]]] = []
         active_index = 0
+        matched_known_screen = False
         for i, (title, screen_cls) in enumerate(page_defs):
             is_active = (
                 self.screen is self.screen_stack[0] if screen_cls is None else isinstance(self.screen, screen_cls)
             )
             if is_active:
                 active_index = i
-                pages.append((title, active_rows))
-            else:
-                static_bindings = self.BINDINGS if screen_cls is None else screen_cls.BINDINGS
-                pages.append((title, binding_rows(static_bindings)))
+                matched_known_screen = True
+            pages.append((title, page_rows(screen_cls, is_active)))
+
+        # A pushed screen that isn't one of the six above (Weather Forecast,
+        # Config, …) used to silently show the unrelated Main page instead of
+        # its own keys (issue #7) — give it a leading page of its own instead.
+        if not matched_known_screen and self.screen is not self.screen_stack[0]:
+            screen_type = type(self.screen)
+            title = getattr(screen_type, "HELP_TITLE", screen_type.__name__)
+            sections = getattr(screen_type, "HELP_SECTIONS", None)
+            entries = active_entries()
+            rows = sectioned_rows(entries, sections) if sections else [(key, desc) for key, desc, _ in entries]
+            pages.insert(0, (title, rows))
+            active_index = 0
 
         self.push_screen(HelpPopup(pages, active_index))
 
@@ -1149,25 +1189,6 @@ class HACLI(App):
 
     # ── Navigation / back ────────────────────────────────────────────────────
 
-    _GRAPH_SCREEN_DENYLIST = {
-        "toggle_search",
-        "expand_entity",
-        "toggle_list_membership",
-        "rename_entity",
-        "show_column_config",
-        "toggle_activity_log",
-        "toggle_device_log",
-        "toggle_entity_log",
-        "maximize_log",
-        "log_older",
-        "log_newer",
-        "toggle_graph",
-        "add_to_graph",
-        "show_list_selection_popup",
-        "move_entity_in_list",
-        "toggle_list_sort",
-    }
-
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         if isinstance(self.screen, DashboardScreen):
             return action in ("quit", "show_saved_graphs_popup")
@@ -1177,8 +1198,8 @@ class HACLI(App):
             return action == "quit"
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
 
-        if isinstance(self.screen, GraphPreviewScreen) and action in self._GRAPH_SCREEN_DENYLIST:
-            return False
+        if isinstance(self.screen, GraphPreviewScreen):
+            return action in GraphPreviewScreen.ALLOWED_APP_ACTIONS
         # Any other pushed screen (ConfigScreen, LightControlScreen, popups, …)
         # must not leak main-table bindings to the hidden base table (#187), but
         # Textual's own tab focus navigation (app.focus_next/previous) operates on

@@ -2,6 +2,7 @@
 from textual.widgets import Input, ListView
 
 from hatty.ui.config_screen import ConfigScreen
+from hatty.ui.help_popup import HelpPopup
 from tests.conftest import make_config
 
 _CONFIG = {
@@ -20,6 +21,26 @@ async def test_config_screen_initially_focuses_category_menu(make_app, sample_en
         screen = app.screen
         assert isinstance(screen, ConfigScreen)
         assert app.focused is screen.query_one("#cfg_category_list", ListView)
+
+
+async def test_question_mark_opens_help_on_config_screen(make_app, sample_entities):
+    """Issue #7: ConfigScreen isn't one of HACLI.action_show_help's six known
+    pages, so "?" used to silently show the unrelated Main page instead."""
+    app = make_app(entities=sample_entities, config_data=_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_show_config()
+        await pilot.pause()
+        assert isinstance(app.screen, ConfigScreen)
+
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpPopup)
+        assert app.screen._pages[0][0] == "Config"
+        assert app.screen._active_index == 0
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Save" in descriptions
+        assert "Back/Cancel" in descriptions
 
 
 async def test_entering_home_assistant_category_focuses_url_input(make_app, sample_entities):

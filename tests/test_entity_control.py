@@ -5,6 +5,7 @@ from textual.widgets import Button, Input, Select
 from hatty.ui.controls.control_popup import EntityControlPopup
 from hatty.ui.controls.percentage_slider import PercentageSlider
 from hatty.ui.entity_table import EntitiesTable
+from hatty.ui.help_popup import HelpPopup
 from hatty.ui.weather_forecast_screen import WeatherForecastScreen
 from tests.conftest import make_config
 
@@ -72,6 +73,16 @@ async def test_e_opens_forecast_screen_for_weather_on_main_table(make_app):
         await pilot.pause()
         await pilot.pause()  # let the fetch_forecast worker resolve
         assert isinstance(app.screen, WeatherForecastScreen)
+
+        # Issue #7: WeatherForecastScreen isn't one of HACLI.action_show_help's
+        # six known pages, so "?" used to silently show the unrelated Main page.
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpPopup)
+        assert app.screen._pages[0][0] == "Weather Forecast"
+        assert app.screen._active_index == 0
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Back" in descriptions
 
 
 async def test_e_opens_control_popup_for_fan_focused_on_first_field(make_app):

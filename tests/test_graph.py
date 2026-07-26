@@ -473,6 +473,38 @@ async def test_stray_list_bindings_disabled_on_fullscreen_graph(make_app, sample
         assert "e" not in shown_keys
         assert "space" not in shown_keys
 
+
+async def test_more_stray_app_bindings_disabled_on_fullscreen_graph(make_app, sample_entities):
+    """Issue #7: the old denylist missed several app-level keys that don't do
+    anything useful on top of a fullscreen graph — they used to still show up
+    in the help page. `d`/`D`/`s`/`T`/quit are the ones that genuinely work
+    here (they push/replace screens or reload the graph) and stay enabled."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)
+        await pilot.pause()
+        await pilot.press("G")
+        await pilot.pause()
+        assert isinstance(app.screen, GraphPreviewScreen)
+
+        for action in (
+            "search_next",
+            "search_prev",
+            "toggle_list_lock",
+            "undo",
+            "redo",
+            "graph_fullscreen",
+            "show_list_selection_popup",
+            "move_entity_in_list",
+            "toggle_list_sort",
+        ):
+            assert app.check_action(action, ()) is False, action
+
+        for action in ("show_dashboard", "show_device_tree", "show_saved_graphs_popup", "show_graph_duration", "quit"):
+            assert app.check_action(action, ()) is True, action
+
         # The keys themselves no longer trigger the underlying list actions.
         await pilot.press("space")
         await pilot.pause()
@@ -584,6 +616,55 @@ async def test_enter_toggles_cursor_mode_and_left_right_move_cursor(make_app, sa
         await pilot.press("right")
         await pilot.pause()
         assert preview._cursor_index == 1
+
+
+async def test_footer_bindings_describe_the_active_mode(make_app, sample_entities):
+    """Issue #7: the same key does two different jobs in/out of inspect mode,
+    so the Footer (and help page) must show the description matching what it
+    currently does, not always the paging one."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._history_data = {
+            "sensor.temperature": [
+                ("2024-01-01T12:00:00+00:00", 20.0),
+                ("2024-01-01T12:01:00+00:00", 21.0),
+            ]
+        }
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+        await pilot.press("G")
+        await pilot.pause()
+        preview = app.screen
+        assert isinstance(preview, GraphPreviewScreen)
+
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Older"
+        assert active["enter"].binding.description == "Inspect"
+        assert active["escape"].binding.description == "Back"
+        # Live and unzoomed: nothing to snap back to yet, so "home"/"end" (both
+        # paging and inspect meanings) are absent rather than misleadingly shown.
+        assert "home" not in active
+        assert "end" not in active
+
+        await pilot.press("enter")
+        await pilot.pause()
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Prev Sample"
+        assert active["home"].binding.description == "Oldest Sample"
+        assert active["end"].binding.description == "Newest Sample"
+        assert active["enter"].binding.description == "Exit Inspect"
+        assert active["escape"].binding.description == "Exit Inspect"
+
+        await pilot.press("escape")
+        await pilot.pause()
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Older"
+        assert active["escape"].binding.description == "Back"
+        assert "home" not in active
 
 
 async def test_cursor_mode_shows_values_for_all_compared_entities(make_app):

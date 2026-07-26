@@ -25,6 +25,31 @@ async def test_question_mark_opens_help_listing_bindings_and_pages(make_app):
         assert not isinstance(app.screen, HelpPopup)
 
 
+async def test_main_page_hides_meaningless_datatable_rows(make_app):
+    """Issue #7: EntitiesTable is a Textual DataTable, so its own key bindings
+    (cursor_left/right, select_cursor, home/end-within-row) leak into the live
+    Main page's active_bindings even though moving *columns* means nothing in
+    a table whose selection model only cares about the row. Row navigation
+    (↑/↓, PgUp/PgDn, Ctrl+Home/Ctrl+End) is real and stays."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Cursor left" not in descriptions
+        assert "Cursor right" not in descriptions
+        assert "Select" not in descriptions
+        assert "Home" not in descriptions
+        assert "End" not in descriptions
+        assert "Cursor up" in descriptions
+        assert "Cursor down" in descriptions
+        assert "Page up" in descriptions
+        assert "Page down" in descriptions
+        assert "Top" in descriptions
+        assert "Bottom" in descriptions
+
+
 async def test_question_mark_opens_help_on_dashboard_screen_use_mode(make_app):
     app = make_app()
     async with app.run_test() as pilot:
@@ -154,3 +179,55 @@ async def test_a_toggles_show_all_pages(make_app):
         await pilot.press("a")
         await pilot.pause()
         assert app.screen._show_all is False
+
+
+def _rows_for(app, title: str) -> list[tuple[str, str]]:
+    return next(rows for page_title, rows in app.screen._pages if page_title == title)
+
+
+async def test_graph_help_page_shows_both_modes_sectioned(make_app):
+    """Issue #7: the Graph page must show both the paging and inspect-mode
+    meaning of a key like `home`, grouped under section headers, regardless
+    of which mode the graph screen happens to be in when help is opened."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        rows = _rows_for(app, "Graph")
+
+        headers = [desc for key, desc in rows if not key]
+        assert "Window" in headers
+        assert "Inspect mode (Enter)" in headers
+        assert "From anywhere" in headers
+
+        descriptions_by_key: dict[str, list[str]] = {}
+        for key, desc in rows:
+            if key:
+                descriptions_by_key.setdefault(key, []).append(desc)
+        assert descriptions_by_key["home"] == ["Now", "Oldest Sample"]
+        assert descriptions_by_key["left"] == ["Older", "Prev Sample"]
+
+        # App-level keys that don't do anything on the graph screen are absent;
+        # the ones that still work (Dashboard/Device Tree/Saved Graphs/Duration)
+        # show up under "From anywhere".
+        assert "n" not in descriptions_by_key
+        flat_descriptions = [desc for _, desc in rows]
+        assert "Dashboard" in flat_descriptions
+        assert "Saved Graphs" in flat_descriptions
+
+
+async def test_dashboard_help_page_sectioned_by_mode(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        rows = _rows_for(app, "Dashboard")
+        headers = [desc for key, desc in rows if not key]
+        assert headers == ["Use mode", "Edit mode", "Both modes"]
+
+        descriptions = [desc for key, desc in rows if key]
+        assert "Toggle" in descriptions  # use mode
+        assert "Assign" in descriptions  # edit mode
+        assert "Dashboards" in descriptions  # both modes
