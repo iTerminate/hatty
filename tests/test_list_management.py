@@ -3,9 +3,7 @@ from textual.widgets import ListView
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from tests.conftest import make_config, notified
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, make_config, notified
 
 
 async def test_l_opens_list_popup(make_app):
@@ -121,7 +119,7 @@ async def test_space_keeps_cursor_row_in_filtered_results(make_app, sample_entit
 
 
 async def test_space_with_no_list_selected_shows_warning(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.current_list_name is None
@@ -145,7 +143,7 @@ async def test_escape_exits_list_filter(make_app, sample_entities):
 
 
 async def test_create_new_list_via_popup(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("l")
@@ -323,7 +321,7 @@ async def test_l_while_searching_returns_to_active_list(make_app, sample_entitie
 
 
 async def test_l_with_no_lists_still_opens_popup(make_app):
-    app = make_app(config_data=_NO_LIST_CONFIG)
+    app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.current_list_name is None

@@ -16,9 +16,13 @@ def make_config(url=FAKE_URL, token=FAKE_TOKEN, **overrides):
     """The single source of truth for a test config dict: the shared
     home_assistant stanza (url/token overridable) plus any top-level overrides
     (lists, dashboards, saved_graphs, …). Importable
-    (`from tests.conftest import make_config`) for module-level constants; also
-    surfaced as the config_data / no_list_config fixtures."""
+    (`from tests.conftest import make_config`) for module-level constants."""
     return {"home_assistant": {"url": url, "token": token}, **overrides}
+
+
+# The ubiquitous "connected but no lists" config, shared by every module that
+# used to define its own identical `_NO_LIST_CONFIG = make_config(lists={})`.
+NO_LIST_CONFIG = make_config(lists={})
 
 
 @pytest.fixture(autouse=True)
@@ -72,6 +76,7 @@ class FakeHAClient:
         self._history_data: dict = {}
         self._climate_history_data: dict = {}
         self._logbook_data: list[dict] = []
+        self.logbook_calls: list[tuple[list[str], float, "datetime | None"]] = []
         self._forecast_data: dict[str, dict[str, list[dict]]] = {}
         self.forecast_calls: list[tuple[str, str]] = []
         self._closing = False
@@ -144,7 +149,10 @@ class FakeHAClient:
     ) -> list[dict] | None:
         return self._climate_history_data.get(entity_id, [])
 
-    async def fetch_logbook(self, entity_ids: list[str], hours: int = 24) -> list[dict] | None:
+    async def fetch_logbook(
+        self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
+    ) -> list[dict] | None:
+        self.logbook_calls.append((list(entity_ids), hours, end))
         return list(self._logbook_data)
 
     async def fetch_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict] | None:
@@ -222,15 +230,14 @@ def _build_client_factory(entities, registry, devices=None, areas=None):
 
 
 @pytest.fixture
-def config_data():
-    """The make_config builder, as a fixture for tests that prefer injection."""
-    return make_config
-
-
-@pytest.fixture
-def no_list_config():
-    """The ubiquitous 'connected but no lists' config."""
-    return make_config(lists={})
+def sample_registry():
+    """Shared entity->device registry fixture (device log tests)."""
+    return [
+        {"entity_id": "light.living_room_lamp", "device_id": "dev_abc"},
+        {"entity_id": "light.kitchen_light", "device_id": "dev_abc"},
+        {"entity_id": "sensor.temperature", "device_id": "dev_xyz"},
+        {"entity_id": "switch.fan", "device_id": None},
+    ]
 
 
 @pytest.fixture

@@ -1,33 +1,21 @@
 # hatty — MIT License. See LICENSE file for details.
-import pytest
 from textual.coordinate import Coordinate
 from textual.widgets import Label, Log
 
 from hatty.ui.activity_log_panel import ActivityLogPanel
-from tests.conftest import make_config
+from tests.conftest import NO_LIST_CONFIG
 
-_NO_LIST_CONFIG = make_config(lists={})
+# sample_registry fixture is shared from tests/conftest.py.
 
-
-@pytest.fixture
-def sample_registry():
-    return [
-        {"entity_id": "light.living_room_lamp", "device_id": "dev_abc"},
-        {"entity_id": "light.kitchen_light", "device_id": "dev_abc"},
-        {"entity_id": "sensor.temperature", "device_id": "dev_xyz"},
-        {"entity_id": "switch.fan", "device_id": None},
-    ]
-
-
-# With _NO_LIST_CONFIG + sample_entities, alphabetical sort by friendly name:
+# With NO_LIST_CONFIG + sample_entities, alphabetical sort by friendly name:
 # Row 0: switch.fan         (Fan Switch)
 # Row 1: light.kitchen_light  (Kitchen Light)
 # Row 2: light.living_room_lamp  (Living Room Lamp)
 # Row 3: sensor.temperature  (Temperature Sensor)
 
 
-async def test_A_opens_device_log_panel(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+async def test_A_opens_device_log_panel_with_title_and_sibling_ids(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")
@@ -35,39 +23,17 @@ async def test_A_opens_device_log_panel(make_app, sample_entities, sample_regist
         await pilot.pause()
         await pilot.press("A")
         await pilot.pause()
+
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-
-
-async def test_device_log_title_shows_device_log_and_entity_name(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)  # light.living_room_lamp
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
-        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         title = str(panel.query_one("#log_title", Label).content)
         assert "Device Log" in title
         assert "Living Room Lamp" in title
-
-
-async def test_device_log_tracks_sibling_entity_ids(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)  # light.living_room_lamp
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
         assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
 
 
 async def test_A_closes_panel_when_already_open(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")
@@ -82,7 +48,7 @@ async def test_A_closes_panel_when_already_open(make_app, sample_entities, sampl
 
 
 async def test_a_closes_device_log_panel(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")
@@ -98,7 +64,7 @@ async def test_a_closes_device_log_panel(make_app, sample_entities, sample_regis
 
 
 async def test_device_log_live_update_from_sibling(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")
@@ -122,7 +88,7 @@ async def test_device_log_live_update_from_sibling(make_app, sample_entities, sa
 
 
 async def test_device_log_fallback_when_no_device_id(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")
@@ -136,7 +102,7 @@ async def test_device_log_fallback_when_no_device_id(make_app, sample_entities, 
 
 
 async def test_get_device_entity_ids_returns_siblings(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         entity_ids, label, device_found = app._get_device_entity_ids("light.living_room_lamp")
@@ -149,7 +115,7 @@ async def test_get_device_entity_ids_fallback_empty_device_id(make_app, sample_e
     registry_with_empty = [
         {"entity_id": "light.living_room_lamp", "device_id": ""},
     ]
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=registry_with_empty)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry_with_empty)
     async with app.run_test():
         entity_ids, label, device_found = app._get_device_entity_ids("light.living_room_lamp")
         assert device_found is False
@@ -157,7 +123,7 @@ async def test_get_device_entity_ids_fallback_empty_device_id(make_app, sample_e
 
 
 async def test_A_when_no_entities_stays_hidden(make_app):
-    app = make_app(entities=[], config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=[], config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("A")
@@ -166,23 +132,8 @@ async def test_A_when_no_entities_stays_hidden(make_app):
         assert not panel.has_class("-visible")
 
 
-async def test_a_when_device_log_open_closes_panel(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one("EntitiesTable")
-        table.cursor_coordinate = Coordinate(2, 0)
-        await pilot.pause()
-        await pilot.press("A")
-        await pilot.pause()
-        assert app.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-        await pilot.press("a")
-        await pilot.pause()
-        assert not app.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-
-
 async def test_A_opens_device_log_for_entity_with_different_device(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG, registry=sample_registry)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("EntitiesTable")

@@ -5,9 +5,7 @@ from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
 from hatty.ui.graph.saved_graphs_popup import SavedGraphsPopup, SaveGraphNamePopup
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, make_config
 
 # Alphabetical order with no list:
 # Row 0: Fan Switch (switch.fan, off)
@@ -45,7 +43,7 @@ async def _open_fullscreen_graph(pilot, app, row: int) -> GraphPreviewScreen:
 
 
 async def test_save_graph_from_fullscreen_persists_to_config(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=3)
@@ -66,7 +64,7 @@ async def test_save_graph_from_fullscreen_persists_to_config(make_app, sample_en
 
 
 async def test_save_multi_entity_comparison_graph_and_reopen_restores_state(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=1)
@@ -116,7 +114,7 @@ async def test_save_multi_entity_comparison_graph_and_reopen_restores_state(make
 
 
 async def test_s_opens_saved_graphs_popup(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("s")
@@ -126,7 +124,7 @@ async def test_s_opens_saved_graphs_popup(make_app, sample_entities):
 
 async def test_open_saved_graph_from_popup(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "scatter", "hours": 12},
         },
@@ -147,7 +145,7 @@ async def test_open_saved_graph_from_popup(make_app, sample_entities):
 
 async def test_rename_saved_graph_via_popup(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Old Name": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
         },
@@ -171,7 +169,7 @@ async def test_rename_saved_graph_via_popup(make_app, sample_entities):
 
 async def test_delete_saved_graph_via_popup(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Doomed": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
         },
@@ -189,7 +187,7 @@ async def test_delete_saved_graph_via_popup(make_app, sample_entities):
 
 
 async def test_saved_graphs_popup_cancel_via_escape(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("s")
@@ -202,7 +200,7 @@ async def test_saved_graphs_popup_cancel_via_escape(make_app, sample_entities):
 
 async def test_u_updates_saved_graph_in_place_without_popup(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
         },
@@ -230,7 +228,7 @@ async def test_u_updates_saved_graph_in_place_without_popup(make_app, sample_ent
 
 
 async def test_update_action_disabled_when_not_opened_from_saved_graph(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_fullscreen_graph(pilot, app, row=3)
@@ -242,7 +240,7 @@ async def test_update_action_disabled_when_not_opened_from_saved_graph(make_app,
 
 
 async def test_entities_get_distinct_default_colors(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=1)
@@ -263,7 +261,7 @@ async def test_entities_get_distinct_default_colors(make_app):
 
 
 async def test_cycle_color_changes_active_entitys_color_and_persists_on_save(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=1)
@@ -296,7 +294,7 @@ async def test_cycle_color_changes_active_entitys_color_and_persists_on_save(mak
 
 
 async def test_tab_cycles_active_entity_for_recoloring(make_app):
-    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=1)
@@ -320,7 +318,7 @@ async def test_tab_cycles_active_entity_for_recoloring(make_app):
 
 
 async def test_single_entity_graph_allows_color_but_not_entity_cycling(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=3)
@@ -332,7 +330,7 @@ async def test_single_entity_graph_allows_color_but_not_entity_cycling(make_app,
 
 async def test_reopening_saved_graph_restores_colors(make_app):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Cmp": {
                 "entity_ids": ["sensor.temperature", "sensor.humidity"],
@@ -356,7 +354,7 @@ async def test_reopening_saved_graph_restores_colors(make_app):
 
 
 async def test_capital_c_opens_color_picker_and_applies_choice(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_fullscreen_graph(pilot, app, row=3)
@@ -378,7 +376,7 @@ async def test_capital_c_opens_color_picker_and_applies_choice(make_app, sample_
 
 async def test_picked_color_persists_via_update(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
         },
@@ -408,7 +406,7 @@ async def test_picked_color_persists_via_update(make_app, sample_entities):
 
 async def test_save_as_prefills_name_when_opened_from_saved_graph(make_app, sample_entities):
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
         },
@@ -432,7 +430,7 @@ async def test_opening_saved_graph_replaces_current_graph_screen(make_app, sampl
     # #154: opening a saved graph while a fullscreen graph is already up should
     # replace it in place, never stacking a second GraphPreviewScreen.
     config_data = {
-        **_NO_LIST_CONFIG,
+        **NO_LIST_CONFIG,
         "saved_graphs": {
             "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "scatter", "hours": 12},
         },
@@ -478,7 +476,7 @@ async def test_l_on_fullscreen_graph_jumps_back_to_list(make_app, sample_entitie
 
 async def test_l_on_fullscreen_graph_opens_picker_when_no_list(make_app, sample_entities):
     # #155: with no list to jump back to, l should fall back to the ListSelectionPopup.
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await _open_fullscreen_graph(pilot, app, row=3)

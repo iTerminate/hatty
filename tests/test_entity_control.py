@@ -74,19 +74,7 @@ async def test_e_opens_forecast_screen_for_weather_on_main_table(make_app):
         assert isinstance(app.screen, WeatherForecastScreen)
 
 
-async def test_e_opens_control_popup_for_fan(make_app):
-    app = make_app(entities=_CONTROL_ENTITIES, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        table = app.query_one(EntitiesTable)
-        table.cursor_coordinate = Coordinate(0, 0)  # Bedroom Fan
-        await pilot.pause()
-        await pilot.press("e")
-        await pilot.pause()
-        assert isinstance(app.screen, EntityControlPopup)
-
-
-async def test_control_popup_initially_focuses_first_field(make_app):
+async def test_e_opens_control_popup_for_fan_focused_on_first_field(make_app):
     app = make_app(entities=_CONTROL_ENTITIES, config_data=_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -366,18 +354,7 @@ _THREE_SPEED_FAN = [
 ]
 
 
-async def test_fan_with_percentage_step_sets_slider_step(make_app):
-    app = make_app(entities=_THREE_SPEED_FAN, config_data=_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("e")
-        await pilot.pause()
-
-        slider = app.screen.query_one("#field_percentage", PercentageSlider)
-        assert slider.step == 33
-
-
-async def test_fan_speed_label_shows_level_count(make_app):
+async def test_fan_with_percentage_step_sets_slider_step_and_level_count_label(make_app):
     app = make_app(entities=_THREE_SPEED_FAN, config_data=_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -386,6 +363,8 @@ async def test_fan_speed_label_shows_level_count(make_app):
 
         popup = app.screen
         assert isinstance(popup, EntityControlPopup)
+        slider = popup.query_one("#field_percentage", PercentageSlider)
+        assert slider.step == 33
         labels = [lbl.content for lbl in popup.query("Label.field-label")]
         assert any("3 levels" in str(lbl) for lbl in labels)
 

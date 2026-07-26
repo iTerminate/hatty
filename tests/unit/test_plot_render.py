@@ -17,6 +17,7 @@ from hatty.ui.graph.plot_render import (
     plot_width,
     render_binary,
     render_climate,
+    render_event_marks,
     render_numeric,
     set_binary_axis,
 )
@@ -284,6 +285,13 @@ def test_render_numeric_cursor_index_clamped_to_series():
     assert white_vlines[0][1][0] == 3600.0  # clamped to the last sample
 
 
+def test_render_numeric_returns_t0():
+    plt = _RecordingPlt()
+    primary = ("Temp", [("2026-07-07T10:00:00+00:00", 1.0), ("2026-07-07T11:00:00+00:00", 2.0)], None)
+    t0 = render_numeric(plt, "line", primary, [], width=200)
+    assert t0 == datetime.fromisoformat("2026-07-07T10:00:00+00:00")
+
+
 # ── render_binary (needs plt) ─────────────────────────────────────────────────
 
 
@@ -320,3 +328,45 @@ def test_render_binary_extends_axis_to_extend_to():
     # apply_time_axis is fed total_secs; the largest xtick position reflects the span.
     tick_positions = xticks_call[1][0]
     assert max(tick_positions) >= 3 * 3600 - 1
+
+
+# ── render_event_marks (needs plt) ────────────────────────────────────────────
+
+
+def test_render_event_marks_one_vline_per_event():
+    plt = _RecordingPlt()
+    t0 = datetime.fromisoformat("2026-07-07T10:00:00+00:00")
+    events = ["2026-07-07T10:30:00+00:00", "2026-07-07T11:00:00+00:00"]
+    render_event_marks(plt, t0, events)
+    vlines = [c for c in plt.calls if c[0] == "vline"]
+    assert len(vlines) == 2
+    assert vlines[0][1][0] == 1800.0
+    assert vlines[1][1][0] == 3600.0
+    assert all(kwargs.get("color") == "magenta" for _, _, kwargs in vlines)
+
+
+def test_render_event_marks_skips_events_before_t0():
+    plt = _RecordingPlt()
+    t0 = datetime.fromisoformat("2026-07-07T10:00:00+00:00")
+    events = ["2026-07-07T09:00:00+00:00", "2026-07-07T10:30:00+00:00"]
+    render_event_marks(plt, t0, events)
+    vlines = [c for c in plt.calls if c[0] == "vline"]
+    assert len(vlines) == 1
+    assert vlines[0][1][0] == 1800.0
+
+
+def test_render_event_marks_honours_limit():
+    plt = _RecordingPlt()
+    t0 = datetime.fromisoformat("2026-07-07T10:00:00+00:00")
+    events = [f"2026-07-07T10:{m:02d}:00+00:00" for m in range(0, 10)]
+    render_event_marks(plt, t0, events, limit=3)
+    vlines = [c for c in plt.calls if c[0] == "vline"]
+    assert len(vlines) == 3
+
+
+def test_render_event_marks_ignores_unparseable_timestamps():
+    plt = _RecordingPlt()
+    t0 = datetime.fromisoformat("2026-07-07T10:00:00+00:00")
+    render_event_marks(plt, t0, ["not-a-timestamp", "2026-07-07T10:30:00+00:00"])
+    vlines = [c for c in plt.calls if c[0] == "vline"]
+    assert len(vlines) == 1

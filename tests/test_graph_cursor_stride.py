@@ -10,9 +10,7 @@ from textual.widgets import Label
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 def _label_text(label: Label) -> str:
@@ -38,7 +36,7 @@ def _dense(n):
 
 
 async def test_fast_stride_is_ten_percent_on_dense_plot(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph_with_history(pilot, app, _dense(2000))
@@ -54,7 +52,7 @@ async def test_fast_stride_is_ten_percent_on_dense_plot(make_app, sample_entitie
 
 
 async def test_fast_stride_floor_on_small_plot(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph_with_history(pilot, app, _dense(30))
@@ -69,7 +67,7 @@ async def test_fast_stride_floor_on_small_plot(make_app, sample_entities):
 
 
 async def test_home_and_end_jump_within_cursor_mode_without_reload(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph_with_history(pilot, app, _dense(500))
@@ -90,7 +88,7 @@ async def test_home_and_end_jump_within_cursor_mode_without_reload(make_app, sam
 
 
 async def test_home_outside_cursor_mode_still_snaps_live(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph_with_history(pilot, app, _dense(100))
@@ -106,7 +104,7 @@ async def test_home_outside_cursor_mode_still_snaps_live(make_app, sample_entiti
 
 
 async def test_cursor_stats_show_sample_position(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         preview = await _open_graph_with_history(pilot, app, _dense(50))

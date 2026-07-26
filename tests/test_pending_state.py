@@ -2,16 +2,14 @@
 from textual.coordinate import Coordinate
 
 from hatty.ui.entity_table import EntitiesTable
-from tests.conftest import make_config, notified
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, notified
 
 # Alphabetical order with no list (see tests/test_entity_toggle.py):
 # Row 0: Fan Switch (switch.fan, off)
 
 
 async def test_toggle_marks_entity_pending(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -26,7 +24,7 @@ async def test_toggle_marks_entity_pending(make_app, sample_entities):
 
 
 async def test_state_confirmation_clears_pending(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -52,7 +50,7 @@ async def test_state_confirmation_clears_pending(make_app, sample_entities):
 
 
 async def test_unresponsive_entity_marked_stalled_after_timeout(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     app.PENDING_TIMEOUT_SECONDS = 0.05
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -77,7 +75,7 @@ async def test_entity_control_dispatch_also_tracks_pending(make_app):
             "last_changed": "",
         },
     ]
-    app = make_app(entities=entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         from hatty.ui.controls.percentage_slider import PercentageSlider

@@ -4,13 +4,11 @@ from textual.widgets import Input, RadioSet
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_duration_popup_initially_focuses_radio_set(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -26,7 +24,7 @@ async def test_duration_popup_initially_focuses_radio_set(make_app, sample_entit
 
 
 async def test_custom_duration_input_overrides_preset_selection(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -49,7 +47,7 @@ async def test_custom_duration_input_overrides_preset_selection(make_app, sample
 
 
 async def test_custom_minutes_only_input(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -70,7 +68,7 @@ async def test_custom_minutes_only_input(make_app, sample_entities):
 
 
 async def test_blank_custom_inputs_fall_back_to_preset_radio(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -92,7 +90,7 @@ async def test_blank_custom_inputs_fall_back_to_preset_radio(make_app, sample_en
 
 
 async def test_invalid_custom_duration_does_not_dismiss_popup(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -114,7 +112,7 @@ async def test_invalid_custom_duration_does_not_dismiss_popup(make_app, sample_e
 
 
 async def test_confirm_with_no_selection_and_no_custom_input_is_a_no_op(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.app_config["graph_hours"] = 1.5  # a custom value, so no radio button starts pressed
@@ -133,7 +131,7 @@ async def test_confirm_with_no_selection_and_no_custom_input_is_a_no_op(make_app
 
 
 async def test_reopening_popup_with_custom_value_prefills_custom_inputs(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.app_config["graph_hours"] = 1.5

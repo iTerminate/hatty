@@ -3,7 +3,7 @@ from hatty.ui.dashboard.screen import DashboardScreen
 from hatty.ui.help_popup import HelpPopup, filter_pages
 
 
-async def test_question_mark_opens_help_on_main_screen(make_app):
+async def test_question_mark_opens_help_listing_bindings_and_pages(make_app):
     app = make_app()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -11,29 +11,18 @@ async def test_question_mark_opens_help_on_main_screen(make_app):
         await pilot.pause()
         assert isinstance(app.screen, HelpPopup)
 
-
-async def test_escape_dismisses_help(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("question_mark")
-        await pilot.pause()
-        assert isinstance(app.screen, HelpPopup)
-        await pilot.press("escape")
-        await pilot.pause()
-        assert not isinstance(app.screen, HelpPopup)
-
-
-async def test_help_lists_main_screen_bindings(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("question_mark")
-        await pilot.pause()
         descriptions = [desc for _, desc in app.screen._binding_rows]
         assert "Search" in descriptions
         assert "Controls" in descriptions
         assert "Help" in descriptions
+
+        titles = [title for title, _ in app.screen._pages]
+        assert titles == ["Main", "Dashboard", "Device Tree", "Graph", "Light Control", "Media Player"]
+        assert app.screen._active_index == 0  # opened from the main table
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, HelpPopup)
 
 
 async def test_question_mark_opens_help_on_dashboard_screen_use_mode(make_app):
@@ -73,17 +62,6 @@ async def test_question_mark_opens_help_on_dashboard_screen_edit_mode(make_app):
         assert "Dashboards" in descriptions
         # Use-only action "Edit" (entering edit mode) is hidden once already in edit mode.
         assert "Edit" not in descriptions
-
-
-async def test_help_page_names_cover_every_screen(make_app):
-    app = make_app()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("question_mark")
-        await pilot.pause()
-        titles = [title for title, _ in app.screen._pages]
-        assert titles == ["Main", "Dashboard", "Device Tree", "Graph", "Light Control", "Media Player"]
-        assert app.screen._active_index == 0  # opened from the main table
 
 
 async def test_right_arrow_switches_help_to_next_page(make_app):

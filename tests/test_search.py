@@ -3,9 +3,7 @@ from textual.coordinate import Coordinate
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.search_input import SearchInput
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG
 
 
 async def test_slash_opens_search_input(make_app):
@@ -28,56 +26,57 @@ async def test_escape_hides_search_input(make_app):
         assert app.query_one("#search_input", SearchInput).display is False
 
 
-async def test_search_filters_entities_by_entity_id(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+async def test_search_filters_across_match_kinds_and_reports_in_subtitle(make_app, sample_entities):
+    """Filtering by entity_id/friendly_name/state/multi-word is all the same
+    read-only round trip through the search box, just with different input —
+    the per-word matching semantics themselves are unit-tested directly via
+    entity_matches() in unit/test_entity_table.py. One boot walks all four,
+    plus the subtitle/live-filter/close-on-enter UI state the "fan" search
+    exercises along the way."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
+        table = app.query_one(EntitiesTable)
+
+        # entity_id match: filters live before enter, and enter submits + closes.
         await pilot.press("/")
         await pilot.pause()
         await pilot.press("f", "a", "n")
-        await pilot.press("enter")
         await pilot.pause()
-        assert app.query_one(EntitiesTable).row_count == 1
+        assert table.row_count == 1
         assert app.search_term == "fan"
 
-
-async def test_search_filters_by_friendly_name(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
+        await pilot.press("enter")
         await pilot.pause()
+        assert app.query_one("#search_input", SearchInput).display is False
+        assert "fan" in app.sub_title
+        assert f"{table.row_count}/{len(app.all_entities)}" in app.sub_title
+
+        # friendly_name match.
         await pilot.press("/")
         await pilot.pause()
         await pilot.press("k", "i", "t", "c", "h", "e", "n")
         await pilot.press("enter")
         await pilot.pause()
-        assert app.query_one(EntitiesTable).row_count == 1
+        assert table.row_count == 1
 
-
-async def test_search_multi_word_skips_words(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
+        # multi-word match, order-independent word skipping.
         await pilot.press("/")
         await pilot.pause()
         await pilot.press("l", "i", "v", "i", "n", "g", "space", "l", "a", "m", "p")
         await pilot.press("enter")
         await pilot.pause()
-        table = app.query_one(EntitiesTable)
         assert table.row_count == 1
         cell_key = table.coordinate_to_cell_key(Coordinate(0, 0))
         assert cell_key.row_key.value == "light.living_room_lamp"
 
-
-async def test_search_filters_by_state(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
+        # state match.
         await pilot.press("/")
         await pilot.pause()
         await pilot.press("2", "1", ".", "5")
         await pilot.press("enter")
         await pilot.pause()
-        assert app.query_one(EntitiesTable).row_count == 1
+        assert table.row_count == 1
 
 
 async def test_escape_after_search_restores_prior_filter(make_app, sample_entities):
@@ -95,31 +94,6 @@ async def test_escape_after_search_restores_prior_filter(make_app, sample_entiti
         await pilot.pause()
         assert app.search_term == ""
         assert app.query_one(EntitiesTable).row_count == 1
-
-
-async def test_subtitle_shows_search_term_after_search(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("/")
-        await pilot.pause()
-        await pilot.press("f", "a", "n")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert "fan" in app.sub_title
-
-
-async def test_subtitle_shows_match_count(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("/")
-        await pilot.pause()
-        await pilot.press("f", "a", "n")
-        await pilot.press("enter")
-        await pilot.pause()
-        visible = app.query_one(EntitiesTable).row_count
-        assert f"{visible}/{len(app.all_entities)}" in app.sub_title
 
 
 async def test_subtitle_combines_list_and_search_term(make_app, sample_entities):
@@ -155,32 +129,8 @@ async def test_jump_mode_subtitle_retains_list_context(make_app, sample_entities
         assert "jump" in app.sub_title.lower()
 
 
-async def test_filter_applies_live_before_enter(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("/")
-        await pilot.pause()
-        await pilot.press("f", "a", "n")
-        await pilot.pause()
-        assert app.query_one(EntitiesTable).row_count == 1
-        assert app.search_term == "fan"
-
-
-async def test_enter_closes_search_box(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("/")
-        await pilot.pause()
-        await pilot.press("f", "a", "n")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert app.query_one("#search_input", SearchInput).display is False
-
-
 async def test_tab_toggles_vi_mode(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")
@@ -198,7 +148,7 @@ async def test_tab_toggles_vi_mode(make_app, sample_entities):
 
 
 async def test_vi_mode_jumps_cursor_without_filtering(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -218,7 +168,7 @@ async def test_vi_mode_jumps_cursor_without_filtering(make_app, sample_entities)
 
 
 async def test_n_and_N_cycle_vi_search_matches_with_wraparound(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one(EntitiesTable)
@@ -253,7 +203,7 @@ async def test_n_and_N_cycle_vi_search_matches_with_wraparound(make_app, sample_
 
 
 async def test_escape_in_vi_mode_leaves_filter_state_untouched(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("/")

@@ -1,7 +1,5 @@
 # hatty — MIT License. See LICENSE file for details.
-from tests.conftest import make_config
-
-_NO_LIST_CONFIG = make_config(lists={})
+from tests.conftest import NO_LIST_CONFIG, make_config
 
 # Collections (lists, defaults, etc.) persist to SQLite now (#63), so persistence
 # assertions read them back through app.storage rather than the YAML file.
@@ -37,7 +35,7 @@ async def test_space_key_saves_entity_addition_to_storage(make_app, sample_entit
 
 
 async def test_new_list_created_via_popup_does_not_auto_save(make_app, sample_entities):
-    app = make_app(entities=sample_entities, config_data=_NO_LIST_CONFIG)
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("l")

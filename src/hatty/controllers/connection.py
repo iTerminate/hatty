@@ -210,7 +210,7 @@ class ConnectionController:
 
         app.graph_ctl.record_state(new_state)
         app.notify_ctl.handle_state_change(entity_id, old_state, new_state)
-        if app._log_entity_ids and entity_id in app._log_entity_ids:
+        if app._log_entity_ids and entity_id in app._log_entity_ids and app._log_end is None:
             log_panel = app.query_one("#activity_log_panel", ActivityLogPanel)
             if log_panel.has_class("-visible"):
                 app.call_later(
