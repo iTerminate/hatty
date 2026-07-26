@@ -586,6 +586,55 @@ async def test_enter_toggles_cursor_mode_and_left_right_move_cursor(make_app, sa
         assert preview._cursor_index == 1
 
 
+async def test_footer_bindings_describe_the_active_mode(make_app, sample_entities):
+    """Issue #7: the same key does two different jobs in/out of inspect mode,
+    so the Footer (and help page) must show the description matching what it
+    currently does, not always the paging one."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._history_data = {
+            "sensor.temperature": [
+                ("2024-01-01T12:00:00+00:00", 20.0),
+                ("2024-01-01T12:01:00+00:00", 21.0),
+            ]
+        }
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+        await pilot.press("G")
+        await pilot.pause()
+        preview = app.screen
+        assert isinstance(preview, GraphPreviewScreen)
+
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Older"
+        assert active["enter"].binding.description == "Inspect"
+        assert active["escape"].binding.description == "Back"
+        # Live and unzoomed: nothing to snap back to yet, so "home"/"end" (both
+        # paging and inspect meanings) are absent rather than misleadingly shown.
+        assert "home" not in active
+        assert "end" not in active
+
+        await pilot.press("enter")
+        await pilot.pause()
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Prev Sample"
+        assert active["home"].binding.description == "Oldest Sample"
+        assert active["end"].binding.description == "Newest Sample"
+        assert active["enter"].binding.description == "Exit Inspect"
+        assert active["escape"].binding.description == "Exit Inspect"
+
+        await pilot.press("escape")
+        await pilot.pause()
+        active = preview.active_bindings
+        assert active["left"].binding.description == "Older"
+        assert active["escape"].binding.description == "Back"
+        assert "home" not in active
+
+
 async def test_cursor_mode_shows_values_for_all_compared_entities(make_app):
     app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:

@@ -19,8 +19,13 @@ paged forward — only `home` snaps back to live and clears the zoom.
 
 `enter` toggles cursor/inspect mode: drops a marker at the selected sample and
 swaps the stats line for every plotted entity's nearest value at that
-timestamp, repurposing `left`/`right`/`shift+left`/`shift+right` to move the
-marker instead of paging (unavailable for climate graphs).
+timestamp, repurposing `left`/`right`/`shift+left`/`shift+right`/`home`/`end`
+as marker moves instead of paging/zooming (unavailable for climate graphs).
+Each repurposed key is a second `Binding` on the same key, gated by
+`check_action` on `_cursor_mode` — exactly one twin is ever live, so the
+Footer and help page always show the binding that matches what the key
+currently does (`escape`/`q` similarly split three ways: exit inspect, close
+the activity log, or back out of the screen).
 
 `a` toggles a docked activity log for the plotted entities (issue #2),
 fetched for the same window the graph is currently showing; paging/zooming
@@ -108,14 +113,20 @@ class GraphPreviewScreen(Screen):
     BINDINGS = [
         Binding("t", "cycle_plot_type", "Graph Type"),
         Binding("left", "scroll_back", "Older"),
+        Binding("left", "cursor_prev", "Prev Sample"),
         Binding("right", "scroll_forward", "Newer"),
+        Binding("right", "cursor_next", "Next Sample"),
         Binding("shift+left", "scroll_back_fast", f"Older ×{_FAST_PAGE_MULTIPLIER}"),
+        Binding("shift+left", "cursor_prev_fast", "Prev Sample ×10%"),
         Binding("shift+right", "scroll_forward_fast", f"Newer ×{_FAST_PAGE_MULTIPLIER}"),
+        Binding("shift+right", "cursor_next_fast", "Next Sample ×10%"),
         Binding("plus", "zoom_in", "Zoom In"),
         Binding("minus", "zoom_out", "Zoom Out"),
         Binding("home", "snap_live", "Now"),
-        Binding("end", "cursor_end", "Newest Sample", show=False),
+        Binding("home", "cursor_home", "Oldest Sample"),
+        Binding("end", "cursor_end", "Newest Sample"),
         Binding("enter", "toggle_cursor_mode", "Inspect"),
+        Binding("enter", "exit_cursor_mode", "Exit Inspect"),
         Binding("S", "save_graph", "Save As"),
         Binding("u", "update_graph", "Update"),
         Binding("tab", "next_entity", "Next Line", show=False),
@@ -124,7 +135,11 @@ class GraphPreviewScreen(Screen):
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("a", "toggle_event_log", "Activity Log"),
         Binding("question_mark", "show_help", "Help"),
+        Binding("escape", "exit_cursor_mode", "Exit Inspect"),
+        Binding("escape", "close_event_log", "Close Log"),
         Binding("escape", "go_back", "Back"),
+        Binding("q", "exit_cursor_mode", "Exit Inspect", show=False),
+        Binding("q", "close_event_log", "Close Log", show=False),
         Binding("q", "go_back", "Back", show=False),
     ]
 
@@ -199,12 +214,28 @@ class GraphPreviewScreen(Screen):
         if action in ("cycle_color", "pick_color"):
             return not self._is_climate
         if action == "toggle_cursor_mode":
-            return not self._is_climate
+            return not self._is_climate and not self._cursor_mode and bool(self._data)
+        if action == "exit_cursor_mode":
+            return self._cursor_mode
+        if action in ("scroll_back", "scroll_forward", "scroll_back_fast", "scroll_forward_fast"):
+            return not self._cursor_mode
+        if action in ("cursor_prev", "cursor_next", "cursor_prev_fast", "cursor_next_fast", "cursor_home"):
+            return self._cursor_mode
         if action == "cursor_end":
             return self._cursor_mode
         if action == "snap_live":
-            return self._cursor_mode or self._window_end is not None or self._local_hours is not None
+            return not self._cursor_mode and (self._window_end is not None or self._local_hours is not None)
+        if action == "close_event_log":
+            return not self._cursor_mode and self._log_visible()
+        if action == "go_back":
+            return not self._cursor_mode and not self._log_visible()
         return True
+
+    def _log_visible(self) -> bool:
+        try:
+            return self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible")
+        except Exception:
+            return False
 
     def compose(self) -> ComposeResult:
         yield Label("", id="preview_title")
@@ -301,30 +332,30 @@ class GraphPreviewScreen(Screen):
         await self._refresh_events_if_open()
 
     def action_scroll_back(self) -> None:
-        if self._cursor_mode:
-            self._move_cursor(-1)
-            return
         # Half-window strides keep 50% of the previous view on screen so the eye
         # can track continuity between pages; the fast variants cover distance.
         self._page_back(self._window_hours() / 2)
 
     def action_scroll_forward(self) -> None:
-        if self._cursor_mode:
-            self._move_cursor(1)
-            return
         self._page_forward(self._window_hours() / 2)
 
     def action_scroll_back_fast(self) -> None:
-        if self._cursor_mode:
-            self._move_cursor(-self._fast_cursor_stride())
-            return
         self._page_back(self._window_hours() * _FAST_PAGE_MULTIPLIER)
 
     def action_scroll_forward_fast(self) -> None:
-        if self._cursor_mode:
-            self._move_cursor(self._fast_cursor_stride())
-            return
         self._page_forward(self._window_hours() * _FAST_PAGE_MULTIPLIER)
+
+    def action_cursor_prev(self) -> None:
+        self._move_cursor(-1)
+
+    def action_cursor_next(self) -> None:
+        self._move_cursor(1)
+
+    def action_cursor_prev_fast(self) -> None:
+        self._move_cursor(-self._fast_cursor_stride())
+
+    def action_cursor_next_fast(self) -> None:
+        self._move_cursor(self._fast_cursor_stride())
 
     def _plot_width(self) -> int:
         try:
@@ -357,18 +388,15 @@ class GraphPreviewScreen(Screen):
             self._reload_window()
 
     def action_snap_live(self) -> None:
-        # In cursor mode, home jumps the marker to the oldest sample rather than
-        # reloading the live window (which would yank the data out from under it).
-        if self._cursor_mode:
-            self._jump_cursor(0)
-            return
         if not self._window.should_snap_live():
             return
         self._reload_live()
 
+    def action_cursor_home(self) -> None:
+        self._jump_cursor(0)
+
     def action_cursor_end(self) -> None:
-        if self._cursor_mode:
-            self._jump_cursor(len(self._data) - 1)
+        self._jump_cursor(len(self._data) - 1)
 
     def _jump_cursor(self, index: int) -> None:
         if not self._data:
@@ -648,29 +676,30 @@ class GraphPreviewScreen(Screen):
 
         self.app.push_screen(GraphColorPopup(active_name, self._colors.get(active_eid)), callback)
 
-    def action_toggle_cursor_mode(self) -> None:
-        if self._is_climate or not self._data:
-            return
-        self._cursor_mode = not self._cursor_mode
-        if self._cursor_mode:
+    def _set_cursor_mode(self, active: bool) -> None:
+        self._cursor_mode = active
+        if active:
             self._cursor_index = len(self._data) - 1
         entity = self.app.find_entity(self._entity_id)
         self._update_display(entity)
+        self.refresh_bindings()
+
+    def action_toggle_cursor_mode(self) -> None:
+        self._set_cursor_mode(True)
+
+    def action_exit_cursor_mode(self) -> None:
+        self._set_cursor_mode(False)
 
     def action_show_help(self) -> None:
         self.app.action_show_help()
 
-    def action_go_back(self) -> None:
-        if self._cursor_mode:
-            self._cursor_mode = False
-            entity = self.app.find_entity(self._entity_id)
-            self._update_display(entity)
-            return
+    def action_close_event_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if log_panel.has_class("-visible"):
-            log_panel.remove_class("-visible")
-            self._redraw()
-            return
+        log_panel.remove_class("-visible")
+        self._redraw()
+        self.refresh_bindings()
+
+    def action_go_back(self) -> None:
         self.dismiss()
 
     def _redraw(self) -> None:
@@ -685,6 +714,7 @@ class GraphPreviewScreen(Screen):
         if log_panel.has_class("-visible"):
             log_panel.remove_class("-visible")
             self._redraw()
+            self.refresh_bindings()
             return
 
         entity = self.app.find_entity(self._entity_id)
@@ -696,6 +726,7 @@ class GraphPreviewScreen(Screen):
         log_panel.clear()
         log_panel.add_class("-visible")
         self.run_worker(self._load_events(), exclusive=True, group="events")
+        self.refresh_bindings()
 
     async def _refresh_events_if_open(self) -> None:
         if self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible"):
