@@ -33,6 +33,15 @@ the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
 it to match. While open, each logged event is additionally marked on the
 plot itself (`plot_render.render_event_marks`) — numeric and binary graphs
 only; climate graphs still show the log list but skip the marks.
+
+`ALLOWED_APP_ACTIONS` is this screen's carve-out from `HACLI.check_action`'s
+"pushed screen" lockdown — only the app-level keys that still do something on
+top of a fullscreen graph (Dashboard/Device Tree/Saved Graphs/Duration/Quit)
+stay live; everything else in `HACLI.BINDINGS` is main-table-only and denied.
+`HELP_ALL_MODES` + `HELP_SECTIONS` (read by `HACLI.action_show_help`) make this
+screen's help page always show every binding grouped by section — both a
+paging key and its inspect-mode twin — rather than only whichever mode is
+live when `?` is pressed.
 """
 
 from datetime import datetime, timedelta, timezone

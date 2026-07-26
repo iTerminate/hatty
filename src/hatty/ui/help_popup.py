@@ -1,4 +1,18 @@
 # hatty — MIT License. See LICENSE file for details.
+"""Keybinding help, opened with `?`. `HACLI.action_show_help` builds one page per
+screen as a flat `list[(key, description)]` and hands it to `HelpPopup`; a page
+for the currently active screen is built from its live `active_bindings`
+(mode-filtered), any other page from its static `BINDINGS` class attr.
+
+A row with an empty key is a section header, not a binding — no real binding
+has an empty key — rendered bold instead of as a keybinding (`_render_page`,
+`_render_all`). `sectioned_rows` builds these from a screen's `HELP_SECTIONS`
+class attr (a title -> action-names mapping); `GraphPreviewScreen` additionally
+sets `HELP_ALL_MODES` so its page is always built from the full static
+`BINDINGS` — every inspect-mode twin binding alongside its paging counterpart —
+regardless of which mode happens to be active (issue #7).
+"""
+
 from collections.abc import Iterable, Sequence
 
 from rich.table import Table
