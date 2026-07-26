@@ -5,6 +5,7 @@ from textual.widgets import Button, Input, Static, TabbedContent, Tabs
 from hatty.ui.controls.kelvin_slider import KelvinSlider
 from hatty.ui.controls.light_screen import LightControlScreen, hsv_to_rgb
 from hatty.ui.controls.percentage_slider import PercentageSlider
+from hatty.ui.help_popup import HelpPopup
 from tests.conftest import make_config
 
 _CONFIG = {
@@ -484,6 +485,24 @@ async def test_arrow_keys_switch_tabs_when_tab_bar_focused(make_app):
         await pilot.press("left")
         await pilot.pause()
         assert tc.active == "tab_white"
+
+
+async def test_question_mark_opens_help_on_light_control_screen(make_app):
+    """Issue #7: LightControlScreen is a ModalScreen, so the app-level `?`
+    binding never reached it — it needed its own question_mark binding."""
+    app = make_app(entities=_FULL_LIGHT, config_data=_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _open(pilot, app)
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpPopup)
+        titles = [title for title, _ in app.screen._pages]
+        assert app.screen._pages[app.screen._active_index][0] == "Light Control"
+        assert "Light Control" in titles
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Close" in descriptions
+        assert "On/Off" in descriptions
 
 
 async def test_hsv_to_rgb_pure_red():

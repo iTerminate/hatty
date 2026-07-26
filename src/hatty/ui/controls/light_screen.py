@@ -154,6 +154,7 @@ class LightControlScreen(ModalScreen):
         # focused, so its own up/down cursor movement keeps working.
         Binding("up", "nav_focus(-1)", "Focus Up", show=False, priority=True),
         Binding("down", "nav_focus(1)", "Focus Down", show=False, priority=True),
+        Binding("question_mark", "show_help", "Help"),
     ]
 
     DEFAULT_CSS = """
@@ -491,6 +492,9 @@ class LightControlScreen(ModalScreen):
     def action_close(self) -> None:
         self._flush()
         self.dismiss(None)
+
+    def action_show_help(self) -> None:
+        self.app.action_show_help()
 
     def action_nav_focus(self, direction: int) -> None:
         # A focused slider (or any single widget) just steps one at a time; a row

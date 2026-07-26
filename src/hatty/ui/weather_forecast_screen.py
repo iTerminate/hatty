@@ -99,7 +99,10 @@ class WeatherForecastScreen(Screen):
     BINDINGS = [
         Binding("escape", "go_back", "Back"),
         Binding("t", "cycle_type", "Switch type"),
+        Binding("question_mark", "show_help", "Help"),
     ]
+
+    HELP_TITLE = "Weather Forecast"
 
     def __init__(self, entity: "Entity") -> None:
         super().__init__()
@@ -199,3 +202,6 @@ class WeatherForecastScreen(Screen):
 
     def action_go_back(self) -> None:
         self.dismiss()
+
+    def action_show_help(self) -> None:
+        self.app.action_show_help()

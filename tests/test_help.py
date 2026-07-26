@@ -25,6 +25,31 @@ async def test_question_mark_opens_help_listing_bindings_and_pages(make_app):
         assert not isinstance(app.screen, HelpPopup)
 
 
+async def test_main_page_hides_meaningless_datatable_rows(make_app):
+    """Issue #7: EntitiesTable is a Textual DataTable, so its own key bindings
+    (cursor_left/right, select_cursor, home/end-within-row) leak into the live
+    Main page's active_bindings even though moving *columns* means nothing in
+    a table whose selection model only cares about the row. Row navigation
+    (↑/↓, PgUp/PgDn, Ctrl+Home/Ctrl+End) is real and stays."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Cursor left" not in descriptions
+        assert "Cursor right" not in descriptions
+        assert "Select" not in descriptions
+        assert "Home" not in descriptions
+        assert "End" not in descriptions
+        assert "Cursor up" in descriptions
+        assert "Cursor down" in descriptions
+        assert "Page up" in descriptions
+        assert "Page down" in descriptions
+        assert "Top" in descriptions
+        assert "Bottom" in descriptions
+
+
 async def test_question_mark_opens_help_on_dashboard_screen_use_mode(make_app):
     app = make_app()
     async with app.run_test() as pilot:

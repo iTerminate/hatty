@@ -4,6 +4,7 @@ from textual.widgets import Button, OptionList, Select, Static
 from hatty.const import MEDIA_FEAT
 from hatty.ui.controls.media_player_screen import MediaPlayerControlScreen
 from hatty.ui.controls.percentage_slider import PercentageSlider
+from hatty.ui.help_popup import HelpPopup
 from tests.conftest import make_config
 
 _CONFIG = {
@@ -448,3 +449,19 @@ async def test_left_right_from_field_source_walks_focus_chain(make_app):
 
         assert app.focused is screen.query_one("#field_sound_mode", Select)
         assert app.client.call_service_calls == []
+
+
+async def test_question_mark_opens_help_on_media_player_screen(make_app):
+    """Issue #7: MediaPlayerControlScreen is a ModalScreen, so the app-level
+    `?` binding never reached it — it needed its own question_mark binding."""
+    app = make_app(entities=_FULL_MEDIA_PLAYER, config_data=_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await _open(pilot, app)
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpPopup)
+        assert app.screen._pages[app.screen._active_index][0] == "Media Player"
+        descriptions = [desc for _, desc in app.screen._binding_rows]
+        assert "Close" in descriptions
+        assert "Play/Pause" in descriptions

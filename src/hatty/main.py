@@ -608,12 +608,24 @@ class HACLI(App):
 
     # ── Help ──────────────────────────────────────────────────────────────────
 
+    # Textual DataTable bindings that leak into the Main page's active_bindings
+    # via the focused EntitiesTable but mean nothing as hatty keybindings (issue
+    # #7) — ↑/↓/PgUp/PgDn/Ctrl+Home/Ctrl+End stay, they're genuinely useful.
+    _HELP_HIDDEN_ACTIONS = frozenset({"cursor_left", "cursor_right", "select_cursor", "scroll_home", "scroll_end"})
+
     def action_show_help(self) -> None:
         from hatty.ui.controls.light_screen import LightControlScreen
         from hatty.ui.controls.media_player_screen import MediaPlayerControlScreen
         from hatty.ui.device_tree_screen import DeviceTreeScreen
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
         from hatty.ui.help_popup import action_name, binding_entries, sectioned_rows
+
+        def active_entries() -> list[tuple[str, str, str]]:
+            return [
+                (active.binding.key, active.binding.description, action_name(active.binding.action))
+                for active in self.screen.active_bindings.values()
+                if active.binding.description and action_name(active.binding.action) not in self._HELP_HIDDEN_ACTIONS
+            ]
 
         def page_rows(screen_cls: type | None, is_active: bool) -> list[tuple[str, str]]:
             # A screen opting into HELP_ALL_MODES (GraphPreviewScreen) always builds
@@ -629,14 +641,9 @@ class HACLI(App):
                 return rows
 
             if is_active:
-                entries = [
-                    (active.binding.key, active.binding.description, action_name(active.binding.action))
-                    for active in self.screen.active_bindings.values()
-                    if active.binding.description
-                ]
+                entries = active_entries()
             else:
-                static_bindings = self.BINDINGS if screen_cls is None else screen_cls.BINDINGS
-                entries = binding_entries(static_bindings)
+                entries = binding_entries(self.BINDINGS if screen_cls is None else screen_cls.BINDINGS)
 
             sections = getattr(screen_cls, "HELP_SECTIONS", None) if screen_cls is not None else None
             if sections:
@@ -657,13 +664,27 @@ class HACLI(App):
 
         pages: list[tuple[str, list[tuple[str, str]]]] = []
         active_index = 0
+        matched_known_screen = False
         for i, (title, screen_cls) in enumerate(page_defs):
             is_active = (
                 self.screen is self.screen_stack[0] if screen_cls is None else isinstance(self.screen, screen_cls)
             )
             if is_active:
                 active_index = i
+                matched_known_screen = True
             pages.append((title, page_rows(screen_cls, is_active)))
+
+        # A pushed screen that isn't one of the six above (Weather Forecast,
+        # Config, …) used to silently show the unrelated Main page instead of
+        # its own keys (issue #7) — give it a leading page of its own instead.
+        if not matched_known_screen and self.screen is not self.screen_stack[0]:
+            screen_type = type(self.screen)
+            title = getattr(screen_type, "HELP_TITLE", screen_type.__name__)
+            sections = getattr(screen_type, "HELP_SECTIONS", None)
+            entries = active_entries()
+            rows = sectioned_rows(entries, sections) if sections else [(key, desc) for key, desc, _ in entries]
+            pages.insert(0, (title, rows))
+            active_index = 0
 
         self.push_screen(HelpPopup(pages, active_index))
 

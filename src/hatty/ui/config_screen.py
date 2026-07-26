@@ -103,7 +103,13 @@ class ConfigScreen(Screen):
         Binding("escape", "cancel", "Back/Cancel"),
         Binding("ctrl+o", "open_in_editor", "Editor"),
         Binding("ctrl+v", "toggle_token", "Show/Hide Token"),
+        # "?" is punctuation, not a bare letter, so it doesn't hijack typing the
+        # way the comment above warns about; a focused Input still consumes it
+        # as a keystroke rather than letting it reach this binding.
+        Binding("question_mark", "show_help", "Help"),
     ]
+
+    HELP_TITLE = "Config"
 
     DEFAULT_CSS = """
     ConfigScreen {
@@ -508,3 +514,6 @@ class ConfigScreen(Screen):
         self._token_visible = not self._token_visible
         self.query_one("#cfg_token", Input).password = not self._token_visible
         self.query_one("#cfg_ntfy_password", Input).password = not self._token_visible
+
+    def action_show_help(self) -> None:
+        self.app.action_show_help()
