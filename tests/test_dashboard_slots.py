@@ -5,6 +5,7 @@ from textual.widgets import Button, ListView, Select, Static
 from hatty.ui.dashboard.screen import DashboardScreen, DashboardSlotWidget
 from hatty.ui.dashboard.slot_popup import DashboardSlotPopup
 from hatty.ui.dashboard.widgets.graph import GraphSlotWidget
+from hatty.ui.dashboard.widgets.text import TextSlotWidget
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.search_input import SearchInput
 from tests.conftest import make_config
@@ -294,3 +295,115 @@ async def test_slot_popup_escape_with_search_clears_search_stays_in_entity_step(
         assert isinstance(app.screen, DashboardSlotPopup)
         assert popup.query_one("#entity_picker_table").display is True
         assert popup.query_one("#entity_search_input", SearchInput).value == ""
+
+
+async def test_entity_first_picks_entity_then_restricts_type_choices(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # enter edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#btn_entity_first", Button).press()
+        await pilot.pause()
+        assert popup._entity_first is True
+        assert popup._step == "entity"
+        # No synthetic "no entity" row in entity-first order, and no type filter
+        # yet — every sample entity is browsable.
+        assert popup.query_one("#entity_picker_table", EntitiesTable).row_count == 4
+
+        await pilot.click("#entity_search_input")
+        await pilot.press(*"temperature")
+        await pilot.pause()
+        await pilot.press("enter")  # submit search -> focuses entity table
+        await pilot.press("enter")  # select highlighted (only) match
+        await pilot.pause()
+
+        assert popup._step == "type"
+        assert popup._current_entity_id == "sensor.temperature"
+        # Numeric sensor -> "sensor" (domain match) hoisted ahead of graph/gauge.
+        assert popup.query_one("#widget_type_select", Select).value == "sensor"
+        assert str(popup.query_one("#btn_next_step", Button).label) == "Assign"
+
+        popup.query_one("#btn_next_step", Button).press()
+        await pilot.pause()
+
+        assert isinstance(app.screen, DashboardScreen)
+        assert app.dashboards["Main"]["slots"] == [
+            {"row": 0, "col": 0, "widget_type": "sensor", "entity_id": "sensor.temperature"}
+        ]
+
+
+async def test_entity_first_escape_ladder(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # enter edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#btn_entity_first", Button).press()
+        await pilot.pause()
+        await pilot.click("#entity_search_input")
+        await pilot.press(*"temperature")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert popup._step == "type"  # the type step, restricted, entity already chosen
+
+        await pilot.press("escape")  # type step -> back to entity step (same order)
+        await pilot.pause()
+        assert popup._entity_first is True
+        assert popup._step == "entity"
+        # _advance_to_entity_step's re-focus resets the search filter, so
+        # there's nothing left to clear on the next escape.
+        assert popup.query_one("#entity_search_input", SearchInput).value == ""
+
+        await pilot.press("escape")  # entity step, no search left -> drop back to type-first step 1
+        await pilot.pause()
+        assert popup._entity_first is False
+        assert popup._step == "type"
+        assert popup.query_one("#widget_type_select").display is True
+        assert popup.query_one("#btn_entity_first").display is True
+
+        await pilot.press("escape")  # type-first step 1 -> dismiss
+        await pilot.pause()
+        assert isinstance(app.screen, DashboardScreen)
+        assert app.dashboards["Main"]["slots"] == []
+
+
+async def test_widget_preview_tracks_type_and_entity(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # enter edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#btn_entity_first", Button).press()
+        await pilot.pause()
+        await pilot.click("#entity_search_input")
+        await pilot.press(*"temperature")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        preview = popup.query_one("#widget_preview")
+        assert preview.display is True
+        sensor_preview = preview.query_one(TextSlotWidget)
+        assert sensor_preview.entity_id == "sensor.temperature"
+
+        # Switching the (still interactive) type Select updates the preview live.
+        popup.query_one("#widget_type_select", Select).value = "graph"
+        await pilot.pause()
+        graph_preview = preview.query_one(GraphSlotWidget)
+        assert graph_preview.entity_id == "sensor.temperature"
