@@ -1149,25 +1149,6 @@ class HACLI(App):
 
     # ── Navigation / back ────────────────────────────────────────────────────
 
-    _GRAPH_SCREEN_DENYLIST = {
-        "toggle_search",
-        "expand_entity",
-        "toggle_list_membership",
-        "rename_entity",
-        "show_column_config",
-        "toggle_activity_log",
-        "toggle_device_log",
-        "toggle_entity_log",
-        "maximize_log",
-        "log_older",
-        "log_newer",
-        "toggle_graph",
-        "add_to_graph",
-        "show_list_selection_popup",
-        "move_entity_in_list",
-        "toggle_list_sort",
-    }
-
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         if isinstance(self.screen, DashboardScreen):
             return action in ("quit", "show_saved_graphs_popup")
@@ -1177,8 +1158,8 @@ class HACLI(App):
             return action == "quit"
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
 
-        if isinstance(self.screen, GraphPreviewScreen) and action in self._GRAPH_SCREEN_DENYLIST:
-            return False
+        if isinstance(self.screen, GraphPreviewScreen):
+            return action in GraphPreviewScreen.ALLOWED_APP_ACTIONS
         # Any other pushed screen (ConfigScreen, LightControlScreen, popups, …)
         # must not leak main-table bindings to the hidden base table (#187), but
         # Textual's own tab focus navigation (app.focus_next/previous) operates on

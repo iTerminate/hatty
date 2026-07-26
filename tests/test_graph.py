@@ -473,6 +473,38 @@ async def test_stray_list_bindings_disabled_on_fullscreen_graph(make_app, sample
         assert "e" not in shown_keys
         assert "space" not in shown_keys
 
+
+async def test_more_stray_app_bindings_disabled_on_fullscreen_graph(make_app, sample_entities):
+    """Issue #7: the old denylist missed several app-level keys that don't do
+    anything useful on top of a fullscreen graph — they used to still show up
+    in the help page. `d`/`D`/`s`/`T`/quit are the ones that genuinely work
+    here (they push/replace screens or reload the graph) and stay enabled."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)
+        await pilot.pause()
+        await pilot.press("G")
+        await pilot.pause()
+        assert isinstance(app.screen, GraphPreviewScreen)
+
+        for action in (
+            "search_next",
+            "search_prev",
+            "toggle_list_lock",
+            "undo",
+            "redo",
+            "graph_fullscreen",
+            "show_list_selection_popup",
+            "move_entity_in_list",
+            "toggle_list_sort",
+        ):
+            assert app.check_action(action, ()) is False, action
+
+        for action in ("show_dashboard", "show_device_tree", "show_saved_graphs_popup", "show_graph_duration", "quit"):
+            assert app.check_action(action, ()) is True, action
+
         # The keys themselves no longer trigger the underlying list actions.
         await pilot.press("space")
         await pilot.pause()

@@ -143,6 +143,14 @@ class GraphPreviewScreen(Screen):
         Binding("q", "go_back", "Back", show=False),
     ]
 
+    # App-level actions that still make sense on top of this screen — everything
+    # else in HACLI.BINDINGS is main-table-only and is denied by HACLI.check_action
+    # (issue #7: `n`/`N` search, `L`/`u`/`ctrl+r` list editing, `G` full-graph-again,
+    # etc. used to leak through and clutter the Graph help page).
+    ALLOWED_APP_ACTIONS = frozenset(
+        {"show_dashboard", "show_device_tree", "show_saved_graphs_popup", "show_graph_duration", "quit"}
+    )
+
     def __init__(
         self,
         entity_ids: list[str] | str,
