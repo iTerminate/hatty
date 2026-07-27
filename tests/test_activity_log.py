@@ -88,6 +88,88 @@ async def test_opening_graph_closes_activity_log(make_app, sample_entities):
         assert app.query_one("#detail_panel", EntityDetailPanel).has_class("-visible")
 
 
+_GRAPHED_LIST_CONFIG = {
+    "home_assistant": {"url": "http://fake.ha.local:8123", "token": "fake_token_abc"},
+    "default_list": "my_list",
+    "lists": {"my_list": ["sensor.temperature"]},
+}
+
+_TWO_SENSOR_ENTITIES = [
+    {
+        "entity_id": "sensor.temperature",
+        "state": "21.5",
+        "attributes": {"friendly_name": "Temperature Sensor", "unit_of_measurement": "°C"},
+        "last_changed": "2024-01-15T10:30:00.000000+00:00",
+    },
+    {
+        "entity_id": "sensor.humidity",
+        "state": "40",
+        "attributes": {"friendly_name": "Humidity Sensor", "unit_of_measurement": "%"},
+        "last_changed": "2024-01-15T10:30:00.000000+00:00",
+    },
+]
+
+
+async def test_a_scopes_to_graphed_entity_over_list_scope(make_app, sample_entities):
+    """`a` with the inline graph open logs the graphed entity, not the active
+    list — opening the log from a graph used to silently switch scope (issue #14)."""
+    app = make_app(entities=sample_entities, config_data=_GRAPHED_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("sensor.temperature")
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+        assert app.query_one("#detail_panel", EntityDetailPanel).has_class("-visible")
+
+        await pilot.press("a")
+        await pilot.pause()
+        assert app._log_entity_ids == {"sensor.temperature"}
+        title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
+        assert "Temperature Sensor" in title
+        assert "my_list" not in title
+
+
+async def test_a_includes_comparison_entities_when_graphed(make_app):
+    """A `+` comparison line stays in scope too — the log should cover
+    everything currently plotted, titled with a "+N more" suffix."""
+    app = make_app(entities=_TWO_SENSOR_ENTITIES, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("sensor.temperature")
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+        app._graph_extra_ids = ["sensor.humidity"]
+
+        await pilot.press("a")
+        await pilot.pause()
+        assert app._log_entity_ids == {"sensor.temperature", "sensor.humidity"}
+        assert app.client.logbook_calls[-1][0] == ["sensor.temperature", "sensor.humidity"]
+        title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
+        assert "Temperature Sensor" in title
+        assert "+1 more" in title
+
+
+async def test_i_scopes_to_graphed_entity_when_graph_panel_open(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=_GRAPHED_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("sensor.temperature")
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+
+        await pilot.press("i")
+        await pilot.pause()
+        assert app._log_entity_ids == {"sensor.temperature"}
+        title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
+        assert "my_list" not in title
+
+
 async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
