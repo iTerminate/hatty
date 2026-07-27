@@ -871,7 +871,7 @@ class HACLI(App):
         self._reload_log()
 
     # A device log covering a whole list can expand to many sibling entities; cap
-    # the set so a single logbook GET's entity_id= param can't blow up.
+    # the set so a single logbook GET's entity= param can't blow up.
     _DEVICE_LOG_MAX_ENTITIES = 200
 
     def _get_device_entity_ids(self, entity_id: str) -> tuple[list[str], str, bool]:

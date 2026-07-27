@@ -51,3 +51,34 @@ async def test_fetch_logbook_uses_explicit_end(monkeypatch):
     assert captured["params"]["end_time"] == end.isoformat()
     start = end - timedelta(hours=4)
     assert start.isoformat() in captured["url"]
+
+
+async def test_fetch_logbook_filters_on_entity_param(monkeypatch):
+    """HA's logbook REST endpoint reads the filter from `entity`, not `entity_id`
+    (issue #13) — `entity_id` is silently ignored and returns the whole instance."""
+    client = _make_client()
+    captured = {}
+
+    async def fake_get_json(url, params, label):
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(client, "_get_json", fake_get_json)
+    await client.fetch_logbook(["light.x", "switch.y"], hours=1)
+
+    assert captured["params"]["entity"] == "light.x,switch.y"
+    assert "entity_id" not in captured["params"]
+
+
+async def test_fetch_logbook_omits_filter_when_no_entities(monkeypatch):
+    client = _make_client()
+    captured = {}
+
+    async def fake_get_json(url, params, label):
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(client, "_get_json", fake_get_json)
+    await client.fetch_logbook([], hours=1)
+
+    assert "entity" not in captured["params"]
