@@ -5,6 +5,7 @@ from textual.widgets import Button, ListView, Select, Static
 from hatty.ui.dashboard.screen import DashboardScreen, DashboardSlotWidget
 from hatty.ui.dashboard.slot_popup import DashboardSlotPopup
 from hatty.ui.dashboard.widgets.graph import GraphSlotWidget
+from hatty.ui.dashboard.widgets.panel import PanelSlotWidget
 from hatty.ui.dashboard.widgets.text import TextSlotWidget
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.search_input import SearchInput
@@ -380,7 +381,7 @@ async def test_entity_first_escape_ladder(make_app, open_dashboard):
 
 async def test_widget_preview_tracks_type_and_entity(make_app, open_dashboard):
     app = make_app()
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(120, 40)) as pilot:  # wide enough for the side-by-side preview (issue #11)
         await open_dashboard(pilot)
         await pilot.press("E")  # enter edit mode
         await pilot.press("a")
@@ -407,3 +408,56 @@ async def test_widget_preview_tracks_type_and_entity(make_app, open_dashboard):
         await pilot.pause()
         graph_preview = preview.query_one(GraphSlotWidget)
         assert graph_preview.entity_id == "sensor.temperature"
+
+
+async def test_widget_preview_hidden_on_narrow_terminal(make_app, open_dashboard):
+    # Below preview_fits's threshold (issue #11): no side-by-side room, so the
+    # preview stays hidden through both the type and entity steps instead of
+    # squeezing the main column or overflowing the popup's height cap.
+    app = make_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # enter edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        assert popup.query_one("#widget_preview").display is False
+
+        popup.query_one("#btn_next_step", Button).press()
+        await pilot.pause()
+        assert popup.query_one("#widget_preview").display is False
+
+
+async def test_widget_preview_shown_in_panel_mode_on_wide_terminal(make_app, open_dashboard):
+    # Panel/fill's entity step used to force-hide the preview to avoid
+    # overflowing the popup's height cap; on a wide terminal it now has its
+    # own pane and stays visible even there (issue #11).
+    app = make_app()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # enter edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#widget_type_select", Select).value = "panel"
+        await pilot.pause()
+        popup.query_one("#btn_next_step", Button).press()
+        await pilot.pause()
+
+        preview = popup.query_one("#widget_preview")
+        assert preview.display is True
+
+        await pilot.click("#entity_search_input")
+        await pilot.press(*"fan")
+        await pilot.pause()
+        await pilot.press("enter")  # submit search -> focuses entity table
+        await pilot.press("enter")  # select highlighted (only) match: switch.fan
+        await pilot.pause()
+
+        assert preview.display is True
+        assert preview.query_one(PanelSlotWidget).entity_ids == ["switch.fan"]
+        assert "Fan Switch" in _panel_list_labels(popup)

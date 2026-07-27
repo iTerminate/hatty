@@ -25,14 +25,17 @@ types") and is unavailable in fill mode (already inherently multi-entity).
 
 A live preview (`#widget_preview`), built from the real `build_slot_content`
 factory, tracks the current (widget_type, entity) pair through both steps —
-inert, since no slot widget defines a click/key handler of its own.
+inert, since no slot widget defines a click/key handler of its own. It lives
+in a fixed pane to the right of the main column, shown only when the terminal
+is wide enough to fit both side by side (`preview_fits`, issue #11); on
+narrow terminals it's hidden outright rather than shuffled by step or type.
 """
 
 from typing import TYPE_CHECKING, cast
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.events import Key
 from textual.timer import Timer
 from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Select
@@ -49,6 +52,20 @@ if TYPE_CHECKING:
 
 NO_ENTITY_LABEL = "(no entity)"
 NO_ENTITY_ROW = {"entity_id": "", "attributes": {"friendly_name": NO_ENTITY_LABEL}, "state": ""}
+
+# Layout budget for the side-by-side preview (issue #11): #slot_main stays a
+# fixed 70 cols regardless, so the preview only shows once the terminal can
+# fit it alongside that column plus the popup's own border/padding chrome.
+MAIN_WIDTH = 70
+PREVIEW_WIDTH = 30
+PREVIEW_GAP = 1  # #widget_preview's margin-left
+POPUP_CHROME = 6  # heavy border (2) + `padding: 1 2` (4)
+
+
+def preview_fits(terminal_width: int) -> bool:
+    """Whether the terminal can host the side-by-side preview pane without
+    squeezing the popup's main column."""
+    return terminal_width >= MAIN_WIDTH + PREVIEW_GAP + PREVIEW_WIDTH + POPUP_CHROME
 
 
 class DashboardSlotPopup(PopupScreen):
@@ -71,7 +88,15 @@ class DashboardSlotPopup(PopupScreen):
 
     DEFAULT_CSS = """
     #dashboard_slot_container {
+        width: auto;
+        max-width: 100%;
+    }
+    #slot_body {
+        height: auto;
+    }
+    #slot_main {
         width: 70;
+        height: auto;
     }
     #dashboard_slot_container Label {
         margin-bottom: 1;
@@ -112,9 +137,10 @@ class DashboardSlotPopup(PopupScreen):
         margin-bottom: 1;
     }
     #widget_preview {
-        height: 8;
+        width: 30;
+        height: 100%;
+        margin-left: 1;
         border: round $accent;
-        margin-bottom: 1;
     }
     """
 
@@ -151,26 +177,30 @@ class DashboardSlotPopup(PopupScreen):
             current_type = type_choices[0]
 
         with Container(id="dashboard_slot_container", classes="popup-container"):
-            yield Label("Configure Widget Slot" if not self._fill_mode else "Fill Pane — pick a type, then entities")
-            yield Select(
-                [(wt.replace("_", " ").title(), wt) for wt in type_choices],
-                value=current_type,
-                allow_blank=False,
-                id="widget_type_select",
-            )
-            with Horizontal(id="type_step_buttons"):
-                yield Button("Next", id="btn_next_step")
-                if not self._fill_mode:
-                    yield Button("Pick Entity First ›", id="btn_entity_first")
-            yield Container(id="widget_preview")
-            yield SearchInput(id="entity_search_input")
-            with Horizontal(id="gauge_bounds_row"):
-                yield Input(placeholder="min (auto)", id="gauge_min_input")
-                yield Input(placeholder="max (auto)", id="gauge_max_input")
-            yield EntitiesTable(id="entity_picker_table", cursor_type="row")
-            yield Label("Selected — Shift+↑/↓ reorder · Del remove", id="panel_added_hint")
-            yield ListView(id="panel_added_list")
-            yield Button("Done", id="btn_panel_done")
+            with Horizontal(id="slot_body"):
+                with Vertical(id="slot_main"):
+                    yield Label(
+                        "Configure Widget Slot" if not self._fill_mode else "Fill Pane — pick a type, then entities"
+                    )
+                    yield Select(
+                        [(wt.replace("_", " ").title(), wt) for wt in type_choices],
+                        value=current_type,
+                        allow_blank=False,
+                        id="widget_type_select",
+                    )
+                    with Horizontal(id="type_step_buttons"):
+                        yield Button("Next", id="btn_next_step")
+                        if not self._fill_mode:
+                            yield Button("Pick Entity First ›", id="btn_entity_first")
+                    yield SearchInput(id="entity_search_input")
+                    with Horizontal(id="gauge_bounds_row"):
+                        yield Input(placeholder="min (auto)", id="gauge_min_input")
+                        yield Input(placeholder="max (auto)", id="gauge_max_input")
+                    yield EntitiesTable(id="entity_picker_table", cursor_type="row")
+                    yield Label("Selected — Shift+↑/↓ reorder · Del remove", id="panel_added_hint")
+                    yield ListView(id="panel_added_list")
+                    yield Button("Done", id="btn_panel_done")
+                yield Container(id="widget_preview")
             yield Footer()
 
     def on_mount(self) -> None:
@@ -203,10 +233,7 @@ class DashboardSlotPopup(PopupScreen):
             self.query_one("#panel_added_list").display = False
             self.query_one("#btn_panel_done").display = False
             self.query_one("#gauge_bounds_row").display = False
-        # Panel/fill's entity step already crowds the popup's 80%-of-screen
-        # cap with the picker table plus the accumulated-entities box; drop
-        # the preview there rather than pushing content off-screen.
-        self.query_one("#widget_preview").display = not (is_entity_step and self._is_multi_add())
+        self._apply_preview_visibility()
         self._rebuild_preview()
 
     def _advance_to_entity_step(self) -> None:
@@ -313,6 +340,16 @@ class DashboardSlotPopup(PopupScreen):
         if self._preview_timer is not None:
             self._preview_timer.stop()
         self._preview_timer = self.set_timer(0.3, lambda: self._rebuild_preview(entity_id))
+
+    def _apply_preview_visibility(self) -> None:
+        self.query_one("#widget_preview").display = preview_fits(self.app.size.width)
+
+    def on_resize(self, event) -> None:
+        # Terminal resized while the popup is open (issue #11) — re-decide
+        # whether the side-by-side preview fits and repaint it.
+        if self.is_mounted:
+            self._apply_preview_visibility()
+            self._rebuild_preview()
 
     def _rebuild_preview(self, entity_id: str | None = None) -> None:
         preview = self.query_one("#widget_preview", Container)
