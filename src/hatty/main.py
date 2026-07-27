@@ -1190,6 +1190,13 @@ class HACLI(App):
     # ── Navigation / back ────────────────────────────────────────────────────
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
+        # The command palette is a cross-screen affordance (Dashboard/Lists/
+        # Configuration/Setup wizard, per HACommandProvider) and must stay
+        # reachable no matter which screen is on top — Dashboard and List are
+        # both primary displays a user switches between via the palette, not
+        # a base view with secondary screens bolted on (#9).
+        if action == "command_palette":
+            return True
         if isinstance(self.screen, DashboardScreen):
             return action in ("quit", "show_saved_graphs_popup")
         from hatty.ui.device_tree_screen import DeviceTreeScreen
