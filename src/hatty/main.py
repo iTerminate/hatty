@@ -934,6 +934,19 @@ class HACLI(App):
                 index.setdefault(device_id, []).append(entity_id)
         return index
 
+    def _device_ids_for_entities(self, entity_ids: list[str]) -> list[str]:
+        """Distinct device_ids backing any of entity_ids, order-preserving —
+        used by the fullscreen graph's device-scoped event log (`A`, issue #18)."""
+        reg_device = {e.get("entity_id"): e.get("device_id") for e in self.entity_registry}
+        device_ids: list[str] = []
+        seen: set[str] = set()
+        for entity_id in entity_ids:
+            device_id = reg_device.get(entity_id)
+            if device_id and device_id not in seen:
+                seen.add(device_id)
+                device_ids.append(device_id)
+        return device_ids
+
     def _expand_to_device_entity_ids(self, entity_ids: list[str]) -> tuple[list[str], list[str]]:
         """Every entity of every device backing any of entity_ids. Entities with
         no registry entry / no device pass through as themselves. Returns the

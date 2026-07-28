@@ -144,6 +144,7 @@ class GraphPreviewScreen(Screen):
         Binding("C", "pick_color", "Color Picker"),
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("a", "toggle_event_log", "Activity Log"),
+        Binding("A", "toggle_device_event_log", "Device Log"),
         Binding("question_mark", "show_help", "Help"),
         Binding("escape", "exit_cursor_mode", "Exit Inspect"),
         Binding("escape", "close_event_log", "Close Log"),
@@ -200,7 +201,19 @@ class GraphPreviewScreen(Screen):
         ),
         ("Lines & Colors", frozenset({"next_entity", "cycle_color", "pick_color"})),
         ("Saving", frozenset({"save_graph", "update_graph"})),
-        ("Other", frozenset({"toggle_event_log", "show_list_popup", "close_event_log", "show_help", "go_back"})),
+        (
+            "Other",
+            frozenset(
+                {
+                    "toggle_event_log",
+                    "toggle_device_event_log",
+                    "show_list_popup",
+                    "close_event_log",
+                    "show_help",
+                    "go_back",
+                }
+            ),
+        ),
     )
 
     def __init__(
@@ -237,6 +250,9 @@ class GraphPreviewScreen(Screen):
         self._cursor_mode = False
         self._cursor_index = 0
         self._events: list[LogEntry] = []
+        # Which scope the open log panel/worker is fetching for — `a` (False)
+        # or `A` (True, issue #18); re-set on every open, read by _load_events.
+        self._log_device_scoped = False
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -610,13 +626,17 @@ class GraphPreviewScreen(Screen):
 
     def _draw_event_marks(self, plt, t0: datetime) -> None:
         """Mark each logged event's timestamp on the plot, only while the
-        event log is open (issue #2's graph/log integration)."""
+        event log is open (issue #2's graph/log integration). State-change
+        marks stay the original magenta; device-scoped events (issue #18,
+        e.g. a zha_event button press) get a distinct cyan so the two are
+        visually separable at a glance."""
         if not self._events:
             return
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return
-        render_event_marks(plt, t0, [e.get("when", "") for e in self._events])
+        render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "state"])
+        render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "event"], color="cyan")
 
     def _stats_text(self, entity: "Entity | None", unit: str, binary_end_iso: str | None) -> str:
         if self._cursor_mode:
@@ -769,24 +789,42 @@ class GraphPreviewScreen(Screen):
             entity = self.app.find_entity(self._entity_id)
             self._update_display(entity)
 
-    def action_toggle_event_log(self) -> None:
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if log_panel.has_class("-visible"):
-            log_panel.remove_class("-visible")
-            self._redraw()
-            self.refresh_bindings()
-            return
-
+    def _event_log_title(self, device_scoped: bool) -> str:
         entity = self.app.find_entity(self._entity_id)
         label = get_display_name(entity) if entity else self._entity_id
         if len(self._entity_ids) > 1:
             label += f" +{len(self._entity_ids) - 1} more"
-        log_panel.set_title(f"Activity Log — {label}")
-        log_panel.set_hint("a close · ←/→ page with the graph")
+        prefix = "Device Log" if device_scoped else "Activity Log"
+        return f"{prefix} — {label}"
+
+    def _open_event_log(self, device_scoped: bool) -> None:
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        self._log_device_scoped = device_scoped
+        log_panel.set_title(self._event_log_title(device_scoped))
+        log_panel.set_hint("a/A close · ←/→ page with the graph")
         log_panel.clear()
         log_panel.add_class("-visible")
         self.run_worker(self._load_events(), exclusive=True, group="events")
         self.refresh_bindings()
+
+    def action_toggle_event_log(self) -> None:
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if log_panel.has_class("-visible"):
+            self.action_close_event_log()
+            return
+        self._open_event_log(device_scoped=False)
+
+    def action_toggle_device_event_log(self) -> None:
+        """`A` — like `a`, but scoped to the graphed entities' devices too, so
+        e.g. a zha_event button press shows up alongside the plotted sensor's
+        state changes (issue #18). Pressing it while the panel is already open
+        just closes it, whichever key opened it — mirrors the main screen's
+        a/A/i mutual exclusivity."""
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if log_panel.has_class("-visible"):
+            self.action_close_event_log()
+            return
+        self._open_event_log(device_scoped=True)
 
     async def _refresh_events_if_open(self) -> None:
         if self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible"):
@@ -795,7 +833,8 @@ class GraphPreviewScreen(Screen):
     async def _load_events(self) -> None:
         end = self._window_end or datetime.now(timezone.utc)
         hours = self._window_hours()
-        entries = await self.app.client.fetch_logbook(self._entity_ids, hours=hours, end=end)
+        device_ids = self.app._device_ids_for_entities(self._entity_ids) if self._log_device_scoped else None
+        entries = await self.app.client.fetch_logbook(self._entity_ids, hours=hours, end=end, device_ids=device_ids)
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return  # closed while the fetch was in flight
