@@ -838,6 +838,26 @@ class HACLI(App):
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         log_panel.set_title(self._log_title_base + self._log_range_suffix())
 
+    def _graph_entity_ids(self) -> list[str]:
+        """The graphed entity plus its `+` comparison lines, primary first."""
+        entity_id = self._detail_entity_id
+        if not entity_id:
+            return []
+        return [entity_id] + [e for e in self._graph_extra_ids if e != entity_id]
+
+    def _open_graph_log_ids(self) -> list[str]:
+        """The graphed entities, but only while the inline graph panel is open."""
+        if not self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
+            return []
+        return self._graph_entity_ids()
+
+    def _graph_log_title(self, graph_ids: list[str], prefix: str) -> str:
+        entity = self.find_entity(graph_ids[0])
+        label = get_display_name(entity) if entity else graph_ids[0]
+        if len(graph_ids) > 1:
+            label += f" +{len(graph_ids) - 1} more"
+        return f"{prefix} — {label}"
+
     def _open_log_panel(self, entity_ids: list[str], title: str) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         self._log_entity_ids = set(entity_ids)
@@ -871,7 +891,7 @@ class HACLI(App):
         self._reload_log()
 
     # A device log covering a whole list can expand to many sibling entities; cap
-    # the set so a single logbook GET's entity_id= param can't blow up.
+    # the set so a single logbook GET's entity= param can't blow up.
     _DEVICE_LOG_MAX_ENTITIES = 200
 
     def _get_device_entity_ids(self, entity_id: str) -> tuple[list[str], str, bool]:
@@ -936,8 +956,14 @@ class HACLI(App):
             self._close_log_panel()
             return
 
+        graph_ids = self._open_graph_log_ids()
         if self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
             self.graph_ctl.close_panel()
+
+        if graph_ids:
+            self._log_mode = "entity"
+            self._open_log_panel(graph_ids, self._graph_log_title(graph_ids, "Activity Log"))
+            return
 
         if self.current_list_name:
             entity_ids = list(self.entity_lists.get(self.current_list_name, []))
@@ -966,10 +992,23 @@ class HACLI(App):
             self._close_log_panel()
             return
 
+        graph_ids = self._open_graph_log_ids()
         if self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
             self.graph_ctl.close_panel()
 
         self._log_mode = "device"
+
+        # A graphed entity takes priority over the active list: the device log
+        # covers the graphed entity's device, not the whole list's devices.
+        if graph_ids:
+            entity_ids, label, device_found = self._get_device_entity_ids(graph_ids[0])
+            if not device_found:
+                self.notify(
+                    f"No device found for {graph_ids[0]}. Showing single entity log.",
+                    title="Device Log",
+                )
+            self._open_log_panel(entity_ids, f"Device Log — {label}")
+            return
 
         # With a list active, the device log covers every device backing every
         # entity in the list (all sibling channels), not just the selected row.
@@ -1012,10 +1051,11 @@ class HACLI(App):
             self._close_log_panel()
             return
 
+        graph_ids = self._open_graph_log_ids()
         if self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
             self.graph_ctl.close_panel()
 
-        entity_id = self._selected_entity_id()
+        entity_id = graph_ids[0] if graph_ids else self._selected_entity_id()
         if not entity_id:
             self.notify("No entity selected.", title="Activity Log", severity="warning")
             return
@@ -1118,7 +1158,7 @@ class HACLI(App):
         if entity and not self.graph_ctl.is_graphable(entity):
             self.notify("No graph available for this entity type.", severity="warning")
             return
-        entity_ids = [entity_id] + [e for e in self._graph_extra_ids if e != entity_id]
+        entity_ids = self._graph_entity_ids() if self._detail_entity_id else [entity_id]
         self.push_screen(
             GraphPreviewScreen(
                 entity_ids,

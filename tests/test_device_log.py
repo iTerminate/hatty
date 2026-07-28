@@ -142,3 +142,30 @@ async def test_A_opens_device_log_for_entity_with_different_device(make_app, sam
         await pilot.press("A")
         await pilot.pause()
         assert app._log_entity_ids == {"sensor.temperature"}
+
+
+async def test_A_scopes_to_graphed_entity_over_list_device_expansion(make_app, sample_entities, sample_registry):
+    """A graphed entity's device takes priority over expanding the whole
+    active list's devices (issue #14) — sensor.temperature (dev_xyz, solo)
+    graphed while `my_list` (light.living_room_lamp + sensor.temperature,
+    spanning dev_abc and dev_xyz) is active should log only dev_xyz."""
+    config = {
+        "home_assistant": {"url": "http://fake.ha.local:8123", "token": "fake_token_abc"},
+        "default_list": "my_list",
+        "lists": {"my_list": ["sensor.temperature", "light.living_room_lamp"]},
+    }
+    app = make_app(entities=sample_entities, config_data=config, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("EntitiesTable")
+        table.jump_cursor_to_row_key("sensor.temperature")
+        await pilot.pause()
+        await pilot.press("g")
+        await pilot.pause()
+
+        await pilot.press("A")
+        await pilot.pause()
+        assert app._log_entity_ids == {"sensor.temperature"}
+        title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
+        assert "Temperature Sensor" in title
+        assert "devices)" not in title

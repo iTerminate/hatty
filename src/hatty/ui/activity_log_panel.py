@@ -1,8 +1,9 @@
 # hatty — MIT License. See LICENSE file for details.
 """The activity log side panel: a docked, togglable log of Home Assistant
 logbook entries, hosted both on the main entity table (`a`/`A`/`i` — list,
-device, single-entity scope) and on the fullscreen graph screen (`a`, its
-events additionally marked on the plot).
+device, single-entity scope; scoped to the graphed entity/entities instead
+when the inline graph panel is open) and on the fullscreen graph screen
+(`a`, its events additionally marked on the plot).
 
 The panel itself is dumb — a title, a scrolling `Log`, and a bottom hint line
 (`set_hint`) the host screen fills in with its own keys, since the two hosts

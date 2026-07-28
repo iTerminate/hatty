@@ -273,7 +273,9 @@ class HAClient:
         url = f"{self.base_url}/api/logbook/{start}"
         params: dict = {"end_time": end.isoformat()}
         if entity_ids:
-            params["entity_id"] = ",".join(entity_ids)
+            # HA's logbook endpoint reads the filter from `entity` (comma-separated) —
+            # `entity_id` is silently ignored and returns the whole instance (issue #13).
+            params["entity"] = ",".join(entity_ids)
         data = await self._get_json(url, params, "fetch_logbook")
         if data is None:
             return None
