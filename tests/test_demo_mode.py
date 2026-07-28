@@ -1,10 +1,12 @@
 # hatty — MIT License. See LICENSE file for details.
 """Demo mode boots offline against curated fake data and stays disk-free."""
 
-from textual.widgets import Tree
+from textual.widgets import Log, Tree
 
 from hatty.main import HACLI
+from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.device_tree_screen import DeviceTreeScreen
+from hatty.ui.entity_table import EntitiesTable
 
 
 async def test_demo_mode_boots_populated_offline():
@@ -103,6 +105,33 @@ async def test_demo_mode_serves_devices_and_areas_and_populates_tree():
         living_room = next(c for c in tree.root.children if str(c.label) == "Living Room")
         assert living_room.children  # has devices
         assert any(dev.children for dev in living_room.children)  # devices have entities
+
+
+async def test_demo_mode_device_log_shows_a_device_event():
+    """A on the demo Zigbee button's battery entity, with no list active,
+    surfaces its device events (issue #17) — proof --demo exercises the same
+    WS-shaped normalization path a real logbook/get_events response would."""
+    app = HACLI(demo=True)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.current_list_name = None  # "View All", so A scopes to the cursor's device
+        app._update_entities_display()  # the table doesn't re-render on its own
+
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("sensor.living_room_button_battery")
+        await pilot.pause()
+
+        # The demo splash hold (issue #268) swallows the first keypress as an
+        # early dismiss, same as the real-HA splash.
+        await pilot.press("A")
+        await pilot.pause()
+        await pilot.press("A")
+        await pilot.pause()
+
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        assert panel.has_class("-visible")
+        log_widget = panel.query_one("#log_widget", Log)
+        assert any("⚡" in line for line in log_widget.lines)
 
 
 async def test_demo_mode_history_is_generated():
