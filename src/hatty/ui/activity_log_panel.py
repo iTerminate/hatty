@@ -8,12 +8,17 @@ when the inline graph panel is open) and on the fullscreen graph screen
 The panel itself is dumb — a title, a scrolling `Log`, and a bottom hint line
 (`set_hint`) the host screen fills in with its own keys, since the two hosts
 offer different actions around it (`f` maximize only exists on the main
-screen). Scope, time-window paging and live-append all live on the host."""
-from datetime import datetime, timezone
+screen). Scope, time-window paging and live-append all live on the host.
+
+`load_history` renders normalized `LogEntry`s (see `hatty.logbook`) — both the
+REST and WS logbook transports get unified to that shape before reaching this
+widget, so it never has to know which one an entry came from."""
 
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label, Log
+
+from hatty.logbook import LogEntry, format_log_line
 
 
 class ActivityLogPanel(Widget):
@@ -70,31 +75,15 @@ class ActivityLogPanel(Widget):
     def add_entry(self, name: str, state: str, when: str) -> None:
         self.query_one("#log_widget", Log).write_line(f"[{when}] {name} → {state}")
 
-    def load_history(self, entries: list[dict]) -> None:
+    def load_history(self, entries: list[LogEntry]) -> None:
         log = self.query_one("#log_widget", Log)
         log.clear()
         if not entries:
             log.write_line("(no history available)")
             return
-        lines = []
-        for entry in entries:
-            when = _format_log_time(entry.get("when", ""))
-            name = entry.get("name") or entry.get("entity_id", "unknown")
-            state = entry.get("state") or entry.get("message", "")
-            lines.append(f"[{when}] {name} → {state}")
-        log.write_lines(lines)
+        # content_size is only meaningful post-mount, which load_history always is.
+        width = max(20, self.content_size.width or 50)
+        log.write_lines([format_log_line(entry, width) for entry in entries])
 
     def clear(self) -> None:
         self.query_one("#log_widget", Log).clear()
-
-
-def _format_log_time(iso_str: str) -> str:
-    if not iso_str:
-        return "??:??:??"
-    try:
-        dt = datetime.fromisoformat(iso_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone().strftime("%H:%M:%S")
-    except (ValueError, TypeError):
-        return iso_str[:8] if len(iso_str) >= 8 else "??:??:??"

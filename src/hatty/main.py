@@ -1113,7 +1113,7 @@ class HACLI(App):
             self.notify("Failed to load activity log from Home Assistant.", title="Activity Log", severity="error")
             panel.load_history([])
         else:
-            panel.load_history(entries)
+            panel.load_history(self.normalize_log_entries(entries))
 
     def action_cycle_graph_type(self) -> None:
         panel = self.query_one("#detail_panel", EntityDetailPanel)

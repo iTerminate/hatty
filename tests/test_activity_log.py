@@ -52,6 +52,27 @@ async def test_activity_log_loads_logbook_history(make_app):
         assert log_widget.line_count >= 1
 
 
+async def test_activity_log_renders_ws_shaped_device_event(make_app):
+    """A logbook/get_events-style entry (epoch `when`, `message`, no `name`)
+    normalizes and renders as an event line rather than crashing (issue #17)."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._logbook_data = [
+            {
+                "when": 1705315800.0,
+                "name": "Living Room Button",
+                "message": "remote_button_short_press event was fired with parameters: {'x': 1}",
+                "domain": "zha",
+            }
+        ]
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        # Substring short enough to survive the panel's width truncation.
+        assert any("⚡ Living Room Button:" in line for line in log_widget.lines)
+
+
 async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:

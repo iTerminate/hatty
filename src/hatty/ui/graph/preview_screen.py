@@ -54,6 +54,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Label
 from textual_plotext import PlotextPlot
 
+from hatty.logbook import LogEntry
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import entity_title, entity_unit, get_display_name
 from hatty.ui.graph.binary_history import binary_stats, value_to_state
@@ -235,7 +236,7 @@ class GraphPreviewScreen(Screen):
         self._active_entity_index = 0
         self._cursor_mode = False
         self._cursor_index = 0
-        self._events: list[dict] = []
+        self._events: list[LogEntry] = []
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -803,8 +804,8 @@ class GraphPreviewScreen(Screen):
             self._events = []
             log_panel.load_history([])
         else:
-            self._events = entries
-            log_panel.load_history(entries)
+            self._events = self.app.normalize_log_entries(entries)
+            log_panel.load_history(self._events)
         self._redraw()
 
     def action_show_list_popup(self) -> None:
