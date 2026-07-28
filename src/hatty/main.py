@@ -157,6 +157,7 @@ class HACLI(App):
         self.current_view = "entities"
         self._log_entity_ids: set[str] = set()
         self._log_query_ids: list[str] = []
+        self._log_device_ids: list[str] = []
         self._log_generation: int = 0
         self._log_mode: str = "list"
         self._log_title_base: str = ""
@@ -809,6 +810,7 @@ class HACLI(App):
         log_panel.remove_class("-maximized")
         self._log_entity_ids.clear()
         self._log_query_ids = []
+        self._log_device_ids = []
         self._log_mode = "list"
         self._log_end = None
         self.refresh_bindings()
@@ -819,7 +821,7 @@ class HACLI(App):
             return
         log_panel.toggle_class("-maximized")
 
-    _LOG_HINT = "f maximize · ←/→ older/newer · T timeframe · a/A/i close"
+    _LOG_HINT = "f maximize · ←/→ older/newer · T timeframe · A narrows · a/A/i close"
 
     @staticmethod
     def _format_log_hours(hours: float) -> str:
@@ -860,10 +862,11 @@ class HACLI(App):
             label += f" +{len(graph_ids) - 1} more"
         return f"{prefix} — {label}"
 
-    def _open_log_panel(self, entity_ids: list[str], title: str) -> None:
+    def _open_log_panel(self, entity_ids: list[str], title: str, device_ids: list[str] | None = None) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         self._log_entity_ids = set(entity_ids)
         self._log_query_ids = list(entity_ids)
+        self._log_device_ids = list(device_ids) if device_ids else []
         self._log_end = None
         self._log_title_base = title
         log_panel.set_hint(self._LOG_HINT)
@@ -877,7 +880,7 @@ class HACLI(App):
         self._log_generation += 1
         current_gen = self._log_generation
         self._set_log_title()
-        self.spawn(self._load_activity_log(self._log_query_ids, current_gen))
+        self.spawn(self._load_activity_log(self._log_query_ids, current_gen, self._log_device_ids))
 
     def action_log_older(self) -> None:
         now = datetime.now(timezone.utc)
@@ -895,8 +898,15 @@ class HACLI(App):
     # A device log covering a whole list can expand to many sibling entities; cap
     # the set so a single logbook GET's entity= param can't blow up.
     _DEVICE_LOG_MAX_ENTITIES = 200
+    # Every device_id widens the WS logbook query's event-type set (HA's
+    # async_determine_event_types), making device count the expensive axis —
+    # cap it independently of the entity cap above.
+    _DEVICE_LOG_MAX_DEVICES = 50
 
-    def _get_device_entity_ids(self, entity_id: str) -> tuple[list[str], str, bool]:
+    def _get_device_entity_ids(self, entity_id: str) -> tuple[list[str], str, str | None]:
+        """Sibling entity_ids sharing entity_id's device, its display label,
+        and the device_id itself (None when the entity has no device — the
+        WS logbook query then falls back to entity-only scope)."""
         entity = self.find_entity(entity_id)
         label = get_display_name(entity) if entity else entity_id
 
@@ -904,7 +914,7 @@ class HACLI(App):
         device_id = reg_entry.get("device_id") if reg_entry else None
 
         if not device_id:
-            return ([entity_id], label, False)
+            return ([entity_id], label, None)
 
         siblings = [
             e["entity_id"] for e in self.entity_registry if e.get("device_id") == device_id and e.get("entity_id")
@@ -912,7 +922,7 @@ class HACLI(App):
         if not siblings:
             siblings = [entity_id]
 
-        return (siblings, label, True)
+        return (siblings, label, device_id)
 
     def _device_index(self) -> dict[str, list[str]]:
         """device_id -> its registered entity_ids, built once per call."""
@@ -924,16 +934,18 @@ class HACLI(App):
                 index.setdefault(device_id, []).append(entity_id)
         return index
 
-    def _expand_to_device_entity_ids(self, entity_ids: list[str]) -> tuple[list[str], int]:
+    def _expand_to_device_entity_ids(self, entity_ids: list[str]) -> tuple[list[str], list[str]]:
         """Every entity of every device backing any of entity_ids. Entities with
         no registry entry / no device pass through as themselves. Returns the
-        deduped, order-preserving expansion plus the number of distinct devices."""
+        deduped, order-preserving expansion plus the ordered, deduped device_ids
+        (the latter feeds the WS logbook query's device_ids param)."""
         index = self._device_index()
         reg_device = {e.get("entity_id"): e.get("device_id") for e in self.entity_registry}
 
         expanded: list[str] = []
         seen: set[str] = set()
-        devices: set[str] = set()
+        device_ids: list[str] = []
+        seen_devices: set[str] = set()
 
         def _add(eid: str) -> None:
             if eid and eid not in seen:
@@ -943,13 +955,15 @@ class HACLI(App):
         for entity_id in entity_ids:
             device_id = reg_device.get(entity_id)
             if device_id and device_id in index:
-                devices.add(device_id)
+                if device_id not in seen_devices:
+                    seen_devices.add(device_id)
+                    device_ids.append(device_id)
                 for sibling in index[device_id]:
                     _add(sibling)
             else:
                 _add(entity_id)
 
-        return (expanded, len(devices))
+        return (expanded, device_ids)
 
     def action_toggle_activity_log(self) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
@@ -987,29 +1001,41 @@ class HACLI(App):
         self._log_mode = "list"
         self._open_log_panel(entity_ids, title)
 
+    def _open_single_device_log(self, entity_id: str, *, mode: str) -> None:
+        """Shared tail for every "one device" case (graphed entity, list-less
+        selection, and A's second-press narrowing) — resolves entity_id's
+        device, opens the panel scoped to it, and notifies if it has none."""
+        entity_ids, label, device_id = self._get_device_entity_ids(entity_id)
+        if not device_id:
+            self.notify(f"No device found for {entity_id}. Showing single entity log.", title="Device Log")
+        self._log_mode = mode
+        self._open_log_panel(entity_ids, f"Device Log — {label}", device_ids=[device_id] if device_id else None)
+
     def action_toggle_device_log(self) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
+        graph_ids = self._open_graph_log_ids()
 
         if log_panel.has_class("-visible"):
+            # A cycles: from the list-wide "every device" scope, a second press
+            # narrows to the device under the cursor; a third closes. Every other
+            # open state (already narrowed, or a graph/no-list single device,
+            # which have no wider scope to have come from) closes immediately.
+            if self._log_mode == "device" and not graph_ids and self.current_list_name:
+                entity_id = self._selected_entity_id()
+                if entity_id:
+                    self._open_single_device_log(entity_id, mode="device_selected")
+                    return
             self._close_log_panel()
             return
 
-        graph_ids = self._open_graph_log_ids()
         if self.query_one("#detail_panel", EntityDetailPanel).has_class("-visible"):
             self.graph_ctl.close_panel()
 
-        self._log_mode = "device"
-
         # A graphed entity takes priority over the active list: the device log
-        # covers the graphed entity's device, not the whole list's devices.
+        # covers the graphed entity's device, not the whole list's devices —
+        # and since that's already a single device, there's nothing to narrow.
         if graph_ids:
-            entity_ids, label, device_found = self._get_device_entity_ids(graph_ids[0])
-            if not device_found:
-                self.notify(
-                    f"No device found for {graph_ids[0]}. Showing single entity log.",
-                    title="Device Log",
-                )
-            self._open_log_panel(entity_ids, f"Device Log — {label}")
+            self._open_single_device_log(graph_ids[0], mode="device_selected")
             return
 
         # With a list active, the device log covers every device backing every
@@ -1019,32 +1045,32 @@ class HACLI(App):
             if not list_ids:
                 self.notify("No entities in this list to log.", title="Device Log", severity="warning")
                 return
-            entity_ids, device_count = self._expand_to_device_entity_ids(list_ids)
+            entity_ids, device_ids = self._expand_to_device_entity_ids(list_ids)
             if len(entity_ids) > self._DEVICE_LOG_MAX_ENTITIES:
                 entity_ids = entity_ids[: self._DEVICE_LOG_MAX_ENTITIES]
                 self.notify(
                     f"Showing device log for the first {self._DEVICE_LOG_MAX_ENTITIES} entities.",
                     title="Device Log",
                 )
-            self._open_log_panel(entity_ids, f"Device Log — {self.current_list_name} ({device_count} devices)")
+            if len(device_ids) > self._DEVICE_LOG_MAX_DEVICES:
+                device_ids = device_ids[: self._DEVICE_LOG_MAX_DEVICES]
+                self.notify(
+                    f"Showing device log for the first {self._DEVICE_LOG_MAX_DEVICES} devices.",
+                    title="Device Log",
+                )
+            self._log_mode = "device"
+            title = f"Device Log — {self.current_list_name} ({len(device_ids)} devices)"
+            self._open_log_panel(entity_ids, title, device_ids=device_ids)
             return
 
         # No list active: log the selected entity's device (expanding a View-All
-        # of ~everything would be a useless whole-instance logbook query).
+        # of ~everything would be a useless whole-instance logbook query). Already
+        # a single device, so a second press just closes, same as the graph case.
         entity_id = self._selected_entity_id()
         if not entity_id:
             self.notify("No entity selected.", title="Device Log", severity="warning")
             return
-
-        entity_ids, label, device_found = self._get_device_entity_ids(entity_id)
-
-        if not device_found:
-            self.notify(
-                f"No device found for {entity_id}. Showing single entity log.",
-                title="Device Log",
-            )
-
-        self._open_log_panel(entity_ids, f"Device Log — {label}")
+        self._open_single_device_log(entity_id, mode="device_selected")
 
     def action_toggle_entity_log(self) -> None:
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
@@ -1104,8 +1130,12 @@ class HACLI(App):
         device_names = {d["id"]: device_display_name(d) for d in self.device_registry if d.get("id")}
         return normalize_entries(raw, entity_names, device_names)
 
-    async def _load_activity_log(self, entity_ids: list[str], generation: int) -> None:
-        entries = await self.client.fetch_logbook(entity_ids, hours=self.log_hours, end=self._log_end)
+    async def _load_activity_log(
+        self, entity_ids: list[str], generation: int, device_ids: list[str] | None = None
+    ) -> None:
+        entries = await self.client.fetch_logbook(
+            entity_ids, hours=self.log_hours, end=self._log_end, device_ids=device_ids
+        )
         panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if not panel.has_class("-visible") or self._log_generation != generation:
             return

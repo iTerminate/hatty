@@ -211,6 +211,27 @@ async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app
         assert not panel.has_class("-visible")
 
 
+async def test_a_and_i_send_no_device_ids(make_app, sample_entities, sample_registry):
+    """`a` (list/entity log) and `i` (single-entity log) stay entity-only —
+    only `A` (device log) queries device-scoped events (issue #18)."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("light.living_room_lamp")
+        await pilot.pause()
+
+        await pilot.press("i")
+        await pilot.pause()
+        assert app.client.logbook_calls[-1][3] == []
+        await pilot.press("i")  # close
+        await pilot.pause()
+
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_calls[-1][3] == []
+
+
 async def test_left_arrow_pages_log_older_when_open(make_app):
     app = make_app()
     async with app.run_test() as pilot:

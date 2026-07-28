@@ -30,6 +30,20 @@ async def test_A_opens_device_log_panel_with_title_and_sibling_ids(make_app, sam
         assert "Device Log" in title
         assert "Living Room Lamp" in title
         assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
+        # issue #17: A is the one scope that queries device-scoped events.
+        assert app.client.logbook_calls[-1][3] == ["dev_abc"]
+
+
+async def test_A_sends_no_device_id_when_entity_has_no_device(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("EntitiesTable")
+        table.cursor_coordinate = Coordinate(0, 0)  # switch.fan (no device_id)
+        await pilot.pause()
+        await pilot.press("A")
+        await pilot.pause()
+        assert app.client.logbook_calls[-1][3] == []
 
 
 async def test_A_closes_panel_when_already_open(make_app, sample_entities, sample_registry):
@@ -105,8 +119,8 @@ async def test_get_device_entity_ids_returns_siblings(make_app, sample_entities,
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
-        entity_ids, label, device_found = app._get_device_entity_ids("light.living_room_lamp")
-        assert device_found is True
+        entity_ids, label, device_id = app._get_device_entity_ids("light.living_room_lamp")
+        assert device_id == "dev_abc"
         assert set(entity_ids) == {"light.living_room_lamp", "light.kitchen_light"}
         assert "Living Room Lamp" in label
 
@@ -117,8 +131,8 @@ async def test_get_device_entity_ids_fallback_empty_device_id(make_app, sample_e
     ]
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry_with_empty)
     async with app.run_test():
-        entity_ids, label, device_found = app._get_device_entity_ids("light.living_room_lamp")
-        assert device_found is False
+        entity_ids, label, device_id = app._get_device_entity_ids("light.living_room_lamp")
+        assert device_id is None
         assert entity_ids == ["light.living_room_lamp"]
 
 
@@ -168,4 +182,11 @@ async def test_A_scopes_to_graphed_entity_over_list_device_expansion(make_app, s
         assert app._log_entity_ids == {"sensor.temperature"}
         title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
         assert "Temperature Sensor" in title
+
+        # A graph-scoped device log is already a single device — a second
+        # press has nothing to narrow to, so it closes (issue #18).
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        await pilot.press("A")
+        await pilot.pause()
+        assert not panel.has_class("-visible")
         assert "devices)" not in title
