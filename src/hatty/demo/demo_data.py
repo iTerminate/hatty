@@ -392,8 +392,12 @@ def demo_climate_history(
     return pts
 
 
-def demo_logbook(entity_ids: list[str], hours: float = 24, end: datetime | None = None) -> list[dict]:
-    """A handful of plausible activity entries for the given entities."""
+def demo_logbook(
+    entity_ids: list[str], hours: float = 24, end: datetime | None = None, device_ids: list[str] | None = None
+) -> list[dict]:
+    """A handful of plausible activity entries for the given entities. `device_ids`
+    mirrors the real client's signature; device-scoped demo events are added in
+    demo_device_events (issue #17)."""
     names = {e["entity_id"]: e["attributes"].get("friendly_name", e["entity_id"]) for e in demo_entities()}
     targets = entity_ids or list(names)
     rng = random.Random(1234)

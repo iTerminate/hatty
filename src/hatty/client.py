@@ -89,12 +89,18 @@ class HAClient:
         self.pending_requests: dict[int, str] = {}
         self._pending_futures: dict[int, asyncio.Future] = {}
         self._closing = False
+        # Latched off if HA rejects logbook/get_events (old HA or missing
+        # device_ids support) so fetch_logbook stops retrying WS every call.
+        self._logbook_ws_supported = True
 
     def _next_message_id(self) -> int:
         self.message_id += 1
         return self.message_id
 
     async def connect(self):
+        # A fresh connection might be to an upgraded HA, so give logbook/get_events
+        # another chance even after a previous connection latched it off.
+        self._logbook_ws_supported = True
         self.session = aiohttp.ClientSession()
         self.ws = await self.session.ws_connect(self.url, heartbeat=WS_HEARTBEAT)
 
@@ -339,12 +345,13 @@ class HAClient:
         forecast = data.get("service_response", {}).get(entity_id, {}).get("forecast")
         return forecast if isinstance(forecast, list) else None
 
-    async def fetch_logbook(
-        self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
+    async def _rest_fetch_logbook(
+        self, entity_ids: list[str], start: datetime, end: datetime
     ) -> list[dict] | None:
-        end = end or datetime.now(timezone.utc)
-        start = (end - timedelta(hours=hours)).isoformat()
-        url = f"{self.base_url}/api/logbook/{start}"
+        """The REST `/api/logbook` fallback. Entity-only — HA's REST logbook view
+        has no device filter at all, so device-scoped events (e.g. zha_event)
+        never come back through this path (issue #17)."""
+        url = f"{self.base_url}/api/logbook/{start.isoformat()}"
         params: dict = {"end_time": end.isoformat()}
         if entity_ids:
             # HA's logbook endpoint reads the filter from `entity` (comma-separated) —
@@ -354,6 +361,55 @@ class HAClient:
         if data is None:
             return None
         return data if isinstance(data, list) else []
+
+    async def _ws_fetch_logbook(
+        self, entity_ids: list[str], device_ids: list[str], start: datetime, end: datetime
+    ) -> list[dict] | None:
+        """`logbook/get_events` — the only HA API that accepts `device_ids`, so
+        it's the one path that can surface device-scoped events like zha_event
+        (issue #17). Entries differ in shape from the REST endpoint (epoch
+        `when`, no `name` on state entries) — see `hatty.logbook.normalize_entries`.
+        Returns None on any failure so the caller falls back to REST; latches
+        `_logbook_ws_supported` off on a command/schema HA doesn't recognize so
+        later calls skip straight to REST instead of retrying every time."""
+        payload: dict[str, Any] = {
+            "type": "logbook/get_events",
+            "start_time": start.isoformat(),
+            "end_time": end.isoformat(),
+        }
+        if entity_ids:
+            payload["entity_ids"] = list(entity_ids)
+        if device_ids:
+            payload["device_ids"] = list(device_ids)
+        try:
+            result = await self._request(payload)
+        except HARequestError as e:
+            if e.code in ("unknown_command", "invalid_format"):
+                # `invalid_format` covers HA versions that have logbook/get_events
+                # but not yet its device_ids param — the command exists, only the
+                # schema rejects us, so latch off the same way.
+                self._logbook_ws_supported = False
+            self.log.warning(f"fetch_logbook (WS) failed: {e}")
+            return None
+        except (ConnectionError, asyncio.TimeoutError) as e:
+            self.log.warning(f"fetch_logbook (WS) failed: {e}")
+            return None
+        return result if isinstance(result, list) else []
+
+    async def fetch_logbook(
+        self,
+        entity_ids: list[str],
+        hours: float = 24,
+        end: datetime | None = None,
+        device_ids: list[str] | None = None,
+    ) -> list[dict] | None:
+        end = end or datetime.now(timezone.utc)
+        start = end - timedelta(hours=hours)
+        if self._logbook_ws_supported and self.ws is not None:
+            entries = await self._ws_fetch_logbook(entity_ids, device_ids or [], start, end)
+            if entries is not None:
+                return entries
+        return await self._rest_fetch_logbook(entity_ids, start, end)
 
     async def _fetch_raw_history(
         self, entity_id: str, hours: float, end: datetime | None, minimal: bool = True
