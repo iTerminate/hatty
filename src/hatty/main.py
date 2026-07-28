@@ -42,6 +42,7 @@ from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
 from hatty.controllers.lists import ListController
 from hatty.controllers.notifications import NotificationController
+from hatty.logbook import LogEntry, normalize_entries
 from hatty.service_calls import _CONTROL_SERVICE_BUILDERS
 from hatty.types import Entity
 from hatty.ui.activity_log_panel import ActivityLogPanel
@@ -50,6 +51,7 @@ from hatty.ui.config_screen import ConfigScreen
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.controls.control_popup import EntityControlPopup
 from hatty.ui.dashboard.screen import DashboardScreen
+from hatty.ui.device_tree_screen import device_display_name
 from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_name
 from hatty.ui.graph.entity_detail import EntityDetailPanel
 from hatty.ui.help_popup import HelpPopup
@@ -1089,6 +1091,18 @@ class HACLI(App):
         entity_id = self._selected_entity_id()
         if entity_id:
             self.toggle_or_open_controls(entity_id)
+
+    def normalize_log_entries(self, raw: list[dict]) -> list[LogEntry]:
+        """Raw REST/WS logbook entries -> the single shape the log panel and
+        the graph's event marks consume. WS entries have an epoch `when` and
+        no `name` on state entries (issue #17) — this resolves both."""
+        entity_names = {e["entity_id"]: get_display_name(e) for e in self.all_entities if e.get("entity_id")}
+        for reg in self.entity_registry:
+            entity_id = reg.get("entity_id")
+            if entity_id and entity_id not in entity_names:
+                entity_names[entity_id] = reg.get("name") or reg.get("original_name") or entity_id
+        device_names = {d["id"]: device_display_name(d) for d in self.device_registry if d.get("id")}
+        return normalize_entries(raw, entity_names, device_names)
 
     async def _load_activity_log(self, entity_ids: list[str], generation: int) -> None:
         entries = await self.client.fetch_logbook(entity_ids, hours=self.log_hours, end=self._log_end)
