@@ -18,6 +18,10 @@ MAX_RECONNECT_DELAY = 60
 # arriving, which flows through listen()'s except-Exception path instead.
 WS_HEARTBEAT = 30
 
+# How long an awaited WS request (`_request`) waits for its `result` frame
+# before giving up — see fetch_logbook's WS-first/REST-fallback split (issue #17).
+WS_REQUEST_TIMEOUT = 10
+
 # Sentinel distinguishing "argument omitted" from an explicit None (which is a
 # meaningful value — clearing a device's area or reverting its user-set name).
 # Shared so the stand-in clients import the *same* object: the parity test in
@@ -28,6 +32,16 @@ _UNSET = object()
 class AuthenticationError(Exception):
     """Home Assistant rejected the access token. Retrying won't help, so the
     reconnect loop stops and surfaces this distinctly from an unreachable host."""
+
+
+class HARequestError(Exception):
+    """An awaited WS request (`_request`) came back `success: false`. Carries
+    HA's error `code` so callers can distinguish "old HA, command doesn't
+    exist" (`unknown_command`) from a transient failure."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
 
 
 async def probe_connection(url: str, token: str, timeout: float = 5.0) -> tuple[bool, str]:
@@ -73,6 +87,7 @@ class HAClient:
         self.ws: aiohttp.ClientWebSocketResponse | None = None
         self.message_id = 1
         self.pending_requests: dict[int, str] = {}
+        self._pending_futures: dict[int, asyncio.Future] = {}
         self._closing = False
 
     def _next_message_id(self) -> int:
@@ -97,14 +112,67 @@ class HAClient:
             self.ws = None
             raise AuthenticationError(f"Authentication failed: {auth_result.get('message')}")
 
-    async def _send(self, payload: dict[str, Any], label: str) -> None:
+    async def _send(self, payload: dict[str, Any], label: str) -> int:
         """Send a WS request with the next message id and record it in
-        pending_requests under `label` so the response can be routed."""
+        pending_requests under `label` so the response can be routed. Returns
+        the message id (used by subscribe-style callers that need it later to
+        unsubscribe)."""
         if self.ws is None:
             raise ConnectionError("Cannot send: the WebSocket is not connected")
         message_id = self._next_message_id()
         await self.ws.send_json({"id": message_id, **payload})
         self.pending_requests[message_id] = label
+        return message_id
+
+    async def _request(self, payload: dict[str, Any], *, timeout: float = WS_REQUEST_TIMEOUT) -> Any:
+        """Send a WS request and await its `result` frame directly, instead of
+        going through the label-based `pending_requests` demux that
+        ConnectionController handles later/out of band. Raises ConnectionError
+        (not connected, or disconnects before a response arrives),
+        asyncio.TimeoutError, or HARequestError (`success: false`)."""
+        if self.ws is None:
+            raise ConnectionError("Cannot send: the WebSocket is not connected")
+        message_id = self._next_message_id()
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        # Register before sending — a fast HA can otherwise land the result
+        # frame in _read_loop before this entry exists, and it would be
+        # forwarded to on_message instead of resolving this future.
+        self._pending_futures[message_id] = future
+        try:
+            await self.ws.send_json({"id": message_id, **payload})
+            return await asyncio.wait_for(future, timeout)
+        finally:
+            self._pending_futures.pop(message_id, None)
+
+    def _resolve_pending_future(self, data: dict) -> bool:
+        """If `data` is a `result` frame for one of our awaited `_request`
+        calls, resolve it and return True (consumed — do not forward to
+        on_message). Otherwise return False."""
+        if data.get("type") != "result":
+            return False
+        message_id = data.get("id")
+        if message_id is None:
+            return False
+        future = self._pending_futures.get(message_id)
+        if future is None:
+            return False
+        if not future.done():
+            if data.get("success"):
+                future.set_result(data.get("result"))
+            else:
+                error = data.get("error") or {}
+                future.set_exception(HARequestError(error.get("code", ""), error.get("message", "")))
+        return True
+
+    def _fail_pending_futures(self, error: BaseException) -> None:
+        """Unblock every outstanding `_request` waiter (e.g. on disconnect)
+        instead of leaving it to time out. set_exception rather than cancel():
+        a CancelledError out of wait_for would look like caller-task
+        cancellation, whereas callers already handle ConnectionError."""
+        for future in self._pending_futures.values():
+            if not future.done():
+                future.set_exception(error)
+        self._pending_futures.clear()
 
     async def fetch_states(self):
         await self._send({"type": "get_states"}, "get_states")
@@ -163,7 +231,9 @@ class HAClient:
         while not ws.closed:
             msg = await ws.receive()
             if msg.type == aiohttp.WSMsgType.TEXT:
-                self.on_message(json.loads(msg.data))
+                data = json.loads(msg.data)
+                if not self._resolve_pending_future(data):
+                    self.on_message(data)
             elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                 break
 
@@ -197,6 +267,9 @@ class HAClient:
                 self.log.warning(f"Connection attempt {attempt + 1} failed: {e}")
                 self.on_message({"type": "ha_connect_failed", "error": str(e), "attempt": attempt + 1})
             finally:
+                # Unblock any in-flight _request() waiters immediately rather than
+                # leaving them to hit WS_REQUEST_TIMEOUT during a reconnect.
+                self._fail_pending_futures(ConnectionError("WebSocket disconnected"))
                 if self.session:
                     await self.session.close()
                     self.session = None
@@ -211,6 +284,7 @@ class HAClient:
 
     async def close(self):
         self._closing = True
+        self._fail_pending_futures(ConnectionError("Client closed"))
         if self.ws:
             await self.ws.close()
         if self.session:
