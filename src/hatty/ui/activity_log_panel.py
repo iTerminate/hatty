@@ -12,13 +12,24 @@ screen). Scope, time-window paging and live-append all live on the host.
 
 `load_history` renders normalized `LogEntry`s (see `hatty.logbook`) — both the
 REST and WS logbook transports get unified to that shape before reaching this
-widget, so it never has to know which one an entry came from."""
+widget, so it never has to know which one an entry came from.
+
+`add_log_entry` is the live-streamed twin of `load_history` (issue #19's
+logbook/event_stream) — it dedupes against the last few entries rendered, since
+a live push can legitimately overlap the last entry `load_history` already
+drew (the window fetch and the stream subscription have no shared cursor)."""
+
+from collections import deque
 
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label, Log
 
 from hatty.logbook import LogEntry, format_log_line
+
+# How many recently-rendered entries add_log_entry checks against — only the
+# fetch/stream boundary can overlap, so a handful of slots is ample.
+_DEDUPE_WINDOW = 8
 
 
 class ActivityLogPanel(Widget):
@@ -52,6 +63,10 @@ class ActivityLogPanel(Widget):
     }
     """
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._recent_keys: deque[tuple[str, str, str]] = deque(maxlen=_DEDUPE_WINDOW)
+
     def compose(self) -> ComposeResult:
         yield Label("Activity Log", id="log_title")
         log = Log(max_lines=2000, id="log_widget", auto_scroll=True)
@@ -75,9 +90,15 @@ class ActivityLogPanel(Widget):
     def add_entry(self, name: str, state: str, when: str) -> None:
         self.query_one("#log_widget", Log).write_line(f"[{when}] {name} → {state}")
 
+    @staticmethod
+    def _dedupe_key(entry: LogEntry) -> tuple[str, str, str]:
+        return (entry["when"], entry["name"], entry["detail"])
+
     def load_history(self, entries: list[LogEntry]) -> None:
         log = self.query_one("#log_widget", Log)
         log.clear()
+        self._recent_keys.clear()
+        self._recent_keys.extend(self._dedupe_key(e) for e in entries[-_DEDUPE_WINDOW:])
         if not entries:
             log.write_line("(no history available)")
             return
@@ -85,5 +106,18 @@ class ActivityLogPanel(Widget):
         width = max(20, self.content_size.width or 50)
         log.write_lines([format_log_line(entry, width) for entry in entries])
 
+    def add_log_entry(self, entry: LogEntry) -> None:
+        """Live-append a single normalized entry (a logbook/event_stream push)
+        — reuses format_log_line so a device event gets the same ⚡ form and
+        width truncation as the initial load. Skips an entry already rendered
+        in the last _DEDUPE_WINDOW (the fetch/stream boundary can overlap)."""
+        key = self._dedupe_key(entry)
+        if key in self._recent_keys:
+            return
+        self._recent_keys.append(key)
+        width = max(20, self.content_size.width or 50)
+        self.query_one("#log_widget", Log).write_line(format_log_line(entry, width))
+
     def clear(self) -> None:
         self.query_one("#log_widget", Log).clear()
+        self._recent_keys.clear()

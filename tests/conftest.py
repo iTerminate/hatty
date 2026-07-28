@@ -80,6 +80,9 @@ class FakeHAClient:
         self.logbook_calls: list[tuple[list[str], float, "datetime | None", list[str]]] = []
         self._forecast_data: dict[str, dict[str, list[dict]]] = {}
         self.forecast_calls: list[tuple[str, str]] = []
+        self.logbook_subscription_id: int | None = None
+        self.subscribe_logbook_calls: list[tuple[list[str], list[str]]] = []
+        self.unsubscribe_logbook_calls: int = 0
         self._closing = False
 
     def _next_id(self) -> int:
@@ -167,6 +170,20 @@ class FakeHAClient:
         self.forecast_calls.append((entity_id, forecast_type))
         return self._forecast_data.get(entity_id, {}).get(forecast_type)
 
+    async def subscribe_logbook(self, entity_ids: list[str], device_ids: list[str] | None = None) -> int | None:
+        self.subscribe_logbook_calls.append((list(entity_ids), list(device_ids or [])))
+        self.logbook_subscription_id = self._next_id()
+        return self.logbook_subscription_id
+
+    async def unsubscribe_logbook(self) -> None:
+        # Mirrors the real client: a no-op when nothing is subscribed, so a
+        # _resync_log_subscription() call before the first subscribe doesn't
+        # count as a real unsubscribe.
+        if self.logbook_subscription_id is None:
+            return
+        self.unsubscribe_logbook_calls += 1
+        self.logbook_subscription_id = None
+
     def inject_failed_result(self, label: str, error: dict | None = None) -> None:
         request_id = self._next_id()
         self.pending_requests[request_id] = label
@@ -182,6 +199,12 @@ class FakeHAClient:
                 },
             }
         )
+
+    def inject_logbook_event(self, entries: list[dict]) -> None:
+        """Simulates a live logbook/event_stream frame — routed by shape (an
+        `events` key, not `event_type`/`data`) rather than by subscription id,
+        so this works whether or not subscribe_logbook was actually called."""
+        self.on_message({"id": self.logbook_subscription_id or 0, "type": "event", "event": {"events": entries}})
 
 
 @pytest.fixture

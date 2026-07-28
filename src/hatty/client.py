@@ -92,6 +92,9 @@ class HAClient:
         # Latched off if HA rejects logbook/get_events (old HA or missing
         # device_ids support) so fetch_logbook stops retrying WS every call.
         self._logbook_ws_supported = True
+        # The active logbook/event_stream subscription id, if any — dies with
+        # the socket, so it's reset on every fresh connect() (issue #19).
+        self.logbook_subscription_id: int | None = None
 
     def _next_message_id(self) -> int:
         self.message_id += 1
@@ -101,6 +104,9 @@ class HAClient:
         # A fresh connection might be to an upgraded HA, so give logbook/get_events
         # another chance even after a previous connection latched it off.
         self._logbook_ws_supported = True
+        # Any prior subscription id is meaningless on a new socket — the caller
+        # (HACLI, via ha_connected) re-subscribes if the log is open and live.
+        self.logbook_subscription_id = None
         self.session = aiohttp.ClientSession()
         self.ws = await self.session.ws_connect(self.url, heartbeat=WS_HEARTBEAT)
 
@@ -223,6 +229,43 @@ class HAClient:
 
     async def subscribe_to_events(self, event_type: str = "state_changed"):
         await self._send({"type": "subscribe_events", "event_type": event_type}, f"subscribe_events_{event_type}")
+
+    async def subscribe_logbook(self, entity_ids: list[str], device_ids: list[str] | None = None) -> int | None:
+        """Live logbook events (issue #19) — device-scoped events never fire a
+        state_changed WS event, so this is the only way they can appear in the
+        log without reloading it. Anchored at "now" rather than the fetched
+        window's start, so the historical replay batch HA sends is empty/near-
+        empty and this is effectively a pure live-append channel; fetch_logbook
+        still serves the loaded window. Returns the subscription id (needed by
+        unsubscribe_logbook), or None if the request couldn't be sent (e.g.
+        mid-reconnect) — never raises, matching the REST fetchers' contract."""
+        payload: dict[str, Any] = {
+            "type": "logbook/event_stream",
+            "start_time": datetime.now(timezone.utc).isoformat(),
+        }
+        if entity_ids:
+            payload["entity_ids"] = list(entity_ids)
+        if device_ids:
+            payload["device_ids"] = list(device_ids)
+        try:
+            message_id = await self._send(payload, "logbook_stream")
+        except ConnectionError:
+            return None
+        self.logbook_subscription_id = message_id
+        return message_id
+
+    async def unsubscribe_logbook(self) -> None:
+        """No-op when nothing is subscribed. Never raises — a disconnect
+        between subscribing and unsubscribing just means there's nothing left
+        on the server to tell; the subscription already died with the socket."""
+        subscription_id = self.logbook_subscription_id
+        if subscription_id is None:
+            return
+        self.logbook_subscription_id = None
+        try:
+            await self._send({"type": "unsubscribe_events", "subscription": subscription_id}, "unsubscribe_logbook")
+        except ConnectionError:
+            pass
 
     async def call_service(self, domain: str, service: str, service_data: dict[str, Any], entity_id: str = ""):
         await self._send(

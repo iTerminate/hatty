@@ -813,6 +813,7 @@ class HACLI(App):
         self._log_device_ids = []
         self._log_mode = "list"
         self._log_end = None
+        self.spawn(self.client.unsubscribe_logbook())
         self.refresh_bindings()
 
     def action_maximize_log(self) -> None:
@@ -881,6 +882,19 @@ class HACLI(App):
         current_gen = self._log_generation
         self._set_log_title()
         self.spawn(self._load_activity_log(self._log_query_ids, current_gen, self._log_device_ids))
+        self.spawn(self._resync_log_subscription())
+
+    async def _resync_log_subscription(self) -> None:
+        """Realign the live logbook/event_stream subscription with the panel's
+        current scope/live-ness (issue #19) — called on every open, page, and
+        timeframe change, so a stale subscription never survives a scope
+        change. Always unsubscribes first: the real client allocates a fresh
+        WS id per subscribe, so an old one would otherwise leak server-side."""
+        await self.client.unsubscribe_logbook()
+        if self._log_end is None:
+            panel = self.query_one("#activity_log_panel", ActivityLogPanel)
+            if panel.has_class("-visible"):
+                await self.client.subscribe_logbook(self._log_query_ids, self._log_device_ids)
 
     def action_log_older(self) -> None:
         now = datetime.now(timezone.utc)

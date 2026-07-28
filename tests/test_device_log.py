@@ -86,6 +86,10 @@ async def test_device_log_live_update_from_sibling(make_app, sample_entities, sa
         await pilot.pause()
         await pilot.press("A")
         await pilot.pause()
+        # Opening a live log auto-subscribes to logbook/event_stream (issue #19);
+        # the raw state_changed append is then the fallback path, so simulate it
+        # not being active here to keep testing the pre-#19 append mechanism.
+        app.client.logbook_subscription_id = None
         log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
         count_before = log_widget.line_count
 

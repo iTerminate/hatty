@@ -30,6 +30,7 @@ class _StubNotifyCtl:
 class _StubClient:
     def __init__(self):
         self.pending_requests = {}
+        self.logbook_subscription_id = None
 
     # The registry fetchers are spawned as coroutines by the real app; the stub
     # just needs callables whose return value spawn can swallow.
@@ -41,6 +42,17 @@ class _StubClient:
 
     def fetch_area_registry(self):
         return None
+
+    def subscribe_logbook(self, entity_ids, device_ids=None):
+        return None
+
+
+class _StubLogPanel:
+    """No log panel is ever mounted in this pump-only test file — always
+    reports "closed" so ha_connected's resubscribe check is a no-op here."""
+
+    def has_class(self, name):
+        return False
 
 
 class _StubApp:
@@ -59,6 +71,9 @@ class _StubApp:
         self.entity_names = {}
         self.sub_title = ""
         self._log_entity_ids = set()
+        self._log_query_ids = []
+        self._log_device_ids = []
+        self._log_end = None
         self._detail_entity_id = None
         self.notifications = []
         self.spawned = []
@@ -85,6 +100,9 @@ class _StubApp:
 
     def _splash_screen(self):
         return None
+
+    def query_one(self, selector, widget_type=None):
+        return _StubLogPanel()
 
     def _dismiss_splash(self):
         self.splash_dismissals += 1
