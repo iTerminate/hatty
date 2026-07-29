@@ -30,12 +30,15 @@ the activity log, or back out of the screen).
 `a` toggles a docked activity log for the plotted entities (issue #2),
 fetched for the same window the graph is currently showing; paging/zooming
 the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
-it to match. `f` maximizes it to the full screen width (issue #22); `a`/`A`
-always close outright even while maximized, while `escape`/`q` restore the
-normal width first and only close on a further press. While open, each
-logged event is additionally marked on the plot itself
-(`plot_render.render_event_marks`) — numeric and binary graphs only; climate
-graphs still show the log list but skip the marks.
+it to match. `v` cycles its scope through `_LOG_VIEWS` (issue #21): the
+plotted entities alone, then their devices' events too (issue #18, e.g. a
+zha_event button press), then every sibling entity on those devices. `f`
+maximizes it to the full screen width (issue #22); `a` always closes outright
+even while maximized, while `escape`/`q` restore the normal width first and
+only close on a further press. While open, each logged event is additionally
+marked on the plot itself (`plot_render.render_event_marks`) — numeric and
+binary graphs only; climate graphs still show the log list but skip the
+marks.
 
 `ALLOWED_APP_ACTIONS` is this screen's carve-out from `HACLI.check_action`'s
 "pushed screen" lockdown — only the app-level keys that still do something on
@@ -147,7 +150,7 @@ class GraphPreviewScreen(Screen):
         Binding("C", "pick_color", "Color Picker"),
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("a", "toggle_event_log", "Activity Log"),
-        Binding("A", "toggle_device_event_log", "Device Log"),
+        Binding("v", "cycle_log_view", "Log View"),
         Binding("f", "maximize_log", "Maximize Log", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("escape", "exit_cursor_mode", "Exit Inspect"),
@@ -207,10 +210,21 @@ class GraphPreviewScreen(Screen):
         ("Saving", frozenset({"save_graph", "update_graph"})),
         (
             "Activity log",
-            frozenset({"toggle_event_log", "toggle_device_event_log", "maximize_log", "close_event_log"}),
+            frozenset({"toggle_event_log", "cycle_log_view", "maximize_log", "close_event_log"}),
         ),
         ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
     )
+
+    # The fullscreen graph's log scopes, cycled by `v` (issue #21) — widening
+    # from just the plotted entities, to their devices' events too, to every
+    # sibling entity on those devices. Not named _log_mode: HACLI._log_mode
+    # is a different, unrelated state machine for the main screen's own log.
+    _LOG_VIEWS = ("entity", "device", "device_entities")
+    _LOG_VIEW_TITLES = {
+        "entity": "Activity Log",
+        "device": "Device Log",
+        "device_entities": "Device Entities Log",
+    }
 
     def __init__(
         self,
@@ -246,9 +260,10 @@ class GraphPreviewScreen(Screen):
         self._cursor_mode = False
         self._cursor_index = 0
         self._events: list[LogEntry] = []
-        # Which scope the open log panel/worker is fetching for — `a` (False)
-        # or `A` (True, issue #18); re-set on every open, read by _load_events.
-        self._log_device_scoped = False
+        # Which of _LOG_VIEWS the open log panel/worker is fetching for
+        # (issue #21); reset to "entity" on every open, advanced by `v`,
+        # read by _log_scope.
+        self._log_view = "entity"
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -300,6 +315,8 @@ class GraphPreviewScreen(Screen):
         if action == "close_event_log":
             return not self._cursor_mode and self._log_visible()
         if action == "maximize_log":
+            return self._log_visible()
+        if action == "cycle_log_view":
             return self._log_visible()
         if action == "go_back":
             return not self._cursor_mode and not self._log_visible()
@@ -801,43 +818,52 @@ class GraphPreviewScreen(Screen):
             entity = self.app.find_entity(self._entity_id)
             self._update_display(entity)
 
-    def _event_log_title(self, device_scoped: bool) -> str:
+    def _event_log_title(self) -> str:
         entity = self.app.find_entity(self._entity_id)
         label = get_display_name(entity) if entity else self._entity_id
         if len(self._entity_ids) > 1:
             label += f" +{len(self._entity_ids) - 1} more"
-        prefix = "Device Log" if device_scoped else "Activity Log"
-        return f"{prefix} — {label}"
+        return f"{self._LOG_VIEW_TITLES[self._log_view]} — {label}"
 
-    def _open_event_log(self, device_scoped: bool) -> None:
+    def _log_scope(self) -> tuple[list[str], list[str] | None]:
+        """entity_ids/device_ids to fetch for the current _log_view — a
+        monotonic widening: the plotted entities alone, then their devices'
+        events too (issue #18), then every sibling entity on those devices."""
+        if self._log_view == "entity":
+            return self._entity_ids, None
+        if self._log_view == "device":
+            return self._entity_ids, self.app._device_ids_for_entities(self._entity_ids)
+        return self.app._expand_to_device_entity_ids(self._entity_ids)
+
+    def _reload_event_log(self) -> None:
+        """Shared by opening and by `v` cycling — clear, retitle, refetch."""
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        self._log_device_scoped = device_scoped
-        log_panel.set_title(self._event_log_title(device_scoped))
-        log_panel.set_hint("f max · a/A close · ←/→ page with the graph")
+        log_panel.set_title(self._event_log_title())
         log_panel.clear()
-        log_panel.set_maximized(False)
-        log_panel.add_class("-visible")
         self.run_worker(self._load_events(), exclusive=True, group="events")
         self.refresh_bindings()
+
+    def _open_event_log(self) -> None:
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        self._log_view = "entity"
+        log_panel.set_hint("v view · f max · a close · ←/→ page with the graph")
+        log_panel.set_maximized(False)
+        log_panel.add_class("-visible")
+        self._reload_event_log()
 
     def action_toggle_event_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if log_panel.has_class("-visible"):
             self._close_event_log()
             return
-        self._open_event_log(device_scoped=False)
+        self._open_event_log()
 
-    def action_toggle_device_event_log(self) -> None:
-        """`A` — like `a`, but scoped to the graphed entities' devices too, so
-        e.g. a zha_event button press shows up alongside the plotted sensor's
-        state changes (issue #18). Pressing it while the panel is already open
-        just closes it, whichever key opened it — mirrors the main screen's
-        a/A/i mutual exclusivity."""
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if log_panel.has_class("-visible"):
-            self._close_event_log()
-            return
-        self._open_event_log(device_scoped=True)
+    def action_cycle_log_view(self) -> None:
+        """`v` — advance through _LOG_VIEWS, wrapping (issue #21). A no-op
+        while the log is closed (gated by check_action)."""
+        index = self._LOG_VIEWS.index(self._log_view)
+        self._log_view = self._LOG_VIEWS[(index + 1) % len(self._LOG_VIEWS)]
+        self._reload_event_log()
 
     async def _refresh_events_if_open(self) -> None:
         if self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible"):
@@ -846,8 +872,8 @@ class GraphPreviewScreen(Screen):
     async def _load_events(self) -> None:
         end = self._window_end or datetime.now(timezone.utc)
         hours = self._window_hours()
-        device_ids = self.app._device_ids_for_entities(self._entity_ids) if self._log_device_scoped else None
-        entries = await self.app.client.fetch_logbook(self._entity_ids, hours=hours, end=end, device_ids=device_ids)
+        entity_ids, device_ids = self._log_scope()
+        entries = await self.app.client.fetch_logbook(entity_ids, hours=hours, end=end, device_ids=device_ids)
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return  # closed while the fetch was in flight
