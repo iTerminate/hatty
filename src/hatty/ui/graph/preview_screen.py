@@ -30,9 +30,12 @@ the activity log, or back out of the screen).
 `a` toggles a docked activity log for the plotted entities (issue #2),
 fetched for the same window the graph is currently showing; paging/zooming
 the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
-it to match. While open, each logged event is additionally marked on the
-plot itself (`plot_render.render_event_marks`) — numeric and binary graphs
-only; climate graphs still show the log list but skip the marks.
+it to match. `f` maximizes it to the full screen width (issue #22); `a`/`A`
+always close outright even while maximized, while `escape`/`q` restore the
+normal width first and only close on a further press. While open, each
+logged event is additionally marked on the plot itself
+(`plot_render.render_event_marks`) — numeric and binary graphs only; climate
+graphs still show the log list but skip the marks.
 
 `ALLOWED_APP_ACTIONS` is this screen's carve-out from `HACLI.check_action`'s
 "pushed screen" lockdown — only the app-level keys that still do something on
@@ -145,6 +148,7 @@ class GraphPreviewScreen(Screen):
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("a", "toggle_event_log", "Activity Log"),
         Binding("A", "toggle_device_event_log", "Device Log"),
+        Binding("f", "maximize_log", "Maximize Log", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("escape", "exit_cursor_mode", "Exit Inspect"),
         Binding("escape", "close_event_log", "Close Log"),
@@ -202,18 +206,10 @@ class GraphPreviewScreen(Screen):
         ("Lines & Colors", frozenset({"next_entity", "cycle_color", "pick_color"})),
         ("Saving", frozenset({"save_graph", "update_graph"})),
         (
-            "Other",
-            frozenset(
-                {
-                    "toggle_event_log",
-                    "toggle_device_event_log",
-                    "show_list_popup",
-                    "close_event_log",
-                    "show_help",
-                    "go_back",
-                }
-            ),
+            "Activity log",
+            frozenset({"toggle_event_log", "toggle_device_event_log", "maximize_log", "close_event_log"}),
         ),
+        ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
     )
 
     def __init__(
@@ -303,6 +299,8 @@ class GraphPreviewScreen(Screen):
             return not self._cursor_mode and (self._window_end is not None or self._local_hours is not None)
         if action == "close_event_log":
             return not self._cursor_mode and self._log_visible()
+        if action == "maximize_log":
+            return self._log_visible()
         if action == "go_back":
             return not self._cursor_mode and not self._log_visible()
         return True
@@ -773,11 +771,25 @@ class GraphPreviewScreen(Screen):
     def action_show_help(self) -> None:
         self.app.action_show_help()
 
-    def action_close_event_log(self) -> None:
+    def _close_event_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         log_panel.remove_class("-visible")
         self._redraw()
         self.refresh_bindings()
+
+    def action_close_event_log(self) -> None:
+        """escape/q — a further escape/toggle closes; a maximized panel gets
+        un-maximized first, mirroring the main screen's action_go_back. `a`/`A`
+        (action_toggle_event_log) close outright instead, bypassing this."""
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        if log_panel.has_class("-maximized"):
+            log_panel.set_maximized(False)
+            return
+        self._close_event_log()
+
+    def action_maximize_log(self) -> None:
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        log_panel.set_maximized(not log_panel.has_class("-maximized"))
 
     def action_go_back(self) -> None:
         self.dismiss()
@@ -801,8 +813,9 @@ class GraphPreviewScreen(Screen):
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         self._log_device_scoped = device_scoped
         log_panel.set_title(self._event_log_title(device_scoped))
-        log_panel.set_hint("a/A close · ←/→ page with the graph")
+        log_panel.set_hint("f max · a/A close · ←/→ page with the graph")
         log_panel.clear()
+        log_panel.set_maximized(False)
         log_panel.add_class("-visible")
         self.run_worker(self._load_events(), exclusive=True, group="events")
         self.refresh_bindings()
@@ -810,7 +823,7 @@ class GraphPreviewScreen(Screen):
     def action_toggle_event_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if log_panel.has_class("-visible"):
-            self.action_close_event_log()
+            self._close_event_log()
             return
         self._open_event_log(device_scoped=False)
 
@@ -822,7 +835,7 @@ class GraphPreviewScreen(Screen):
         a/A/i mutual exclusivity."""
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if log_panel.has_class("-visible"):
-            self.action_close_event_log()
+            self._close_event_log()
             return
         self._open_event_log(device_scoped=True)
 
