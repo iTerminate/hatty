@@ -2,41 +2,10 @@
 from textual.app import ComposeResult
 from textual.widgets import Label
 
+from hatty.const import binary_state_label
 from hatty.types import Entity
 from hatty.ui.dashboard.widgets.base import EntitySlotWidget
 from hatty.ui.entity_table import apply_pending_suffix, get_display_name_text
-
-# device_class -> (on label, off label), per Home Assistant's binary_sensor conventions
-DEVICE_CLASS_LABELS = {
-    "battery": ("Low", "Normal"),
-    "battery_charging": ("Charging", "Not Charging"),
-    "cold": ("Cold", "Normal"),
-    "connectivity": ("Connected", "Disconnected"),
-    "door": ("Open", "Closed"),
-    "garage_door": ("Open", "Closed"),
-    "gas": ("Detected", "Clear"),
-    "heat": ("Hot", "Normal"),
-    "light": ("Detected", "No Light"),
-    "lock": ("Unlocked", "Locked"),
-    "moisture": ("Wet", "Dry"),
-    "motion": ("Detected", "Clear"),
-    "moving": ("Moving", "Not Moving"),
-    "occupancy": ("Detected", "Clear"),
-    "opening": ("Open", "Closed"),
-    "plug": ("Plugged In", "Unplugged"),
-    "power": ("Detected", "No Power"),
-    "presence": ("Home", "Away"),
-    "problem": ("Problem", "OK"),
-    "running": ("Running", "Not Running"),
-    "safety": ("Unsafe", "Safe"),
-    "smoke": ("Detected", "Clear"),
-    "sound": ("Detected", "Clear"),
-    "tamper": ("Tampering", "Clear"),
-    "update": ("Update Available", "Up-to-date"),
-    "vibration": ("Detected", "Clear"),
-    "window": ("Open", "Closed"),
-}
-
 
 # device_class -> (on icon, off icon); classes without an entry fall back to generic dots.
 DEVICE_CLASS_ICONS = {
@@ -76,14 +45,8 @@ ALERT_ON_CLASSES = {
 
 
 def binary_sensor_label(entity: Entity) -> str:
-    state = entity.get("state", "")
     device_class = entity.get("attributes", {}).get("device_class") or ""
-    on_label, off_label = DEVICE_CLASS_LABELS.get(device_class, ("On", "Off"))
-    if state == "on":
-        return on_label
-    if state == "off":
-        return off_label
-    return state
+    return binary_state_label(entity.get("state", ""), device_class)
 
 
 def binary_sensor_icon(entity: Entity) -> str:
