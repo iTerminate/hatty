@@ -13,6 +13,7 @@ from hatty.logbook import (
     normalize_entries,
     normalize_entry,
     resolve_name,
+    state_detail,
 )
 
 
@@ -120,6 +121,36 @@ def test_normalize_entries_skips_non_dicts_and_preserves_order():
     ]
     entries = normalize_entries(raw, {}, {})
     assert [e["when"] for e in entries] == ["2024-01-15T10:00:00+00:00", "2024-01-15T11:00:00+00:00"]
+
+
+def test_state_detail_labels_binary_sensor_by_device_class():
+    assert state_detail("binary_sensor.front_door", "on", "door") == "Open"
+    assert state_detail("binary_sensor.front_door", "off", "door") == "Closed"
+
+
+def test_state_detail_leaves_non_binary_sensor_domains_unchanged():
+    assert state_detail("cover.garage", "open", "door") == "open"
+    assert state_detail("switch.fan", "on", "switch") == "on"
+
+
+def test_normalize_entry_applies_device_class_label_for_binary_sensor():
+    raw = {"when": "2024-01-15T12:00:00+00:00", "name": "Front Door", "state": "on", "entity_id": "binary_sensor.d"}
+    entry = normalize_entry(raw, {}, {}, {"binary_sensor.d": "door"})
+    assert entry["detail"] == "Open"
+
+
+def test_normalize_entry_without_device_classes_map_still_capitalizes_binary_sensor():
+    """No device_classes map -> device_class defaults to "" -> the generic
+    On/Off label (same fallback the dashboard binary_sensor widget uses)."""
+    raw = {"when": "2024-01-15T12:00:00+00:00", "name": "Front Door", "state": "on", "entity_id": "binary_sensor.d"}
+    entry = normalize_entry(raw, {}, {})
+    assert entry["detail"] == "On"
+
+
+def test_normalize_entry_leaves_non_binary_sensor_state_raw():
+    raw = {"when": "2024-01-15T12:00:00+00:00", "name": "Fan", "state": "on", "entity_id": "switch.fan"}
+    entry = normalize_entry(raw, {}, {})
+    assert entry["detail"] == "on"
 
 
 def test_format_log_time_handles_empty_and_malformed():

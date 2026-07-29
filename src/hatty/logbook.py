@@ -11,12 +11,14 @@ state-change entries, relying on the caller to resolve a display name. This
 module is the one place that difference is resolved, so downstream code never
 has to know which transport an entry came from.
 
-Imports only stdlib, like const.py/types.py — no Textual, no app state — so
-it's unit-testable without booting the app and stays at the bottom of the
-dependency graph."""
+Imports only stdlib plus const.py (itself stdlib-only) — no Textual, no app
+state — so it's unit-testable without booting the app and stays near the
+bottom of the dependency graph."""
 
 from datetime import datetime, timezone
 from typing import TypedDict
+
+from hatty.const import binary_state_label
 
 # HA's `logbook_entry`/`call_service`-style describers append this to an
 # external event's message (e.g. ZHA's zha_event): the leading event type is
@@ -91,25 +93,49 @@ def resolve_name(raw: dict, entity_names: dict[str, str], device_names: dict[str
     return "unknown"
 
 
-def normalize_entry(raw: dict, entity_names: dict[str, str], device_names: dict[str, str]) -> LogEntry:
+def state_detail(entity_id: str, state: str, device_class: str) -> str:
+    """A state entry's display detail — device_class-aware (e.g. "Open") for
+    binary_sensor, since its states are the raw on/off HA itself relabels;
+    other domains (cover, switch, ...) already report human states as-is."""
+    if entity_id.split(".", 1)[0] == "binary_sensor":
+        return binary_state_label(state, device_class)
+    return state
+
+
+def normalize_entry(
+    raw: dict,
+    entity_names: dict[str, str],
+    device_names: dict[str, str],
+    device_classes: dict[str, str] | None = None,
+) -> LogEntry:
     kind = entry_kind(raw)
-    detail = compact_message(raw.get("message", "")) if kind == "event" else raw.get("state", "")
+    entity_id = raw.get("entity_id") or ""
+    if kind == "event":
+        detail = compact_message(raw.get("message", ""))
+    else:
+        device_class = (device_classes or {}).get(entity_id, "")
+        detail = state_detail(entity_id, raw.get("state", ""), device_class)
     return LogEntry(
         when=entry_when_iso(raw.get("when")),
         name=resolve_name(raw, entity_names, device_names),
         detail=detail,
-        entity_id=raw.get("entity_id") or "",
+        entity_id=entity_id,
         kind=kind,
     )
 
 
 def normalize_entries(
-    raw_entries: list[dict], entity_names: dict[str, str], device_names: dict[str, str]
+    raw_entries: list[dict],
+    entity_names: dict[str, str],
+    device_names: dict[str, str],
+    device_classes: dict[str, str] | None = None,
 ) -> list[LogEntry]:
     """Maps normalize_entry over a raw logbook response, skipping any
     non-dict item, and preserving order — both transports return entries in
     ascending time order; reordering is left to the caller."""
-    return [normalize_entry(e, entity_names, device_names) for e in raw_entries if isinstance(e, dict)]
+    return [
+        normalize_entry(e, entity_names, device_names, device_classes) for e in raw_entries if isinstance(e, dict)
+    ]
 
 
 def format_log_time(iso_str: str) -> str:

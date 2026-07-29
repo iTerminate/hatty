@@ -1150,12 +1150,19 @@ class HACLI(App):
         the graph's event marks consume. WS entries have an epoch `when` and
         no `name` on state entries (issue #17) — this resolves both."""
         entity_names = {e["entity_id"]: get_display_name(e) for e in self.all_entities if e.get("entity_id")}
+        device_classes = {
+            e["entity_id"]: e.get("attributes", {}).get("device_class") or ""
+            for e in self.all_entities
+            if e.get("entity_id")
+        }
         for reg in self.entity_registry:
             entity_id = reg.get("entity_id")
             if entity_id and entity_id not in entity_names:
                 entity_names[entity_id] = reg.get("name") or reg.get("original_name") or entity_id
+            if entity_id and not device_classes.get(entity_id):
+                device_classes[entity_id] = reg.get("device_class") or reg.get("original_device_class") or ""
         device_names = {d["id"]: device_display_name(d) for d in self.device_registry if d.get("id")}
-        return normalize_entries(raw, entity_names, device_names)
+        return normalize_entries(raw, entity_names, device_names, device_classes)
 
     async def _load_activity_log(
         self, entity_ids: list[str], generation: int, device_ids: list[str] | None = None

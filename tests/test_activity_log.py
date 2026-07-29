@@ -73,6 +73,34 @@ async def test_activity_log_renders_ws_shaped_device_event(make_app):
         assert any("⚡ Living Room Button:" in line for line in log_widget.lines)
 
 
+async def test_activity_log_uses_device_class_label_for_binary_sensor(make_app):
+    """A door binary_sensor's raw "on" reads "Open" in the log, matching how
+    HA itself renders binary_sensor states (issue #25)."""
+    entities = [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "state": "on",
+            "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+            "last_changed": "2024-01-15T10:30:00.000000+00:00",
+        },
+    ]
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._logbook_data = [
+            {
+                "when": "2024-01-15T10:30:00+00:00",
+                "name": "Front Door",
+                "state": "on",
+                "entity_id": "binary_sensor.front_door",
+            }
+        ]
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        assert any("Front Door → Open" in line for line in log_widget.lines)
+
+
 async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
