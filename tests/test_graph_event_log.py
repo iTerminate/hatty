@@ -251,6 +251,77 @@ async def test_device_scoped_event_renders_and_marks_the_plot_in_cyan(
         assert "magenta" in mark_colors
 
 
+async def test_sibling_entity_state_change_marked_orange_in_device_entities_view(
+    make_app, sample_entities, sample_registry, monkeypatch
+):
+    """A "device_entities" view includes sibling entities that aren't
+    plotted — their state changes must not be marked magenta on the plot,
+    since that would falsely imply something happened to a visible line
+    (issue #21)."""
+    registry = [*sample_registry, {"entity_id": "sensor.temperature_2", "device_id": "dev_xyz"}]
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
+        app.client._logbook_data = [
+            {
+                "when": "2024-01-01T11:00:00+00:00",
+                "name": "Temperature Sensor",
+                "state": "21",
+                "entity_id": "sensor.temperature",
+            },
+            {
+                "when": "2024-01-01T11:15:00+00:00",
+                "name": "Sibling Sensor",
+                "state": "22",
+                "entity_id": "sensor.temperature_2",
+            },
+        ]
+        await _open_preview_on_temperature(pilot, app)
+
+        calls = []
+        monkeypatch.setattr(
+            preview_screen_module,
+            "render_event_marks",
+            lambda plt, t0, ts, **kw: calls.append((kw.get("color", "magenta"), len(ts))),
+        )
+
+        await pilot.press("a", "v", "v")
+        await pilot.pause()
+
+        colors_with_marks = {color for color, count in calls if count > 0}
+        assert colors_with_marks == {"magenta", "orange"}
+
+
+async def test_entity_view_never_marks_orange(make_app, sample_entities, monkeypatch):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
+        app.client._logbook_data = [
+            {
+                "when": "2024-01-01T11:00:00+00:00",
+                "name": "Temperature Sensor",
+                "state": "21",
+                "entity_id": "sensor.temperature",
+            },
+        ]
+        await _open_preview_on_temperature(pilot, app)
+
+        calls = []
+        monkeypatch.setattr(
+            preview_screen_module,
+            "render_event_marks",
+            lambda plt, t0, ts, **kw: calls.append((kw.get("color", "magenta"), len(ts))),
+        )
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        colors_with_marks = {color for color, count in calls if count > 0}
+        assert colors_with_marks == {"magenta"}
+
+
 async def test_escape_closes_event_log_before_leaving_graph(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:

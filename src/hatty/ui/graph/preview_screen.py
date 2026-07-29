@@ -641,17 +641,22 @@ class GraphPreviewScreen(Screen):
 
     def _draw_event_marks(self, plt, t0: datetime) -> None:
         """Mark each logged event's timestamp on the plot, only while the
-        event log is open (issue #2's graph/log integration). State-change
-        marks stay the original magenta; device-scoped events (issue #18,
-        e.g. a zha_event button press) get a distinct cyan so the two are
-        visually separable at a glance."""
+        event log is open (issue #2's graph/log integration). Three colors:
+        magenta for a plotted line's own state changes, cyan for device
+        events (issue #18, e.g. a zha_event button press), and orange for a
+        sibling entity's state change in the "device_entities" view (issue
+        #21) — those aren't plotted, so marking them magenta would falsely
+        imply something happened to a visible line."""
         if not self._events:
             return
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return
-        render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "state"])
+        plotted = set(self._entity_ids)
+        state_events = [e for e in self._events if e["kind"] == "state"]
+        render_event_marks(plt, t0, [e["when"] for e in state_events if e["entity_id"] in plotted])
         render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "event"], color="cyan")
+        render_event_marks(plt, t0, [e["when"] for e in state_events if e["entity_id"] not in plotted], color="orange")
 
     def _stats_text(self, entity: "Entity | None", unit: str, binary_end_iso: str | None) -> str:
         if self._cursor_mode:
