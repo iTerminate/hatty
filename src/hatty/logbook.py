@@ -154,12 +154,15 @@ def format_log_time(iso_str: str) -> str:
 
 def format_log_line(entry: LogEntry, width: int) -> str:
     """One display line for the log panel, truncated to `width` with a
-    trailing "…" — the panel is a 52-column docked, non-scrollable widget
+    trailing "…" — the panel is a docked, non-scrollable-horizontally widget
     (ActivityLogPanel), so overflow must never happen. The `[HH:MM:SS] `
-    prefix is never truncated."""
+    prefix is never truncated. Event lines budget one cell less than `width`:
+    the leading "⚡" (U+26A1) is East-Asian-Wide and occupies 2 cells, one
+    more than its single code point, so `len()` alone would run them over."""
     when = format_log_time(entry["when"])
     if entry["kind"] == "event":
         body = f"⚡ {entry['name']}: {entry['detail']}"
+        width -= 1
     else:
         body = f"{entry['name']} → {entry['detail']}"
     line = f"[{when}] {body}"

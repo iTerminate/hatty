@@ -57,6 +57,17 @@ def test_line_over_width_is_truncated_with_ellipsis():
     assert line.endswith("…")
 
 
+def test_event_line_budgets_one_cell_less_for_the_wide_lightning_glyph():
+    """"⚡" (U+26A1) is East-Asian-Wide — 2 cells for 1 code point — so an
+    event line that exactly fills a state line's budget must truncate one
+    character earlier than a state line at the same width (issue #22)."""
+    entry = _event_entry(name="A", detail="B" * 40)
+    state_equivalent = _state_entry(name="A", detail="B" * 40)
+    event_line = format_log_line(entry, width=30)
+    state_line = format_log_line(state_equivalent, width=30)
+    assert len(event_line) == len(state_line) - 1
+
+
 def test_timestamp_prefix_is_never_truncated():
     entry = _state_entry(name="X" * 200)
     line = format_log_line(entry, width=20)

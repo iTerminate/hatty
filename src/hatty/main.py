@@ -820,7 +820,7 @@ class HACLI(App):
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return
-        log_panel.toggle_class("-maximized")
+        log_panel.set_maximized(not log_panel.has_class("-maximized"))
 
     _LOG_HINT = "f maximize · ←/→ older/newer · T timeframe · A narrows · a/A/i close"
 
@@ -1394,7 +1394,7 @@ class HACLI(App):
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if log_panel.has_class("-maximized"):
             # First escape restores the normal-width panel; a further escape/toggle closes it.
-            log_panel.remove_class("-maximized")
+            log_panel.set_maximized(False)
             return
 
         search_input = self.query_one("#search_input", SearchInput)
