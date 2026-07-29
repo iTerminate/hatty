@@ -87,9 +87,6 @@ class ActivityLogPanel(Widget):
     def set_hint(self, text: str) -> None:
         self.query_one("#log_hint", Label).update(text)
 
-    def add_entry(self, name: str, state: str, when: str) -> None:
-        self.query_one("#log_widget", Log).write_line(f"[{when}] {name} → {state}")
-
     @staticmethod
     def _dedupe_key(entry: LogEntry) -> tuple[str, str, str]:
         return (entry["when"], entry["name"], entry["detail"])

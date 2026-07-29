@@ -9,8 +9,9 @@ app state (``all_entities``, the registries, the pending-call machine) still liv
 on ``HACLI``; this controller reaches it through the app reference.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
+from hatty.logbook import normalize_entry
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import get_display_name
 
@@ -236,12 +237,19 @@ class ConnectionController:
         ):
             log_panel = app.query_one("#activity_log_panel", ActivityLogPanel)
             if log_panel.has_class("-visible"):
-                app.call_later(
-                    log_panel.add_entry,
-                    get_display_name(new_state),
-                    new_state.get("state", ""),
-                    datetime.now().strftime("%H:%M:%S"),
-                )
+                device_class = new_state.get("attributes", {}).get("device_class") or ""
+                raw = {
+                    "when": datetime.now(timezone.utc).isoformat(),
+                    "state": new_state.get("state", ""),
+                    "entity_id": entity_id,
+                    "name": get_display_name(new_state),
+                }
+                # name is always set above, so entity_names/device_names can stay
+                # empty — resolve_name short-circuits on it (issue #25's transport
+                # consistency: this now shares format_log_line/state_detail with
+                # the fetched path instead of writing a raw, unlabeled string).
+                entry = normalize_entry(raw, {}, {}, {entity_id: device_class})
+                app.call_later(log_panel.add_log_entry, entry)
         app._clear_pending_call(entity_id)
         if app._detail_entity_id == entity_id:
             app.call_later(app.graph_ctl.refresh_detail_panel)

@@ -477,6 +477,39 @@ async def test_state_change_is_not_double_appended_while_stream_is_active(make_a
         assert log_widget.line_count == count_before
 
 
+async def test_live_state_change_uses_device_class_label_like_the_fetched_path(make_app):
+    """The legacy state_changed live-append (no logbook/event_stream active)
+    must render the same "Open"/"Closed" label the fetched/normalized path
+    does, not the raw "on"/"off" — transport must not change what's shown
+    (issue #25)."""
+    entities = [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "state": "off",
+            "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+            "last_changed": "2024-01-15T10:30:00.000000+00:00",
+        },
+    ]
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.client.logbook_subscription_id = None  # simulate: stream not active
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+
+        app.client.inject_state_change(
+            {
+                "entity_id": "binary_sensor.front_door",
+                "state": "on",
+                "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+                "last_changed": "2024-01-15T10:31:00.000000+00:00",
+            }
+        )
+        await pilot.pause()
+        assert any("Front Door → Open" in line for line in log_widget.lines)
+
+
 async def test_live_logbook_stream_event_appends_to_activity_log(make_app):
     app = make_app()
     async with app.run_test() as pilot:
