@@ -1,6 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
 """demo_data's device-scoped logbook events (issue #17): --demo's proof that
-the device log (A) surfaces more than entities do, plus the mixed epoch-float
+the device log (`v`) surfaces more than entities do, plus the mixed epoch-float
 / ISO-string `when` sort that broke before the fix."""
 
 from datetime import datetime

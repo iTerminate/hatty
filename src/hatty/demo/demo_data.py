@@ -86,8 +86,8 @@ def demo_entities() -> list[dict]:
         e("binary_sensor.smoke_detector", "off", {"friendly_name": "Smoke Detector", "device_class": "smoke"}),
         e("binary_sensor.washing_machine", "on", {"friendly_name": "Washing Machine", "device_class": "running"}),
         # A Zigbee button has no meaningful state beyond its battery — but the
-        # device log (A) is reached from an entity row, so it needs one to be
-        # reachable at all. Its interest is its device events (issue #17):
+        # device log (`i` then `v`) is reached from an entity row, so it needs
+        # one to be reachable at all. Its interest is its device events (issue #17):
         # button presses never show up as a state change.
         e("sensor.living_room_button_battery", "87",
           {"friendly_name": "Living Room Button Battery", "unit_of_measurement": "%", "device_class": "battery"}),
@@ -194,7 +194,7 @@ def demo_forecast(entity_id: str, forecast_type: str) -> list[dict] | None:
 def demo_registry() -> list[dict]:
     """``config/entity_registry/list`` rows — every demo entity mapped to a
     device from ``demo_devices()`` (the entity→device source of truth shared by
-    the Device Log ``A`` and the device tree ``D``) and to a ``platform`` (the
+    the Device Log's `v` views and the device tree ``D``) and to a ``platform`` (the
     integration, backing the tree's integration grouping mode). ``input_number``
     is a helper with no backing device and no platform, populating the tree's
     "No device" and "No integration" buckets. One row carries ``disabled_by`` to
@@ -402,7 +402,7 @@ def demo_climate_history(
 
 # device_id -> plausible zha_event types (issue #17) — a button's presses and
 # a door sensor's connectivity pings never show up as a state change, so these
-# are the demo's proof that the device log (A) surfaces more than entities do.
+# are the demo's proof that the device log (`v`) surfaces more than entities do.
 _DEMO_DEVICE_EVENTS: dict[str, list[str]] = {
     "dev_lr_button": ["remote_button_short_press", "remote_button_double_press", "remote_button_long_press"],
     "dev_front_door": ["device_offline", "device_online"],

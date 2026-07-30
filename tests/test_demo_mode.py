@@ -108,13 +108,13 @@ async def test_demo_mode_serves_devices_and_areas_and_populates_tree():
 
 
 async def test_demo_mode_device_log_shows_a_device_event():
-    """A on the demo Zigbee button's battery entity, with no list active,
-    surfaces its device events (issue #17) — proof --demo exercises the same
-    WS-shaped normalization path a real logbook/get_events response would."""
+    """`i` then `v` on the demo Zigbee button's battery entity surfaces its
+    device events (issue #17) — proof --demo exercises the same WS-shaped
+    normalization path a real logbook/get_events response would."""
     app = HACLI(demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.current_list_name = None  # "View All", so A scopes to the cursor's device
+        app.current_list_name = None  # "View All"
         app._update_entities_display()  # the table doesn't re-render on its own
 
         table = app.query_one(EntitiesTable)
@@ -123,9 +123,11 @@ async def test_demo_mode_device_log_shows_a_device_event():
 
         # The demo splash hold (issue #268) swallows the first keypress as an
         # early dismiss, same as the real-HA splash.
-        await pilot.press("A")
+        await pilot.press("i")
         await pilot.pause()
-        await pilot.press("A")
+        await pilot.press("i")  # opens the entity-scoped view
+        await pilot.pause()
+        await pilot.press("v")  # advances to the device view, adding device_ids
         await pilot.pause()
 
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)

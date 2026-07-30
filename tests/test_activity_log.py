@@ -240,8 +240,8 @@ async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app
 
 
 async def test_a_and_i_send_no_device_ids(make_app, sample_entities, sample_registry):
-    """`a` (list/entity log) and `i` (single-entity log) stay entity-only —
-    only `A` (device log) queries device-scoped events (issue #18)."""
+    """`a` (list/entity log) and `i` (single-entity log) open entity-only —
+    only `v`'s widened views query device-scoped events (issue #18, #27)."""
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()

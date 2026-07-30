@@ -217,8 +217,9 @@ class GraphPreviewScreen(Screen):
 
     # The fullscreen graph's log scopes, cycled by `v` (issue #21) — widening
     # from just the plotted entities, to their devices' events too, to every
-    # sibling entity on those devices. Not named _log_mode: HACLI._log_mode
-    # is a different, unrelated state machine for the main screen's own log.
+    # sibling entity on those devices. HACLI has its own same-named _log_view
+    # (issue #27) for the main screen's log — a different state machine, no
+    # relation to this class's.
     _LOG_VIEWS = ("entity", "device", "device_entities")
     _LOG_VIEW_TITLES = {
         "entity": "Activity Log",

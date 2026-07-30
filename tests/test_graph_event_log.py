@@ -188,9 +188,8 @@ async def test_v_is_a_noop_when_log_closed(make_app, sample_entities):
 
 async def test_capital_a_does_nothing_on_the_graph_screen(make_app, sample_entities):
     """`A` used to be the device-log toggle here (issue #18); it's now `v`
-    (issue #21), and the app-level `A` (main screen's own device log cycle)
-    must not leak through — GraphPreviewScreen.ALLOWED_APP_ACTIONS excludes
-    toggle_device_log, so HACLI.check_action denies it."""
+    (issue #21). `A` isn't bound on the main screen either anymore (issue
+    #27), so this just proves the key is a no-op while a graph is open."""
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
