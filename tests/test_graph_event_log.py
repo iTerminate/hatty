@@ -286,3 +286,26 @@ async def test_escape_closes_event_log_before_leaving_graph(make_app, sample_ent
         await pilot.press("escape")
         await pilot.pause()
         assert not isinstance(app.screen, GraphPreviewScreen)
+
+
+async def test_numeric_sensor_log_renders_history_derived_entries(make_app, sample_entities):
+    """Issue #29: HA's own logbook silently excludes continuous sensors, so
+    the fullscreen graph's `a` log used to render nothing at all for
+    sensor.temperature — fetch_log_entries fills the gap from history."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
+        app.client._logbook_data = []  # real HA returns nothing for a continuous sensor
+        app.client._state_log_data = {
+            "sensor.temperature": [
+                {"when": "2024-01-01T11:00:00+00:00", "entity_id": "sensor.temperature", "state": "21.5"}
+            ]
+        }
+        preview = await _open_preview_on_temperature(pilot, app)
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
+        assert any("21.5 °C" in line for line in log_panel.query_one("#log_widget", Log).lines)

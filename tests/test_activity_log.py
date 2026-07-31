@@ -101,6 +101,50 @@ async def test_activity_log_uses_device_class_label_for_binary_sensor(make_app):
         assert any("Front Door → Open" in line for line in log_widget.lines)
 
 
+async def test_activity_log_renders_numeric_sensor_history_derived_entries(make_app, sample_entities):
+    """Issue #29: HA's own logbook silently excludes continuous sensors, so
+    the entity log used to render nothing for sensor.temperature —
+    fetch_log_entries fills the gap from history, unit included."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
+        await pilot.pause()
+        app.client._logbook_data = []  # real HA returns nothing for a continuous sensor
+        app.client._state_log_data = {
+            "sensor.temperature": [
+                {"when": "2024-01-15T10:00:00+00:00", "entity_id": "sensor.temperature", "state": "21.5"}
+            ]
+        }
+        await pilot.press("i")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        assert any("21.5 °C" in line for line in log_widget.lines)
+
+
+async def test_activity_log_skips_state_log_fetch_for_binary_sensor_scope(make_app):
+    """A binary_sensor's own domain check means fetch_log_entries never
+    calls fetch_state_log for it — HA's logbook already covers it."""
+    entities = [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "state": "on",
+            "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+            "last_changed": "2024-01-15T10:30:00.000000+00:00",
+        },
+    ]
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(0, 0)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert app.client.state_log_calls == []
+
+
 async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:

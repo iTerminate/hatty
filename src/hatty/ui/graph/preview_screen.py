@@ -869,7 +869,7 @@ class GraphPreviewScreen(Screen):
         end = self._window_end or datetime.now(timezone.utc)
         hours = self._window_hours()
         entity_ids, device_ids = self._log_scope()
-        entries = await self.app.client.fetch_logbook(entity_ids, hours=hours, end=end, device_ids=device_ids)
+        entries = await self.app.fetch_log_entries(entity_ids, hours=hours, end=end, device_ids=device_ids)
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return  # closed while the fetch was in flight
