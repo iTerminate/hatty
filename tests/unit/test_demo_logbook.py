@@ -5,7 +5,7 @@ the device log (`v`) surfaces more than entities do, plus the mixed epoch-float
 
 from datetime import datetime
 
-from hatty.demo.demo_data import demo_device_events, demo_logbook
+from hatty.demo.demo_data import demo_device_events, demo_logbook, demo_state_log
 
 
 def test_demo_device_events_only_for_known_devices():
@@ -43,3 +43,21 @@ def test_demo_logbook_mixed_when_types_sort_without_raising():
     )
     whens = [w if isinstance(w := e["when"], float) else datetime.fromisoformat(w).timestamp() for e in entries]
     assert whens == sorted(whens, reverse=True)
+
+
+def test_demo_logbook_omits_continuous_sensors():
+    """Mirrors real HA's logbook (issue #29) — demo_state_log fills the gap
+    the same way fetch_state_log does for a real HAClient."""
+    entries = demo_logbook(["sensor.living_room_temperature"], hours=24)
+    assert entries == []
+
+
+def test_demo_state_log_returns_entries_for_continuous_sensor():
+    entries = demo_state_log("sensor.living_room_temperature", hours=24)
+    assert entries
+    assert all(e["entity_id"] == "sensor.living_room_temperature" for e in entries)
+    assert all(isinstance(e["state"], str) for e in entries)
+
+
+def test_demo_state_log_empty_for_non_continuous_sensor():
+    assert demo_state_log("light.living_room_lamp", hours=24) == []
