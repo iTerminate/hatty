@@ -78,6 +78,49 @@ NUMERIC_INPUT_TYPES = {"integer", "number"}
 # (unavailable/unknown) is dropped.
 BINARY_STATE_MAP = {"on": 1.0, "off": 0.0}
 
+# device_class -> (on label, off label), per Home Assistant's binary_sensor conventions.
+# Shared by the dashboard binary_sensor slot widget and the activity log (issue #25).
+DEVICE_CLASS_LABELS = {
+    "battery": ("Low", "Normal"),
+    "battery_charging": ("Charging", "Not Charging"),
+    "cold": ("Cold", "Normal"),
+    "connectivity": ("Connected", "Disconnected"),
+    "door": ("Open", "Closed"),
+    "garage_door": ("Open", "Closed"),
+    "gas": ("Detected", "Clear"),
+    "heat": ("Hot", "Normal"),
+    "light": ("Detected", "No Light"),
+    "lock": ("Unlocked", "Locked"),
+    "moisture": ("Wet", "Dry"),
+    "motion": ("Detected", "Clear"),
+    "moving": ("Moving", "Not Moving"),
+    "occupancy": ("Detected", "Clear"),
+    "opening": ("Open", "Closed"),
+    "plug": ("Plugged In", "Unplugged"),
+    "power": ("Detected", "No Power"),
+    "presence": ("Home", "Away"),
+    "problem": ("Problem", "OK"),
+    "running": ("Running", "Not Running"),
+    "safety": ("Unsafe", "Safe"),
+    "smoke": ("Detected", "Clear"),
+    "sound": ("Detected", "Clear"),
+    "tamper": ("Tampering", "Clear"),
+    "update": ("Update Available", "Up-to-date"),
+    "vibration": ("Detected", "Clear"),
+    "window": ("Open", "Closed"),
+}
+
+
+def binary_state_label(state: str, device_class: str) -> str:
+    """Human label for a binary_sensor's on/off state, per device_class
+    (e.g. door: Open/Closed). Any other state passes through unchanged."""
+    on_label, off_label = DEVICE_CLASS_LABELS.get(device_class, ("On", "Off"))
+    if state == "on":
+        return on_label
+    if state == "off":
+        return off_label
+    return state
+
 # Dashboard slot widget types offered by DashboardSlotPopup ("split" is not
 # assignable — split slots are created via SplitSlotPopup).
 WIDGET_TYPES = [

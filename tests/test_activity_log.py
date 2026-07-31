@@ -52,6 +52,55 @@ async def test_activity_log_loads_logbook_history(make_app):
         assert log_widget.line_count >= 1
 
 
+async def test_activity_log_renders_ws_shaped_device_event(make_app):
+    """A logbook/get_events-style entry (epoch `when`, `message`, no `name`)
+    normalizes and renders as an event line rather than crashing (issue #17)."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._logbook_data = [
+            {
+                "when": 1705315800.0,
+                "name": "Living Room Button",
+                "message": "remote_button_short_press event was fired with parameters: {'x': 1}",
+                "domain": "zha",
+            }
+        ]
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        # Substring short enough to survive the panel's width truncation.
+        assert any("⚡ Living Room Button:" in line for line in log_widget.lines)
+
+
+async def test_activity_log_uses_device_class_label_for_binary_sensor(make_app):
+    """A door binary_sensor's raw "on" reads "Open" in the log, matching how
+    HA itself renders binary_sensor states (issue #25)."""
+    entities = [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "state": "on",
+            "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+            "last_changed": "2024-01-15T10:30:00.000000+00:00",
+        },
+    ]
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._logbook_data = [
+            {
+                "when": "2024-01-15T10:30:00+00:00",
+                "name": "Front Door",
+                "state": "on",
+                "entity_id": "binary_sensor.front_door",
+            }
+        ]
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        assert any("Front Door → Open" in line for line in log_widget.lines)
+
+
 async def test_opening_activity_log_closes_graph_panel(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
@@ -190,6 +239,27 @@ async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app
         assert not panel.has_class("-visible")
 
 
+async def test_a_and_i_send_no_device_ids(make_app, sample_entities, sample_registry):
+    """`a` (list/entity log) and `i` (single-entity log) open entity-only —
+    only `v`'s widened views query device-scoped events (issue #18, #27)."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("light.living_room_lamp")
+        await pilot.pause()
+
+        await pilot.press("i")
+        await pilot.pause()
+        assert app.client.logbook_calls[-1][3] == []
+        await pilot.press("i")  # close
+        await pilot.pause()
+
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_calls[-1][3] == []
+
+
 async def test_left_arrow_pages_log_older_when_open(make_app):
     app = make_app()
     async with app.run_test() as pilot:
@@ -252,6 +322,50 @@ async def test_right_arrow_snaps_back_to_live(make_app):
         assert app._log_end is None
 
 
+async def test_paging_older_unsubscribes_the_stream(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is not None
+
+        await pilot.press("left")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is None
+
+
+async def test_snapping_back_to_live_resubscribes_the_stream(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app._log_end = datetime.now(timezone.utc) - timedelta(hours=1)
+        app.client.logbook_subscription_id = None
+
+        await pilot.press("right")
+        await pilot.pause()
+
+        assert app._log_end is None
+        assert app.client.logbook_subscription_id is not None
+
+
+async def test_reconnect_resubscribes_the_open_live_log(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is not None
+
+        app.client.subscribe_logbook_calls.clear()
+        app.client.on_message({"type": "ha_connected", "attempt": 1})  # simulate a reconnect
+        await pilot.pause()
+
+        assert app.client.subscribe_logbook_calls  # re-armed for the still-open live log
+
+
 async def test_paged_back_log_ignores_live_state_change(make_app):
     app = make_app()
     async with app.run_test() as pilot:
@@ -312,12 +426,16 @@ async def test_confirming_log_duration_popup_updates_log_hours_and_reloads(make_
         assert app.client.logbook_calls[-1][1] == 12
 
 
-async def test_live_state_change_appends_to_activity_log(make_app):
+async def test_live_state_change_appends_when_stream_unavailable(make_app):
+    """The state_changed live-append is the fallback for when no
+    logbook/event_stream subscription is active (issue #19) — e.g. old HA
+    that rejected the subscribe, or a momentary WS drop."""
     app = make_app()
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
         await pilot.pause()
+        app.client.logbook_subscription_id = None  # simulate: stream not active
         log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
         count_before = log_widget.line_count
 
@@ -331,3 +449,111 @@ async def test_live_state_change_appends_to_activity_log(make_app):
         )
         await pilot.pause()
         assert log_widget.line_count == count_before + 1
+
+
+async def test_state_change_is_not_double_appended_while_stream_is_active(make_app):
+    """Opening a live log auto-subscribes to logbook/event_stream (issue #19)
+    — the raw state_changed append must be suppressed then, since the stream
+    already carries the same change (and device events state_changed can
+    never see)."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is not None
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        count_before = log_widget.line_count
+
+        app.client.inject_state_change(
+            {
+                "entity_id": "light.living_room_lamp",
+                "state": "off",
+                "attributes": {"friendly_name": "Living Room Lamp"},
+                "last_changed": "2024-01-15T10:31:00.000000+00:00",
+            }
+        )
+        await pilot.pause()
+        assert log_widget.line_count == count_before
+
+
+async def test_live_state_change_uses_device_class_label_like_the_fetched_path(make_app):
+    """The legacy state_changed live-append (no logbook/event_stream active)
+    must render the same "Open"/"Closed" label the fetched/normalized path
+    does, not the raw "on"/"off" — transport must not change what's shown
+    (issue #25)."""
+    entities = [
+        {
+            "entity_id": "binary_sensor.front_door",
+            "state": "off",
+            "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+            "last_changed": "2024-01-15T10:30:00.000000+00:00",
+        },
+    ]
+    app = make_app(entities=entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.client.logbook_subscription_id = None  # simulate: stream not active
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+
+        app.client.inject_state_change(
+            {
+                "entity_id": "binary_sensor.front_door",
+                "state": "on",
+                "attributes": {"friendly_name": "Front Door", "device_class": "door"},
+                "last_changed": "2024-01-15T10:31:00.000000+00:00",
+            }
+        )
+        await pilot.pause()
+        assert any("Front Door → Open" in line for line in log_widget.lines)
+
+
+async def test_live_logbook_stream_event_appends_to_activity_log(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        count_before = log_widget.line_count
+
+        app.client.inject_logbook_event(
+            [{"when": "2024-01-15T10:32:00+00:00", "name": "Living Room Lamp", "state": "off"}]
+        )
+        await pilot.pause()
+        assert log_widget.line_count == count_before + 1
+
+
+async def test_logbook_stream_dedupes_a_reinjected_entry(make_app):
+    """Guards the fetch/stream boundary overlap (issue #19): the same entry
+    arriving twice (once via load_history, once via the live stream) renders
+    only once."""
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        entry = {"when": "2024-01-15T10:30:00+00:00", "name": "Living Room Lamp", "state": "on"}
+        app.client._logbook_data = [entry]
+        await pilot.press("a")
+        await pilot.pause()
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        count_before = log_widget.line_count
+
+        app.client.inject_logbook_event([entry])  # the exact same entry, again
+        await pilot.pause()
+        assert log_widget.line_count == count_before
+
+
+async def test_logbook_stream_unsubscribes_on_close(make_app):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is not None
+
+        await pilot.press("a")  # close
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is None
+        assert app.client.unsubscribe_logbook_calls == 1

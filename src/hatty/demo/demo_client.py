@@ -31,6 +31,7 @@ class DemoHAClient:
         self._registry = demo_data.demo_registry()
         self._devices = demo_data.demo_devices()
         self._areas = demo_data.demo_areas()
+        self.logbook_subscription_id: int | None = None
         self._closing = False
 
     def _next_id(self) -> int:
@@ -135,12 +136,25 @@ class DemoHAClient:
         return demo_data.demo_climate_history(entity_id, hours, end)
 
     async def fetch_logbook(
-        self, entity_ids: list[str], hours: float = 24, end: datetime | None = None
+        self,
+        entity_ids: list[str],
+        hours: float = 24,
+        end: datetime | None = None,
+        device_ids: list[str] | None = None,
     ) -> list[dict] | None:
-        return demo_data.demo_logbook(entity_ids, hours, end)
+        return demo_data.demo_logbook(entity_ids, hours, end, device_ids)
 
     async def fetch_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict] | None:
         return demo_data.demo_forecast(entity_id, forecast_type)
+
+    async def subscribe_logbook(self, entity_ids: list[str], device_ids: list[str] | None = None) -> int | None:
+        # Demo has no live event source — device events already show up via
+        # fetch_logbook on open/reload, so there's nothing to push here.
+        self.logbook_subscription_id = self._next_id()
+        return self.logbook_subscription_id
+
+    async def unsubscribe_logbook(self) -> None:
+        self.logbook_subscription_id = None
 
 
 def _apply_service(entity: dict, domain: str, service: str, service_data: dict[str, Any]) -> None:

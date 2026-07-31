@@ -26,6 +26,8 @@ SHARED_METHODS = [
     "fetch_climate_history",
     "fetch_logbook",
     "fetch_forecast",
+    "subscribe_logbook",
+    "unsubscribe_logbook",
 ]
 
 

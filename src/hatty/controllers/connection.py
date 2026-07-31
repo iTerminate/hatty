@@ -9,8 +9,9 @@ app state (``all_entities``, the registries, the pending-call machine) still liv
 on ``HACLI``; this controller reaches it through the app reference.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
+from hatty.logbook import normalize_entry
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import get_display_name
 
@@ -46,7 +47,16 @@ class ConnectionController:
             self._handle_failed_result_message(msg)
 
     def _on_ha_event(self, msg: dict) -> None:
-        self._handle_event_message(msg)
+        # logbook/event_stream frames and state_changed frames share the outer
+        # {"type": "event", "event": {...}} envelope; distinguished by shape —
+        # a stream frame's `event` carries an `events` list, not `event_type`/
+        # `data` (issue #19). Dispatching on id isn't safe here: send_json's
+        # await point means a fast HA can deliver the first push before
+        # subscribe_logbook() has returned the id to store.
+        if "events" in msg.get("event", {}):
+            self._handle_logbook_stream_message(msg)
+        else:
+            self._handle_event_message(msg)
 
     def _on_ha_connected(self, msg: dict) -> None:
         app = self._app
@@ -60,6 +70,12 @@ class ConnectionController:
         app.spawn(app.client.fetch_area_registry())
         if msg.get("attempt", 0) > 0:
             app.notify("Reconnected to Home Assistant.", title="Reconnected", severity="information")
+        # The logbook/event_stream subscription (if any) died with the old
+        # socket — re-arm it so a live-open log doesn't go silent post-reconnect.
+        if app._log_end is None:
+            log_panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+            if log_panel.has_class("-visible"):
+                app.spawn(app.client.subscribe_logbook(app._log_query_ids, app._log_device_ids))
         # Warn once per run when the token travels over cleartext http:// (issue #158).
         if not self.http_warned and (app.ha_url or "").lower().startswith("http://"):
             self.http_warned = True
@@ -210,15 +226,30 @@ class ConnectionController:
 
         app.graph_ctl.record_state(new_state)
         app.notify_ctl.handle_state_change(entity_id, old_state, new_state)
-        if app._log_entity_ids and entity_id in app._log_entity_ids and app._log_end is None:
+        # While a logbook/event_stream subscription is active, it already
+        # carries this same state change (plus device events state_changed
+        # can never see) — appending here too would double the line (issue #19).
+        if (
+            app._log_entity_ids
+            and entity_id in app._log_entity_ids
+            and app._log_end is None
+            and app.client.logbook_subscription_id is None
+        ):
             log_panel = app.query_one("#activity_log_panel", ActivityLogPanel)
             if log_panel.has_class("-visible"):
-                app.call_later(
-                    log_panel.add_entry,
-                    get_display_name(new_state),
-                    new_state.get("state", ""),
-                    datetime.now().strftime("%H:%M:%S"),
-                )
+                device_class = new_state.get("attributes", {}).get("device_class") or ""
+                raw = {
+                    "when": datetime.now(timezone.utc).isoformat(),
+                    "state": new_state.get("state", ""),
+                    "entity_id": entity_id,
+                    "name": get_display_name(new_state),
+                }
+                # name is always set above, so entity_names/device_names can stay
+                # empty — resolve_name short-circuits on it (issue #25's transport
+                # consistency: this now shares format_log_line/state_detail with
+                # the fetched path instead of writing a raw, unlabeled string).
+                entry = normalize_entry(raw, {}, {}, {entity_id: device_class})
+                app.call_later(log_panel.add_log_entry, entry)
         app._clear_pending_call(entity_id)
         if app._detail_entity_id == entity_id:
             app.call_later(app.graph_ctl.refresh_detail_panel)
@@ -226,3 +257,19 @@ class ConnectionController:
         app._refresh_device_tree_entity(entity_id)
         app.graph_ctl.refresh_graph_preview(entity_id)
         app._schedule_display_update()
+
+    def _handle_logbook_stream_message(self, msg: dict) -> None:
+        """Live logbook/event_stream frames (issue #19) — device-scoped events
+        (a zha_event button press, a ping) never fire state_changed, so this is
+        the only way they can appear without reloading the log. The panel's own
+        dedupe (ActivityLogPanel.add_log_entry) absorbs the boundary overlap
+        between the fetched window and the first live push."""
+        app = self._app
+        raw_entries = msg.get("event", {}).get("events") or []
+        if not raw_entries:
+            return
+        log_panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        if not log_panel.has_class("-visible") or app._log_end is not None:
+            return
+        for entry in app.normalize_log_entries(raw_entries):
+            app.call_later(log_panel.add_log_entry, entry)

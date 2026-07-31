@@ -85,6 +85,12 @@ def demo_entities() -> list[dict]:
           {"friendly_name": "Living Room Motion", "device_class": "motion"}),
         e("binary_sensor.smoke_detector", "off", {"friendly_name": "Smoke Detector", "device_class": "smoke"}),
         e("binary_sensor.washing_machine", "on", {"friendly_name": "Washing Machine", "device_class": "running"}),
+        # A Zigbee button has no meaningful state beyond its battery — but the
+        # device log (`i` then `v`) is reached from an entity row, so it needs
+        # one to be reachable at all. Its interest is its device events (issue #17):
+        # button presses never show up as a state change.
+        e("sensor.living_room_button_battery", "87",
+          {"friendly_name": "Living Room Button Battery", "unit_of_measurement": "%", "device_class": "battery"}),
         # ── Covers ──
         e("cover.living_room_blinds", "open", {"friendly_name": "Living Room Blinds", "current_position": 70}),
         e("cover.garage_door", "closed", {"friendly_name": "Garage Door", "current_position": 0}),
@@ -188,7 +194,7 @@ def demo_forecast(entity_id: str, forecast_type: str) -> list[dict] | None:
 def demo_registry() -> list[dict]:
     """``config/entity_registry/list`` rows — every demo entity mapped to a
     device from ``demo_devices()`` (the entity→device source of truth shared by
-    the Device Log ``A`` and the device tree ``D``) and to a ``platform`` (the
+    the Device Log's `v` views and the device tree ``D``) and to a ``platform`` (the
     integration, backing the tree's integration grouping mode). ``input_number``
     is a helper with no backing device and no platform, populating the tree's
     "No device" and "No integration" buckets. One row carries ``disabled_by`` to
@@ -217,6 +223,7 @@ def demo_registry() -> list[dict]:
         r("binary_sensor.living_room_motion", "dev_lr_multisensor", "zha"),
         # Disabled by the user — hidden from the device tree (issue #139).
         r("sensor.living_room_battery", "dev_lr_multisensor", "zha", disabled_by="user"),
+        r("sensor.living_room_button_battery", "dev_lr_button", "zha"),
         r("cover.living_room_blinds", "dev_lr_blinds", "zha"),
         r("media_player.living_room_speaker", "dev_lr_speaker", "sonos"),
         # ── Kitchen ──
@@ -269,6 +276,7 @@ def demo_devices() -> list[dict]:
         d("dev_lr_tv", "Living Room TV", "area_living_room", "Sony", "Bravia XR"),
         d("dev_lr_thermostat", "Living Room Thermostat", "area_living_room", "Nest", "Learning"),
         d("dev_lr_multisensor", "Living Room Multisensor", "area_living_room", "Aqara", "FP2"),
+        d("dev_lr_button", "Living Room Button", "area_living_room", "Aqara", "Wireless Mini Switch"),
         d("dev_lr_blinds", "Living Room Blinds", "area_living_room", "IKEA", "Fyrtur"),
         d("dev_lr_speaker", "Living Room Speaker", "area_living_room", "Sonos", "One"),
         # ── Kitchen ──
@@ -392,8 +400,58 @@ def demo_climate_history(
     return pts
 
 
-def demo_logbook(entity_ids: list[str], hours: float = 24, end: datetime | None = None) -> list[dict]:
-    """A handful of plausible activity entries for the given entities."""
+# device_id -> plausible zha_event types (issue #17) — a button's presses and
+# a door sensor's connectivity pings never show up as a state change, so these
+# are the demo's proof that the device log (`v`) surfaces more than entities do.
+_DEMO_DEVICE_EVENTS: dict[str, list[str]] = {
+    "dev_lr_button": ["remote_button_short_press", "remote_button_double_press", "remote_button_long_press"],
+    "dev_front_door": ["device_offline", "device_online"],
+}
+
+
+def demo_device_events(device_ids: list[str], hours: float = 24, end: datetime | None = None) -> list[dict]:
+    """Fake device-scoped logbook entries for the given device_ids. WS-shaped
+    (epoch `when`, no `entity_id`) — same as a real logbook/get_events
+    response — so --demo exercises the normalizer's WS branch end to end."""
+    end = end or _now()
+    device_names = {d["id"]: d["name"] for d in demo_devices()}
+    entries: list[dict] = []
+    for device_id in device_ids:
+        event_types = _DEMO_DEVICE_EVENTS.get(device_id)
+        if not event_types:
+            continue
+        rng = _rng(device_id)
+        name = device_names.get(device_id, device_id)
+        for _ in range(rng.randint(1, 3)):
+            when = end - timedelta(minutes=rng.randint(1, max(1, int(hours * 60))))
+            event_type = rng.choice(event_types)
+            params = "{'device_ieee': '00:15:8d:00:02:f1:9a:1c'}"
+            entries.append(
+                {
+                    "when": when.timestamp(),
+                    "name": name,
+                    "message": f"{event_type} event was fired with parameters: {params}",
+                    "domain": "zha",
+                }
+            )
+    return entries
+
+
+def _when_key(entry: dict) -> float:
+    """demo_logbook mixes ISO-string `when` (state entries) with epoch-float
+    `when` (demo_device_events, WS-shaped) — normalize both to an epoch float
+    so sort() doesn't raise TypeError comparing str to float."""
+    when = entry["when"]
+    if isinstance(when, (int, float)):
+        return float(when)
+    return datetime.fromisoformat(when).timestamp()
+
+
+def demo_logbook(
+    entity_ids: list[str], hours: float = 24, end: datetime | None = None, device_ids: list[str] | None = None
+) -> list[dict]:
+    """A handful of plausible activity entries for the given entities, plus
+    device-scoped events (issue #17) when device_ids is given."""
     names = {e["entity_id"]: e["attributes"].get("friendly_name", e["entity_id"]) for e in demo_entities()}
     targets = entity_ids or list(names)
     rng = random.Random(1234)
@@ -405,7 +463,9 @@ def demo_logbook(entity_ids: list[str], hours: float = 24, end: datetime | None 
             when = end - timedelta(minutes=rng.randint(1, max(1, int(hours * 60))))
             state = rng.choice(["on", "off", "open", "closed"])
             entries.append({"when": _iso(when), "name": name, "state": state})
-    entries.sort(key=lambda x: x["when"], reverse=True)
+    if device_ids:
+        entries += demo_device_events(device_ids, hours, end)
+    entries.sort(key=_when_key, reverse=True)
     return entries
 
 
