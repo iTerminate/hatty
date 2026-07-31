@@ -93,12 +93,31 @@ def resolve_name(raw: dict, entity_names: dict[str, str], device_names: dict[str
     return "unknown"
 
 
-def state_detail(entity_id: str, state: str, device_class: str) -> str:
+def is_continuous_sensor(entity_id: str, attributes: dict) -> bool:
+    """True for a `sensor.*` entity HA's own logbook silently excludes — any
+    sensor carrying `unit_of_measurement` or `state_class` is "continuous"
+    (issue #29): its history is a stream of numeric samples, not discrete
+    state changes, so HA never logs it. `fetch_state_log` synthesizes log
+    entries from history for exactly the entities this returns True for."""
+    if entity_id.split(".", 1)[0] != "sensor":
+        return False
+    return bool(attributes.get("unit_of_measurement") or attributes.get("state_class"))
+
+
+def state_detail(entity_id: str, state: str, device_class: str, unit: str = "") -> str:
     """A state entry's display detail — device_class-aware (e.g. "Open") for
     binary_sensor, since its states are the raw on/off HA itself relabels;
-    other domains (cover, switch, ...) already report human states as-is."""
+    other domains (cover, switch, ...) already report human states as-is.
+    `unit` (issue #29) is appended to a numeric state only — never to
+    "unavailable"/"unknown"/other text states, which don't parse as a float."""
     if entity_id.split(".", 1)[0] == "binary_sensor":
         return binary_state_label(state, device_class)
+    if unit:
+        try:
+            float(state)
+        except (ValueError, TypeError):
+            return state
+        return f"{state} {unit}"
     return state
 
 
@@ -107,6 +126,7 @@ def normalize_entry(
     entity_names: dict[str, str],
     device_names: dict[str, str],
     device_classes: dict[str, str] | None = None,
+    units: dict[str, str] | None = None,
 ) -> LogEntry:
     kind = entry_kind(raw)
     entity_id = raw.get("entity_id") or ""
@@ -114,7 +134,8 @@ def normalize_entry(
         detail = compact_message(raw.get("message", ""))
     else:
         device_class = (device_classes or {}).get(entity_id, "")
-        detail = state_detail(entity_id, raw.get("state", ""), device_class)
+        unit = (units or {}).get(entity_id, "")
+        detail = state_detail(entity_id, raw.get("state", ""), device_class, unit)
     return LogEntry(
         when=entry_when_iso(raw.get("when")),
         name=resolve_name(raw, entity_names, device_names),
@@ -129,12 +150,15 @@ def normalize_entries(
     entity_names: dict[str, str],
     device_names: dict[str, str],
     device_classes: dict[str, str] | None = None,
+    units: dict[str, str] | None = None,
 ) -> list[LogEntry]:
     """Maps normalize_entry over a raw logbook response, skipping any
     non-dict item, and preserving order — both transports return entries in
     ascending time order; reordering is left to the caller."""
     return [
-        normalize_entry(e, entity_names, device_names, device_classes) for e in raw_entries if isinstance(e, dict)
+        normalize_entry(e, entity_names, device_names, device_classes, units)
+        for e in raw_entries
+        if isinstance(e, dict)
     ]
 
 

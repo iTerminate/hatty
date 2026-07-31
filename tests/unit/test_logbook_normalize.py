@@ -10,6 +10,7 @@ from hatty.logbook import (
     entry_kind,
     entry_when_iso,
     format_log_time,
+    is_continuous_sensor,
     normalize_entries,
     normalize_entry,
     resolve_name,
@@ -157,3 +158,39 @@ def test_format_log_time_handles_empty_and_malformed():
     assert format_log_time("") == "??:??:??"
     assert format_log_time("garbage") == "??:??:??"  # too short for the [:8] fallback
     assert format_log_time("not-a-real-timestamp") == "not-a-re"  # [:8] fallback on longer garbage
+
+
+def test_is_continuous_sensor_true_for_unit_or_state_class():
+    assert is_continuous_sensor("sensor.temp", {"unit_of_measurement": "°C"}) is True
+    assert is_continuous_sensor("sensor.count", {"state_class": "total_increasing"}) is True
+
+
+def test_is_continuous_sensor_false_for_non_sensor_domain():
+    assert is_continuous_sensor("binary_sensor.door", {"unit_of_measurement": "°C"}) is False
+
+
+def test_is_continuous_sensor_false_without_unit_or_state_class():
+    assert is_continuous_sensor("sensor.mode", {}) is False
+
+
+def test_state_detail_appends_unit_for_numeric_state():
+    assert state_detail("sensor.temp", "21.5", "", "°C") == "21.5 °C"
+
+
+def test_state_detail_omits_unit_for_non_numeric_state():
+    assert state_detail("sensor.temp", "unavailable", "", "°C") == "unavailable"
+    assert state_detail("sensor.temp", "unknown", "", "°C") == "unknown"
+
+
+def test_state_detail_unit_is_a_noop_when_absent():
+    assert state_detail("sensor.temp", "21.5", "") == "21.5"
+
+
+def test_state_detail_binary_sensor_ignores_unit():
+    assert state_detail("binary_sensor.door", "on", "door", "°C") == "Open"
+
+
+def test_normalize_entry_applies_unit_for_numeric_sensor():
+    raw = {"when": "2024-01-15T12:00:00+00:00", "name": "Temp", "state": "21.5", "entity_id": "sensor.temp"}
+    entry = normalize_entry(raw, {}, {}, units={"sensor.temp": "°C"})
+    assert entry["detail"] == "21.5 °C"

@@ -488,6 +488,43 @@ class HAClient:
                 continue
         return values
 
+    async def fetch_state_log(
+        self, entity_id: str, hours: float = 24, end: datetime | None = None
+    ) -> list[dict] | None:
+        """Logbook-shaped state entries synthesized from history, for
+        entities HA's own logbook silently excludes — continuous sensors
+        (issue #29). Reuses `_fetch_raw_history` (the same rows the graph
+        plots) rather than a second endpoint. History's first row is the
+        state carried forward from before the window (often stamped well
+        before `start`), not a real change — dropped, along with any run of
+        repeated states (attribute-only updates HA still emits a history row
+        for), so what's left is only genuine in-window state changes."""
+        end = end or datetime.now(timezone.utc)
+        start = end - timedelta(hours=hours)
+        items = await self._fetch_raw_history(entity_id, hours, end)
+        if items is None:
+            return None
+        entries: list[dict] = []
+        last_state = None
+        for item in items:
+            when = item.get("last_changed", "")
+            if not when:
+                continue
+            try:
+                when_dt = datetime.fromisoformat(when)
+            except ValueError:
+                continue
+            if when_dt.tzinfo is None:
+                when_dt = when_dt.replace(tzinfo=timezone.utc)
+            if when_dt < start:
+                continue
+            state = item.get("state", "")
+            if state == last_state:
+                continue
+            last_state = state
+            entries.append({"when": when, "entity_id": entity_id, "state": state})
+        return entries
+
     async def fetch_binary_history(
         self, entity_id: str, hours: float = 4, end: datetime | None = None
     ) -> list[tuple[str, float]] | None:
