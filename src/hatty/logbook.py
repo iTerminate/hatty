@@ -16,7 +16,7 @@ state — so it's unit-testable without booting the app and stays near the
 bottom of the dependency graph."""
 
 from datetime import datetime, timezone
-from typing import TypedDict
+from typing import Mapping, TypedDict
 
 from hatty.const import binary_state_label
 
@@ -93,7 +93,7 @@ def resolve_name(raw: dict, entity_names: dict[str, str], device_names: dict[str
     return "unknown"
 
 
-def is_continuous_sensor(entity_id: str, attributes: dict) -> bool:
+def is_continuous_sensor(entity_id: str, attributes: Mapping[str, object]) -> bool:
     """True for a `sensor.*` entity HA's own logbook silently excludes — any
     sensor carrying `unit_of_measurement` or `state_class` is "continuous"
     (issue #29): its history is a stream of numeric samples, not discrete
