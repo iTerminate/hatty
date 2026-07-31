@@ -32,13 +32,12 @@ fetched for the same window the graph is currently showing; paging/zooming
 the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
 it to match. `v` cycles its scope through `_LOG_VIEWS` (issue #21): the
 plotted entities alone, then their devices' events too (issue #18, e.g. a
-zha_event button press), then every sibling entity on those devices. `f`
-maximizes it to the full screen width (issue #22); `a` always closes outright
-even while maximized, while `escape`/`q` restore the normal width first and
-only close on a further press. While open, each logged event is additionally
-marked on the plot itself (`plot_render.render_event_marks`) — numeric and
-binary graphs only; climate graphs still show the log list but skip the
-marks.
+zha_event button press). `f` maximizes it to the full screen width (issue
+#22); `a` always closes outright even while maximized, while `escape`/`q`
+restore the normal width first and only close on a further press. While
+open, each logged event is additionally marked on the plot itself
+(`plot_render.render_event_marks`) — numeric and binary graphs only; climate
+graphs still show the log list but skip the marks.
 
 `ALLOWED_APP_ACTIONS` is this screen's carve-out from `HACLI.check_action`'s
 "pushed screen" lockdown — only the app-level keys that still do something on
@@ -216,15 +215,13 @@ class GraphPreviewScreen(Screen):
     )
 
     # The fullscreen graph's log scopes, cycled by `v` (issue #21) — widening
-    # from just the plotted entities, to their devices' events too, to every
-    # sibling entity on those devices. HACLI has its own same-named _log_view
-    # (issue #27) for the main screen's log — a different state machine, no
-    # relation to this class's.
-    _LOG_VIEWS = ("entity", "device", "device_entities")
+    # from just the plotted entities, to their devices' events too. HACLI has
+    # its own same-named _log_view (issue #27) for the main screen's log — a
+    # different state machine, no relation to this class's.
+    _LOG_VIEWS = ("entity", "device")
     _LOG_VIEW_TITLES = {
         "entity": "Activity Log",
         "device": "Device Log",
-        "device_entities": "Device Entities Log",
     }
 
     def __init__(
@@ -642,22 +639,17 @@ class GraphPreviewScreen(Screen):
 
     def _draw_event_marks(self, plt, t0: datetime) -> None:
         """Mark each logged event's timestamp on the plot, only while the
-        event log is open (issue #2's graph/log integration). Three colors:
-        magenta for a plotted line's own state changes, cyan for device
-        events (issue #18, e.g. a zha_event button press), and orange for a
-        sibling entity's state change in the "device_entities" view (issue
-        #21) — those aren't plotted, so marking them magenta would falsely
-        imply something happened to a visible line."""
+        event log is open (issue #2's graph/log integration). Magenta for a
+        plotted line's own state changes, cyan for device events (issue #18,
+        e.g. a zha_event button press)."""
         if not self._events:
             return
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if not log_panel.has_class("-visible"):
             return
-        plotted = set(self._entity_ids)
         state_events = [e for e in self._events if e["kind"] == "state"]
-        render_event_marks(plt, t0, [e["when"] for e in state_events if e["entity_id"] in plotted])
+        render_event_marks(plt, t0, [e["when"] for e in state_events])
         render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "event"], color="cyan")
-        render_event_marks(plt, t0, [e["when"] for e in state_events if e["entity_id"] not in plotted], color="orange")
 
     def _stats_text(self, entity: "Entity | None", unit: str, binary_end_iso: str | None) -> str:
         if self._cursor_mode:
@@ -832,14 +824,12 @@ class GraphPreviewScreen(Screen):
         return f"{self._LOG_VIEW_TITLES[self._log_view]} — {label}"
 
     def _log_scope(self) -> tuple[list[str], list[str] | None]:
-        """entity_ids/device_ids to fetch for the current _log_view — a
-        monotonic widening: the plotted entities alone, then their devices'
-        events too (issue #18), then every sibling entity on those devices."""
+        """entity_ids/device_ids to fetch for the current _log_view — the
+        plotted entities alone, or widened to their devices' events too
+        (issue #18)."""
         if self._log_view == "entity":
             return self._entity_ids, None
-        if self._log_view == "device":
-            return self._entity_ids, self.app._device_ids_for_entities(self._entity_ids)
-        return self.app._expand_to_device_entity_ids(self._entity_ids)
+        return self._entity_ids, self.app._device_ids_for_entities(self._entity_ids)
 
     def _reload_event_log(self) -> None:
         """Shared by opening and by `v` cycling — clear, retitle, refetch."""

@@ -4,8 +4,8 @@ window follows the graph's own paging so opening the log shows events for
 whatever's currently plotted, and closing/escaping tears it back down.
 
 Also `v`'s log-view cycle (issue #21): entity-only, then entity + the
-plotted entities' devices' events (issue #18), then every sibling entity on
-those devices — with device-scoped marks drawn in a distinct color."""
+plotted entities' devices' events (issue #18) — with device events drawn in
+a distinct color."""
 
 from textual.coordinate import Coordinate
 from textual.widgets import Label, Log
@@ -135,28 +135,6 @@ async def test_device_view_title_says_device_log(make_app, sample_entities, samp
         assert "Temperature Sensor" in title
 
 
-async def test_v_v_reaches_device_entities_view(make_app, sample_entities, sample_registry):
-    """A third view widens further: every sibling entity on the plotted
-    entity's device(s), not just their events (issue #21). A per-test
-    registry adds the sibling rather than extending the shared fixture,
-    since other tests (test_device_log.py) depend on dev_xyz staying solo."""
-    registry = [*sample_registry, {"entity_id": "sensor.temperature_2", "device_id": "dev_xyz"}]
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        preview = await _open_preview_on_temperature(pilot, app)
-
-        await pilot.press("a", "v", "v")
-        await pilot.pause()
-        entity_ids, _, _, device_ids = app.client.logbook_calls[-1]
-        assert set(entity_ids) == {"sensor.temperature", "sensor.temperature_2"}
-        assert device_ids == ["dev_xyz"]
-        log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
-        title = str(log_panel.query_one("#log_title", Label).content)
-        assert "Device Entities Log" in title
-
-
 async def test_v_wraps_back_to_entity_view(make_app, sample_entities, sample_registry):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
@@ -164,7 +142,7 @@ async def test_v_wraps_back_to_entity_view(make_app, sample_entities, sample_reg
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
         preview = await _open_preview_on_temperature(pilot, app)
 
-        await pilot.press("a", "v", "v", "v")
+        await pilot.press("a", "v", "v")
         await pilot.pause()
         assert app.client.logbook_calls[-1][3] == []
         log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
@@ -250,50 +228,12 @@ async def test_device_scoped_event_renders_and_marks_the_plot_in_cyan(
         assert "magenta" in mark_colors
 
 
-async def test_sibling_entity_state_change_marked_orange_in_device_entities_view(
-    make_app, sample_entities, sample_registry, monkeypatch
-):
-    """A "device_entities" view includes sibling entities that aren't
-    plotted — their state changes must not be marked magenta on the plot,
-    since that would falsely imply something happened to a visible line
-    (issue #21)."""
-    registry = [*sample_registry, {"entity_id": "sensor.temperature_2", "device_id": "dev_xyz"}]
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        app.client._logbook_data = [
-            {
-                "when": "2024-01-01T11:00:00+00:00",
-                "name": "Temperature Sensor",
-                "state": "21",
-                "entity_id": "sensor.temperature",
-            },
-            {
-                "when": "2024-01-01T11:15:00+00:00",
-                "name": "Sibling Sensor",
-                "state": "22",
-                "entity_id": "sensor.temperature_2",
-            },
-        ]
-        await _open_preview_on_temperature(pilot, app)
-
-        calls = []
-        monkeypatch.setattr(
-            preview_screen_module,
-            "render_event_marks",
-            lambda plt, t0, ts, **kw: calls.append((kw.get("color", "magenta"), len(ts))),
-        )
-
-        await pilot.press("a", "v", "v")
-        await pilot.pause()
-
-        colors_with_marks = {color for color, count in calls if count > 0}
-        assert colors_with_marks == {"magenta", "orange"}
-
-
-async def test_entity_view_never_marks_orange(make_app, sample_entities, monkeypatch):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+async def test_neither_view_ever_marks_orange(make_app, sample_entities, sample_registry, monkeypatch):
+    """Orange marked a non-plotted sibling entity's state change in the old
+    "device_entities" view (issue #21); that view is gone, so no scope should
+    ever produce an orange mark — every state event returned now belongs to
+    a plotted entity."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
@@ -316,9 +256,14 @@ async def test_entity_view_never_marks_orange(make_app, sample_entities, monkeyp
 
         await pilot.press("a")
         await pilot.pause()
-
         colors_with_marks = {color for color, count in calls if count > 0}
         assert colors_with_marks == {"magenta"}
+
+        calls.clear()
+        await pilot.press("v")  # device view
+        await pilot.pause()
+        colors_with_marks = {color for color, count in calls if count > 0}
+        assert "orange" not in colors_with_marks
 
 
 async def test_escape_closes_event_log_before_leaving_graph(make_app, sample_entities):

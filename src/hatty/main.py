@@ -832,17 +832,16 @@ class HACLI(App):
     # `v`'s activity-log scope cycle (issue #27, mirroring the fullscreen
     # graph's `v` from issue #21). _log_base names where the open log's base
     # entity set came from: a fixed set (the inline graph's lines, or `i`'s
-    # single entity) only ever widens through the first three views; the
+    # single entity) only ever widens through the first two views; the
     # entity table (an active list, or the no-list "first 50" fallback) also
     # offers the two cursor-scoped views.
     _LOG_BASE_ENTITIES = "entities"
     _LOG_BASE_TABLE = "table"
-    _LOG_VIEWS_ENTITIES = ("base", "base_devices", "base_device_entities")
+    _LOG_VIEWS_ENTITIES = ("base", "base_devices")
     _LOG_VIEWS_TABLE = (*_LOG_VIEWS_ENTITIES, "cursor", "cursor_device")
     _LOG_VIEW_TITLES = {
         "base": "Activity Log",
         "base_devices": "Device Log",
-        "base_device_entities": "Device Entities Log",
         "cursor": "Activity Log",
         "cursor_device": "Device Log",
     }
@@ -997,16 +996,6 @@ class HACLI(App):
 
         return (siblings, label, device_id)
 
-    def _device_index(self) -> dict[str, list[str]]:
-        """device_id -> its registered entity_ids, built once per call."""
-        index: dict[str, list[str]] = {}
-        for entry in self.entity_registry:
-            device_id = entry.get("device_id")
-            entity_id = entry.get("entity_id")
-            if device_id and entity_id:
-                index.setdefault(device_id, []).append(entity_id)
-        return index
-
     def _device_ids_for_entities(self, entity_ids: list[str]) -> list[str]:
         """Distinct device_ids backing any of entity_ids, order-preserving —
         used by both surfaces' `v`-cycled device-scoped event log views
@@ -1020,37 +1009,6 @@ class HACLI(App):
                 seen.add(device_id)
                 device_ids.append(device_id)
         return device_ids
-
-    def _expand_to_device_entity_ids(self, entity_ids: list[str]) -> tuple[list[str], list[str]]:
-        """Every entity of every device backing any of entity_ids. Entities with
-        no registry entry / no device pass through as themselves. Returns the
-        deduped, order-preserving expansion plus the ordered, deduped device_ids
-        (the latter feeds the WS logbook query's device_ids param)."""
-        index = self._device_index()
-        reg_device = {e.get("entity_id"): e.get("device_id") for e in self.entity_registry}
-
-        expanded: list[str] = []
-        seen: set[str] = set()
-        device_ids: list[str] = []
-        seen_devices: set[str] = set()
-
-        def _add(eid: str) -> None:
-            if eid and eid not in seen:
-                seen.add(eid)
-                expanded.append(eid)
-
-        for entity_id in entity_ids:
-            device_id = reg_device.get(entity_id)
-            if device_id and device_id in index:
-                if device_id not in seen_devices:
-                    seen_devices.add(device_id)
-                    device_ids.append(device_id)
-                for sibling in index[device_id]:
-                    _add(sibling)
-            else:
-                _add(entity_id)
-
-        return (expanded, device_ids)
 
     def _device_log_title(self, prefix: str, label: str, device_ids: list[str]) -> str:
         suffix = f" ({len(device_ids)} devices)" if len(device_ids) > 1 else ""
@@ -1074,10 +1032,6 @@ class HACLI(App):
         if view == "base_devices":
             device_ids = self._device_ids_for_entities(base_ids)
             entity_ids, device_ids = self._cap_log_scope(base_ids, device_ids)
-            return entity_ids, device_ids, self._device_log_title(title_prefix, label, device_ids)
-        if view == "base_device_entities":
-            entity_ids, device_ids = self._expand_to_device_entity_ids(base_ids)
-            entity_ids, device_ids = self._cap_log_scope(entity_ids, device_ids)
             return entity_ids, device_ids, self._device_log_title(title_prefix, label, device_ids)
 
         entity_id = self._selected_entity_id()

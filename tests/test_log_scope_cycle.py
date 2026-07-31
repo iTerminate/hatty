@@ -89,16 +89,21 @@ async def test_v_stays_unsubscribed_while_paged_back(make_app, sample_entities, 
         assert app.client.logbook_subscription_id is None
 
 
-async def test_v_v_retargets_the_live_append_filter(make_app, sample_entities, sample_registry):
-    config = _list_config(["light.living_room_lamp"])
+async def test_v_v_v_retargets_the_live_append_filter(make_app, sample_entities, sample_registry):
+    config = _list_config(["light.living_room_lamp", "sensor.temperature"])
     app = make_app(entities=sample_entities, config_data=config, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
+        table = app.query_one("EntitiesTable")
+        table.jump_cursor_to_row_key("light.living_room_lamp")
+        await pilot.pause()
         await pilot.press("a")
         await pilot.pause()
-        await pilot.press("v")
+        await pilot.press("v")  # base_devices
         await pilot.pause()
-        await pilot.press("v")  # device entities view: the sibling kitchen_light is now in scope
+        await pilot.press("v")  # cursor: narrows to living_room_lamp alone
+        await pilot.pause()
+        await pilot.press("v")  # cursor_device: sibling kitchen_light now in scope
         await pilot.pause()
         assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
 
@@ -159,8 +164,6 @@ async def test_v_skips_the_cursor_views_when_no_row_is_selected(make_app, sample
 
         await pilot.press("v")  # base_devices
         await pilot.pause()
-        await pilot.press("v")  # base_device_entities
-        await pilot.pause()
         await pilot.press("v")  # cursor / cursor_device would resolve to nothing — skip straight back to base
         await pilot.pause()
 
@@ -185,7 +188,7 @@ async def test_v_caps_the_widened_scope(make_app, sample_entities, sample_regist
         assert len(app.client.logbook_calls[-1][3]) == 1
 
 
-async def test_v_walks_the_fixed_base_through_three_views_and_wraps(make_app, sample_entities, sample_registry):
+async def test_v_walks_the_fixed_base_through_two_views_and_wraps(make_app, sample_entities, sample_registry):
     app = make_app(entities=sample_entities, config_data=make_config(lists={}), registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -204,15 +207,11 @@ async def test_v_walks_the_fixed_base_through_three_views_and_wraps(make_app, sa
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Device Log")
         assert app.client.logbook_calls[-1][3] == ["dev_abc"]
-
-        await pilot.press("v")
-        await pilot.pause()
-        title = str(panel.query_one("#log_title", Label).content)
-        assert title.startswith("Device Entities Log")
-        assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
+        assert app._log_entity_ids == {"light.living_room_lamp"}
 
         await pilot.press("v")  # wraps — a fixed base has no cursor views
         await pilot.pause()
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Activity Log")
+        assert app.client.logbook_calls[-1][3] == []
         assert app._log_entity_ids == {"light.living_room_lamp"}
