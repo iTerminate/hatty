@@ -199,3 +199,71 @@ async def test_fetch_logbook_timeout_falls_back_without_latching(monkeypatch):
     await client.fetch_logbook(["light.x"], hours=1)
 
     assert client._logbook_ws_supported is True  # transient failure, not latched
+
+
+# ── fetch_state_log (issue #29: continuous sensors HA's logbook excludes) ───
+
+
+async def test_fetch_state_log_shapes_history_as_logbook_entries(monkeypatch):
+    """start = end - 4h = 08:00 — the leading 07:00 row is the state carried
+    forward from before the window, dropped as in `test_fetch_state_log_drops_
+    leading_pre_window_state`; only the genuine in-window change remains."""
+    client = _make_client()
+    end = datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+    async def fake_raw_history(entity_id, hours, end, minimal=True):
+        return [
+            {"last_changed": "2024-01-15T07:00:00+00:00", "state": "20.0"},
+            {"last_changed": "2024-01-15T10:00:00+00:00", "state": "21.5"},
+        ]
+
+    monkeypatch.setattr(client, "_fetch_raw_history", fake_raw_history)
+    result = await client.fetch_state_log("sensor.temp", hours=4, end=end)
+
+    assert result == [{"when": "2024-01-15T10:00:00+00:00", "entity_id": "sensor.temp", "state": "21.5"}]
+
+
+async def test_fetch_state_log_drops_leading_pre_window_state(monkeypatch):
+    """History's first row is the value carried forward from before the
+    window (often stamped hours earlier) — not a real in-window change."""
+    client = _make_client()
+    end = datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+    async def fake_raw_history(entity_id, hours, end, minimal=True):
+        return [{"last_changed": "2024-01-15T02:00:00+00:00", "state": "19.0"}]
+
+    monkeypatch.setattr(client, "_fetch_raw_history", fake_raw_history)
+    result = await client.fetch_state_log("sensor.temp", hours=4, end=end)
+
+    assert result == []
+
+
+async def test_fetch_state_log_dedupes_repeated_states(monkeypatch):
+    """History still rows attribute-only updates that don't change `state`."""
+    client = _make_client()
+    end = datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+    async def fake_raw_history(entity_id, hours, end, minimal=True):
+        return [
+            {"last_changed": "2024-01-15T07:00:00+00:00", "state": "20.0"},  # pre-window, dropped
+            {"last_changed": "2024-01-15T10:00:00+00:00", "state": "21.5"},
+            {"last_changed": "2024-01-15T10:30:00+00:00", "state": "21.5"},
+            {"last_changed": "2024-01-15T11:00:00+00:00", "state": "22.0"},
+        ]
+
+    monkeypatch.setattr(client, "_fetch_raw_history", fake_raw_history)
+    result = await client.fetch_state_log("sensor.temp", hours=4, end=end)
+
+    assert [e["state"] for e in result] == ["21.5", "22.0"]
+
+
+async def test_fetch_state_log_returns_none_on_fetch_failure(monkeypatch):
+    client = _make_client()
+
+    async def fake_raw_history(entity_id, hours, end, minimal=True):
+        return None
+
+    monkeypatch.setattr(client, "_fetch_raw_history", fake_raw_history)
+    result = await client.fetch_state_log("sensor.temp", hours=4)
+
+    assert result is None

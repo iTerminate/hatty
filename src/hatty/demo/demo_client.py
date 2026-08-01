@@ -135,6 +135,11 @@ class DemoHAClient:
     ) -> list[dict] | None:
         return demo_data.demo_climate_history(entity_id, hours, end)
 
+    async def fetch_state_log(
+        self, entity_id: str, hours: float = 24, end: datetime | None = None
+    ) -> list[dict] | None:
+        return demo_data.demo_state_log(entity_id, hours, end)
+
     async def fetch_logbook(
         self,
         entity_ids: list[str],

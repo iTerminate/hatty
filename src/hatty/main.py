@@ -42,7 +42,7 @@ from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
 from hatty.controllers.lists import ListController
 from hatty.controllers.notifications import NotificationController
-from hatty.logbook import LogEntry, normalize_entries
+from hatty.logbook import LogEntry, entry_when_iso, is_continuous_sensor, normalize_entries
 from hatty.service_calls import _CONTROL_SERVICE_BUILDERS
 from hatty.types import Entity
 from hatty.ui.activity_log_panel import ActivityLogPanel
@@ -1170,6 +1170,11 @@ class HACLI(App):
             for e in self.all_entities
             if e.get("entity_id")
         }
+        units = {
+            e["entity_id"]: e.get("attributes", {}).get("unit_of_measurement") or ""
+            for e in self.all_entities
+            if e.get("entity_id")
+        }
         for reg in self.entity_registry:
             entity_id = reg.get("entity_id")
             if entity_id and entity_id not in entity_names:
@@ -1177,12 +1182,57 @@ class HACLI(App):
             if entity_id and not device_classes.get(entity_id):
                 device_classes[entity_id] = reg.get("device_class") or reg.get("original_device_class") or ""
         device_names = {d["id"]: device_display_name(d) for d in self.device_registry if d.get("id")}
-        return normalize_entries(raw, entity_names, device_names, device_classes)
+        return normalize_entries(raw, entity_names, device_names, device_classes, units)
+
+    def _continuous_log_ids(self, entity_ids: list[str]) -> list[str]:
+        """The subset of entity_ids that are continuous sensors (issue #29)
+        — HA's logbook silently excludes these, so fetch_log_entries fills
+        the gap with history-derived entries. Order-preserving."""
+        result = []
+        for entity_id in entity_ids:
+            entity = self.find_entity(entity_id)
+            if entity and is_continuous_sensor(entity_id, entity.get("attributes", {})):
+                result.append(entity_id)
+        return result
+
+    async def fetch_log_entries(
+        self,
+        entity_ids: list[str],
+        hours: float,
+        end: datetime | None = None,
+        device_ids: list[str] | None = None,
+    ) -> list[dict] | None:
+        """The one seam both log surfaces call instead of client.fetch_logbook
+        directly — merges in history-derived entries for continuous sensors
+        (issue #29), which HA's own logbook never returns. Failure semantics
+        of the base fetch are preserved: a None here still means "ask HA
+        failed", not "nothing to show"."""
+        entries = await self.client.fetch_logbook(entity_ids, hours=hours, end=end, device_ids=device_ids)
+        continuous_ids = self._continuous_log_ids(entity_ids)
+        if not continuous_ids:
+            return entries
+
+        semaphore = asyncio.Semaphore(8)
+
+        async def _fetch(entity_id: str) -> list[dict]:
+            async with semaphore:
+                result = await self.client.fetch_state_log(entity_id, hours=hours, end=end)
+                return result or []
+
+        synthesized: list[dict] = []
+        for rows in await asyncio.gather(*(_fetch(eid) for eid in continuous_ids)):
+            synthesized.extend(rows)
+        if not synthesized:
+            return entries
+
+        merged = list(entries or []) + synthesized
+        merged.sort(key=lambda e: entry_when_iso(e.get("when")))
+        return merged
 
     async def _load_activity_log(
         self, entity_ids: list[str], generation: int, device_ids: list[str] | None = None
     ) -> None:
-        entries = await self.client.fetch_logbook(
+        entries = await self.fetch_log_entries(
             entity_ids, hours=self.log_hours, end=self._log_end, device_ids=device_ids
         )
         panel = self.query_one("#activity_log_panel", ActivityLogPanel)

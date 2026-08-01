@@ -16,6 +16,8 @@ import math
 import random
 from datetime import datetime, timedelta, timezone
 
+from hatty.logbook import is_continuous_sensor
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -355,6 +357,18 @@ def demo_numeric_history(
     return pts
 
 
+def demo_state_log(entity_id: str, hours: float = 24, end: datetime | None = None) -> list[dict]:
+    """Logbook-shaped entries synthesized from demo_numeric_history — the
+    demo-mode counterpart of ``HAClient.fetch_state_log`` (issue #29), which
+    fills the gap real HA's logbook leaves for continuous sensors. Thinned
+    to 8 samples so it reads like discrete state changes, not the raw
+    ~80-point plot feed."""
+    return [
+        {"when": when, "entity_id": entity_id, "state": str(value)}
+        for when, value in demo_numeric_history(entity_id, hours, end, n=8)
+    ]
+
+
 def demo_binary_history(
     entity_id: str, hours: float = 4, end: datetime | None = None, n: int = 60
 ) -> list[tuple[str, float]]:
@@ -451,9 +465,13 @@ def demo_logbook(
     entity_ids: list[str], hours: float = 24, end: datetime | None = None, device_ids: list[str] | None = None
 ) -> list[dict]:
     """A handful of plausible activity entries for the given entities, plus
-    device-scoped events (issue #17) when device_ids is given."""
-    names = {e["entity_id"]: e["attributes"].get("friendly_name", e["entity_id"]) for e in demo_entities()}
+    device-scoped events (issue #17) when device_ids is given. Continuous
+    sensors are skipped here, same as a real HA logbook (issue #29) —
+    demo_state_log fills that gap the same way fetch_state_log does."""
+    entity_attrs = {e["entity_id"]: e["attributes"] for e in demo_entities()}
+    names = {eid: attrs.get("friendly_name", eid) for eid, attrs in entity_attrs.items()}
     targets = entity_ids or list(names)
+    targets = [eid for eid in targets if not is_continuous_sensor(eid, entity_attrs.get(eid, {}))]
     rng = random.Random(1234)
     end = end or _now()
     entries: list[dict] = []
