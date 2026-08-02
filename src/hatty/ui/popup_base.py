@@ -43,38 +43,44 @@ class PopupScreen(ModalScreen[ScreenResultType]):
 
 class ListPopup(PopupScreen):
     """Base for the name-list popups (lists / dashboards / saved graphs):
-    a ListView of names with an optional trailing `*` default marker.
+    a ListView of names with an optional trailing `*` default marker (and, for
+    lists, a trailing notify marker — see `markers` below).
 
     Owns the selection glue every subclass used to re-implement: `selected_name`
     tracks the highlighted entry, and `_focus_and_preselect` selects the first
-    row on mount. Subclasses that carry no default marker (saved graphs) set
-    `_strip_default_marker = False`."""
-
-    # Whether a highlighted item's trailing `*` default marker is stripped before
-    # it becomes selected_name (lists/dashboards mark a default; saved graphs don't).
-    _strip_default_marker = True
+    row on mount. Row → name lookup is by position (`_name_at`/`self._names`)
+    rather than parsing the label text back apart, so an arbitrary number of
+    trailing markers can be appended without the two ever needing to agree on
+    how to strip them back off."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.selected_name: str | None = None
+        self._names: list[str] = []
+
+    def _name_at(self, index: int | None) -> str | None:
+        """The name backing row `index` (whatever markers its label carries)."""
+        if index is None or not (0 <= index < len(self._names)):
+            return None
+        return self._names[index]
 
     @staticmethod
-    def _item_name(item: ListItem | None, strip_default_marker: bool = True) -> str | None:
-        """The name behind a ListView item (the default marker stripped)."""
-        if item is None:
-            return None
-        name = str(cast(Label, item.children[0]).content)
-        return name.rstrip("*") if strip_default_marker else name
+    def _label_for(name: str, default_name: str | None, markers: dict[str, str] | None) -> str:
+        label = f"{name}*" if name == default_name else name
+        if markers and name in markers:
+            label += markers[name]
+        return label
 
-    def _populate(self, names, default_name: str | None = None) -> None:
-        """Fill the popup's ListView, marking the default entry with `*`."""
+    def _populate(self, names, default_name: str | None = None, markers: dict[str, str] | None = None) -> None:
+        """Fill the popup's ListView, marking the default entry with `*` and any
+        `markers`-listed entries with their (per-name) trailing suffix."""
         list_view = self.query_one(ListView)
         list_view.clear()
-        for name in names:
-            label = f"{name}*" if name == default_name else name
-            list_view.append(ListItem(Label(label)))
+        self._names = list(names)
+        for name in self._names:
+            list_view.append(ListItem(Label(self._label_for(name, default_name, markers))))
 
-    def _relabel(self, names, default_name: str | None = None) -> None:
+    def _relabel(self, names, default_name: str | None = None, markers: dict[str, str] | None = None) -> None:
         """Update each *existing* ListView item's text to match `names`
         positionally, without clearing/remounting. Reordering (issue #212)
         permutes rows in place rather than adding/removing any, so this is
@@ -83,9 +89,9 @@ class ListPopup(PopupScreen):
         whose Label child hasn't finished mounting yet. `names` must be the
         same length as the current row count."""
         list_view = self.query_one(ListView)
-        for item, name in zip(list_view.children, names):
-            label = f"{name}*" if name == default_name else name
-            cast(Label, item.children[0]).update(label)
+        self._names = list(names)
+        for item, name in zip(list_view.children, self._names):
+            cast(Label, item.children[0]).update(self._label_for(name, default_name, markers))
 
     def _focus_and_preselect(self, names) -> None:
         """Focus the ListView and select its first row (if any), the on-mount
@@ -98,4 +104,4 @@ class ListPopup(PopupScreen):
             self.selected_name = names[0]
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        self.selected_name = self._item_name(event.item, strip_default_marker=self._strip_default_marker)
+        self.selected_name = self._name_at(event.list_view.index)

@@ -66,7 +66,7 @@ class DashboardSelectionPopup(ListPopup):
         self._populate(self.parent.dashboard_names, self.parent.default_dashboard_name)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        self.dismiss({"action": "select", "name": self._item_name(event.item)})
+        self.dismiss({"action": "select", "name": self._name_at(event.index)})
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id in {

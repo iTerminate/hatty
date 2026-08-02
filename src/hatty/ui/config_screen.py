@@ -44,7 +44,6 @@ from hatty.const import (
     DEFAULT_GRAPH_HOURS,
     DEFAULT_NOTIFICATIONS,
     DEFAULT_TERMINAL_TITLE,
-    NOTIFY_LIST_NAME,
 )
 from hatty.controllers.notifications import send_test_ntfy
 from hatty.ui.entity_table import COLUMNS
@@ -189,9 +188,7 @@ class ConfigScreen(Screen):
 
     @staticmethod
     def _lists_summary(lists: dict) -> str | Table:
-        """The Lists section's summary renderable — factored out so the
-        "Clear watched entities" button (issue #224) can refresh it in place
-        instead of leaving it showing the stale pre-clear count."""
+        """The Lists section's summary renderable."""
         if not lists:
             return "No lists defined."
         t = Table.grid(padding=(0, 2))
@@ -220,7 +217,8 @@ class ConfigScreen(Screen):
         title_text = self._raw_config.get(CONFIG_KEY_TERMINAL_TITLE) or DEFAULT_TERMINAL_TITLE
         lists = self._raw_config.get(CONFIG_KEY_LISTS, {})
         notify_prefs = {**DEFAULT_NOTIFICATIONS, **(self._raw_config.get(CONFIG_KEY_NOTIFICATIONS) or {})}
-        watched_count = len(lists.get(NOTIFY_LIST_NAME) or [])
+        notify_list_names = sorted(self.app.notify_ctl.notify_lists)
+        watched_count = len(self.app.notify_ctl.watched_entities())
         entity_names = self._raw_config.get(CONFIG_KEY_ENTITY_NAMES, {})
         dashboards = self._raw_config.get(CONFIG_KEY_DASHBOARDS, {})
         saved_graphs = self._raw_config.get(CONFIG_KEY_SAVED_GRAPHS, {})
@@ -294,10 +292,23 @@ class ConfigScreen(Screen):
                 )
                 yield Label("", id="cfg_ntfy_status")
                 yield Button("Send test notification", id="cfg_ntfy_test")
+
+                yield Label("Notify Lists", classes="section-title")
+                notify_lists_summary = Static(
+                    ", ".join(notify_list_names) if notify_list_names else "No lists are set to notify.",
+                    id="cfg_notify_lists_summary",
+                )
+                notify_lists_summary.set_class(not notify_list_names, "read-only-note")
+                yield notify_lists_summary
+                yield Label(
+                    "Use [bold]n[/bold] in the list popup ([bold]l[/bold]) to designate a list",
+                    classes="read-only-note",
+                    markup=True,
+                )
                 yield Static(
                     f"{watched_count} entit{'y' if watched_count == 1 else 'ies'} watched.", id="cfg_notify_count"
                 )
-                yield Button("Clear watched entities", id="cfg_notify_clear")
+                yield Button("Stop watching all lists", id="cfg_notify_clear")
 
             with VerticalScroll(id="cat_data", classes="config-pane"):
                 yield Label("Lists", classes="section-title")
@@ -375,21 +386,20 @@ class ConfigScreen(Screen):
             # "go back a level", even when pressed from inside a category pane.
             self.dismiss(None)
         elif event.button.id == "cfg_notify_clear":
-            self.action_clear_watched_entities()
+            self.action_stop_watching_all()
         elif event.button.id == "cfg_ntfy_test":
             self.action_test_ntfy()
 
-    def action_clear_watched_entities(self) -> None:
+    def action_stop_watching_all(self) -> None:
         # A live write (like the l/d/s popups edit their own collections directly)
         # rather than something staged until Save — there's no "undo" expected here.
-        self.app.notify_ctl.clear_entities()
-        lists_now = dict(self.app.entity_lists)
-        self._raw_config[CONFIG_KEY_LISTS] = lists_now
+        # Only the notify_lists designation is cleared; list contents are untouched.
+        self.app.notify_ctl.stop_watching_all()
         self.query_one("#cfg_notify_count", Static).update("0 entities watched.")
-        lists_summary = self.query_one("#cfg_lists_summary", Static)
-        lists_summary.update(self._lists_summary(lists_now))
-        lists_summary.set_class(not lists_now, "read-only-note")
-        self.notify("Cleared the watched-entities list.", title="Notifications")
+        summary = self.query_one("#cfg_notify_lists_summary", Static)
+        summary.update("No lists are set to notify.")
+        summary.set_class(True, "read-only-note")
+        self.notify("Stopped watching all lists.", title="Notifications")
 
     def _set_status(self, text: str, ok: bool | None = None) -> None:
         status = self.query_one("#cfg_conn_status", Label)

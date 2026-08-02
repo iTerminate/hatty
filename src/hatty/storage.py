@@ -23,6 +23,8 @@ Shapes (see `_SCHEMA` for the actual columns):
   colors}` — `colors` (optional) maps entity_id → plotext color name.
 - `manual_lists`: a set of list names currently in manual-sort order rather
   than the default alphabetical-by-display-name sort.
+- `notify_lists`: a set of list names designated as change-alert sources (issue
+  #24) — a watched entity is any member of any list in this set.
 """
 
 import json
@@ -39,7 +41,9 @@ from hatty.const import (
     CONFIG_KEY_ENTITY_NAMES,
     CONFIG_KEY_LISTS,
     CONFIG_KEY_MANUAL_LISTS,
+    CONFIG_KEY_NOTIFY_LISTS,
     CONFIG_KEY_SAVED_GRAPHS,
+    NOTIFY_LIST_NAME,
 )
 
 SCHEMA_VERSION = 1
@@ -97,6 +101,7 @@ PERSISTED = {
     CONFIG_KEY_SAVED_GRAPHS: ("saved_graphs", "sqlite"),
     CONFIG_KEY_ENTITY_NAMES: ("entity_names", "sqlite"),
     CONFIG_KEY_MANUAL_LISTS: ("manual_lists", "sqlite"),
+    CONFIG_KEY_NOTIFY_LISTS: ("notify_lists", "sqlite"),
     CONFIG_KEY_COLUMNS: ("columns", "yaml"),
 }
 
@@ -168,6 +173,33 @@ class Storage:
     def _mark_imported(self) -> None:
         self._db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('imported', '1')")
 
+    def migrate_reserved_notify_list(self) -> None:
+        """One-time migration off the pre-#24 reserved '🔔 Notifications' list: a
+        non-empty list survives as an ordinary designated list (added to
+        `notify_lists`); an empty one (never actually used) is dropped outright.
+        Guarded by a meta flag so a list the user later (re)creates with the same
+        name is never touched. Call after connect(), before load_all()."""
+        if self._get_meta("notify_migrated") is not None:
+            return
+        with self._lock:
+            conn = self._conn
+            if conn is None:
+                return
+            with conn:
+                row = self._db.execute("SELECT 1 FROM lists WHERE name = ?", (NOTIFY_LIST_NAME,)).fetchone()
+                if row is not None:
+                    has_entities = (
+                        self._db.execute(
+                            "SELECT 1 FROM list_entities WHERE list_name = ? LIMIT 1", (NOTIFY_LIST_NAME,)
+                        ).fetchone()
+                        is not None
+                    )
+                    if has_entities:
+                        self._set_meta("notify_lists", _dump_json([NOTIFY_LIST_NAME]))
+                    else:
+                        self._db.execute("DELETE FROM lists WHERE name = ?", (NOTIFY_LIST_NAME,))
+                self._set_meta("notify_migrated", "1")
+
     # ── Loading ──────────────────────────────────────────────────────────────
 
     def load_all(self) -> dict:
@@ -178,6 +210,7 @@ class Storage:
             "dashboards": self._load_dashboards(),
             "saved_graphs": self._load_saved_graphs(),
             "manual_lists": _load_json(self._get_meta("manual_lists")) or [],
+            "notify_lists": _load_json(self._get_meta("notify_lists")) or [],
             "default_list": self._get_meta("default_list"),
             "default_dashboard": self._get_meta("default_dashboard"),
         }
@@ -269,6 +302,7 @@ class Storage:
                 self._write_dashboards(collections.get("dashboards") or {})
                 self._write_saved_graphs(collections.get("saved_graphs") or {})
                 self._set_meta("manual_lists", _dump_json(sorted(collections.get("manual_lists") or [])))
+                self._set_meta("notify_lists", _dump_json(sorted(collections.get("notify_lists") or [])))
                 self._set_meta("default_list", collections.get("default_list"))
                 self._set_meta("default_dashboard", collections.get("default_dashboard"))
                 self._mark_imported()

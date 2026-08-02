@@ -186,6 +186,7 @@ CONFIG_KEY_SAVED_GRAPHS = "saved_graphs"
 CONFIG_KEY_ENTITY_NAMES = "entity_names"
 CONFIG_KEY_MANUAL_LISTS = "manual_lists"
 CONFIG_KEY_NOTIFICATIONS = "notifications"
+CONFIG_KEY_NOTIFY_LISTS = "notify_lists"
 CONFIG_KEY_TERMINAL_TITLE_ENABLED = "terminal_title_enabled"
 CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
 
@@ -193,10 +194,9 @@ CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
 # title to hatty or pref).
 DEFAULT_TERMINAL_TITLE = "hatty"
 
-# Reserved list name (issue #224) holding the entities watched for change alerts.
-# Reuses the entity_lists schema (space to add/remove, undo/redo, etc.) but can't
-# be renamed or deleted (see ListController/ListSelectionPopup guards), and is only
-# shown in list_names while notifications are enabled (NotificationController.sync).
+# Legacy reserved list name (issue #224). No longer special — any list can be
+# designated a notification source via `notify_lists` (issue #24) — kept only as
+# the name storage.migrate_reserved_notify_list looks for on a pre-#24 DB.
 NOTIFY_LIST_NAME = "\U0001f514 Notifications"
 
 # Default notification preferences (config key "notifications"), merged over by

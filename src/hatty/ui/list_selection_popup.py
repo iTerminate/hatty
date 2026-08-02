@@ -6,7 +6,6 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Input, Label, ListView
 
-from hatty.const import NOTIFY_LIST_NAME
 from hatty.ui.popup_base import ListPopup
 from hatty.ui.search_input import SearchInput
 
@@ -22,6 +21,7 @@ class ListSelectionPopup(ListPopup):
         ("delete", "delete_list", "Delete List"),
         ("r", "rename_list", "Rename"),
         ("d", "set_default", "Set as Default"),
+        ("n", "toggle_notify", "Notify"),
         ("v", "view_as_dashboard", "View as Dashboard"),
         ("escape", "cancel", "Cancel"),
         Binding("q", "cancel", "Cancel", show=False),
@@ -79,13 +79,16 @@ class ListSelectionPopup(ListPopup):
         self._update_list_view()
         self.query_one(ListView).focus()
 
+    def _notify_markers(self) -> dict[str, str]:
+        return {name: " \U0001f514" for name in self.parent.notify_ctl.notify_lists}
+
     def _update_list_view(self) -> None:
         names = [
             name
             for name in ["View All"] + self.parent.list_names
             if self.search_term.lower() in name.lower()
         ]
-        self._populate(names, self.parent.default_list_name)
+        self._populate(names, self.parent.default_list_name, markers=self._notify_markers())
 
     def on_search_input_search_submitted(self, event: SearchInput.SearchSubmitted) -> None:
         event.stop()
@@ -100,7 +103,7 @@ class ListSelectionPopup(ListPopup):
         self._update_list_view()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        self.dismiss(self._item_name(event.item))
+        self.dismiss(self._name_at(event.index))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "new_list_input" and event.value:
@@ -129,8 +132,6 @@ class ListSelectionPopup(ListPopup):
     def action_delete_list(self) -> None:
         if self.selected_name == "View All":
             self.app.notify("'View All' cannot be deleted.", severity="information")
-        elif self.selected_name == NOTIFY_LIST_NAME:
-            self.app.notify(f"'{NOTIFY_LIST_NAME}' cannot be deleted.", severity="information")
         elif self.selected_name:
             self.dismiss({"action": "delete", "list_name": self.selected_name})
 
@@ -140,23 +141,28 @@ class ListSelectionPopup(ListPopup):
         if self.selected_name == "View All":
             self.app.notify("'View All' cannot be renamed.", severity="information")
             return
-        if self.selected_name == NOTIFY_LIST_NAME:
-            self.app.notify(f"'{NOTIFY_LIST_NAME}' cannot be renamed.", severity="information")
-            return
         rename_input = self.query_one("#rename_list_input", Input)
         rename_input.value = self.selected_name
         rename_input.display = True
         rename_input.focus()
 
     def action_set_default(self) -> None:
-        if self.selected_name == NOTIFY_LIST_NAME:
-            self.app.notify(f"'{NOTIFY_LIST_NAME}' cannot be set as default.", severity="information")
-        elif self.selected_name and self.selected_name != "View All":
+        if self.selected_name and self.selected_name != "View All":
             self.dismiss({"action": "set_default", "list_name": self.selected_name})
 
     def action_view_as_dashboard(self) -> None:
         if self.selected_name and self.selected_name != "View All":
             self.dismiss({"action": "view_as_dashboard", "list_name": self.selected_name})
+
+    def action_toggle_notify(self) -> None:
+        # Acts in place (like _move below) rather than dismissing, so several
+        # lists can be toggled in one visit to the popup.
+        if not self.selected_name or self.selected_name == "View All":
+            return
+        now_on = self.parent.notify_ctl.toggle_list(self.selected_name)
+        verb = "now notifies" if now_on else "no longer notifies"
+        self.app.notify(f"'{self.selected_name}' {verb}.", title="Notifications")
+        self._relabel(self._names, self.parent.default_list_name, markers=self._notify_markers())
 
     def _move(self, delta: int) -> None:
         # Mirrors ColumnConfigPopup's Shift+up/down reorder (issue #212). The
@@ -176,7 +182,7 @@ class ListSelectionPopup(ListPopup):
         reordered = list(names)
         reordered[index - 1], reordered[target - 1] = reordered[target - 1], reordered[index - 1]
         self.parent.list_ctl.reorder_lists(reordered)
-        self._relabel(["View All"] + reordered, self.parent.default_list_name)
+        self._relabel(["View All"] + reordered, self.parent.default_list_name, markers=self._notify_markers())
         list_view.index = target
 
     def action_move_up(self) -> None:
