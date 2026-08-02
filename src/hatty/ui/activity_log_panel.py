@@ -28,7 +28,12 @@ and `set_maximized`'s explicit follow-up call are the two triggers (issue
 #22: the old code baked truncation width into each line at write time and
 never revisited it, so maximizing did nothing for already-written lines).
 Re-render always scrolls to the newest line — there's no cursor to preserve,
-since the log stays outside the focus chain (see below)."""
+since the log stays outside the focus chain (see below).
+
+The same retained `_entries` (via the `entries` property, alongside
+`title_text`) also back `LogEntryPopup` (issue #23, `ui/log_entry_popup.py`,
+opened with `V` by each host) — a browse popup for reading a truncated
+line's full, untruncated text."""
 
 from collections import deque
 
@@ -85,6 +90,7 @@ class ActivityLogPanel(Widget):
         self._recent_keys: deque[tuple[str, str, str]] = deque(maxlen=_DEDUPE_WINDOW)
         self._entries: deque[LogEntry] = deque(maxlen=_MAX_LOG_LINES)
         self._rendered_width = 0
+        self._title = ""
 
     def compose(self) -> ComposeResult:
         yield Label("Activity Log", id="log_title")
@@ -101,10 +107,21 @@ class ActivityLogPanel(Widget):
         yield Label("", id="log_hint")
 
     def set_title(self, text: str) -> None:
+        self._title = text
         self.query_one("#log_title", Label).update(text)
 
     def set_hint(self, text: str) -> None:
         self.query_one("#log_hint", Label).update(text)
+
+    @property
+    def title_text(self) -> str:
+        return self._title
+
+    @property
+    def entries(self) -> list[LogEntry]:
+        """A snapshot of the retained entries, newest last — what
+        LogEntryPopup (issue #23) browses."""
+        return list(self._entries)
 
     @staticmethod
     def _dedupe_key(entry: LogEntry) -> tuple[str, str, str]:

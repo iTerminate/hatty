@@ -33,9 +33,11 @@ the graph (`left`/`right`/`shift+left`/`shift+right`/`+`/`-`/`home`) refetches
 it to match. `v` cycles its scope through `_LOG_VIEWS` (issue #21): the
 plotted entities alone, then their devices' events too (issue #18, e.g. a
 zha_event button press). `f` maximizes it to the full screen width (issue
-#22); `a` always closes outright even while maximized, while `escape`/`q`
-restore the normal width first and only close on a further press. While
-open, each logged event is additionally marked on the plot itself
+#22); `V` opens a browse popup (`LogEntryPopup`, issue #23) over its
+retained entries for reading a truncated line's full text; `a` always
+closes outright even while maximized, while `escape`/`q` restore the normal
+width first and only close on a further press. While open, each logged
+event is additionally marked on the plot itself
 (`plot_render.render_event_marks`) — numeric and binary graphs only; climate
 graphs still show the log list but skip the marks.
 
@@ -80,6 +82,7 @@ from hatty.ui.graph.plot_render import (
 from hatty.ui.graph.plot_time import secs_since
 from hatty.ui.graph.plot_time import ts_to_full as _ts_to_full
 from hatty.ui.graph.window import GraphWindow
+from hatty.ui.log_entry_popup import LogEntryPopup
 
 if TYPE_CHECKING:
     from hatty.main import HACLI
@@ -151,6 +154,7 @@ class GraphPreviewScreen(Screen):
         Binding("a", "toggle_event_log", "Activity Log"),
         Binding("v", "cycle_log_view", "Log View"),
         Binding("f", "maximize_log", "Maximize Log", show=False),
+        Binding("V", "show_log_entries", "Full Text", show=False),
         Binding("question_mark", "show_help", "Help"),
         Binding("escape", "exit_cursor_mode", "Exit Inspect"),
         Binding("escape", "close_event_log", "Close Log"),
@@ -209,7 +213,9 @@ class GraphPreviewScreen(Screen):
         ("Saving", frozenset({"save_graph", "update_graph"})),
         (
             "Activity log",
-            frozenset({"toggle_event_log", "cycle_log_view", "maximize_log", "close_event_log"}),
+            frozenset(
+                {"toggle_event_log", "cycle_log_view", "maximize_log", "show_log_entries", "close_event_log"}
+            ),
         ),
         ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
     )
@@ -313,6 +319,8 @@ class GraphPreviewScreen(Screen):
         if action == "close_event_log":
             return not self._cursor_mode and self._log_visible()
         if action == "maximize_log":
+            return self._log_visible()
+        if action == "show_log_entries":
             return self._log_visible()
         if action == "cycle_log_view":
             return self._log_visible()
@@ -806,6 +814,16 @@ class GraphPreviewScreen(Screen):
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         log_panel.set_maximized(not log_panel.has_class("-maximized"))
 
+    def action_show_log_entries(self) -> None:
+        """`V` — browse the open log's retained entries and read a
+        truncated line's full text (issue #23)."""
+        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
+        entries = log_panel.entries
+        if not entries:
+            self.notify("No activity log entries to show.", title="Activity Log")
+            return
+        self.app.push_screen(LogEntryPopup(entries, log_panel.title_text))
+
     def action_go_back(self) -> None:
         self.dismiss()
 
@@ -842,7 +860,7 @@ class GraphPreviewScreen(Screen):
     def _open_event_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         self._log_view = "entity"
-        log_panel.set_hint("v view · f max · a close · ←/→ page with the graph")
+        log_panel.set_hint("v view · f max · V full text · a close · ←/→ page with the graph")
         log_panel.set_maximized(False)
         log_panel.add_class("-visible")
         self._reload_event_log()
