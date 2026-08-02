@@ -174,6 +174,31 @@ async def test_set_default_via_popup(make_app, sample_entities):
         assert app.default_list_name == "list_a"
 
 
+async def test_toggle_notify_via_popup(make_app, sample_entities):
+    # issue #24: any list can be designated a notification source from the
+    # list popup, toggled on and off in place without dismissing.
+    config_data = {
+        **make_config(),
+        "lists": {"list_a": ["switch.fan"]},
+    }
+    app = make_app(entities=sample_entities, config_data=config_data)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("down", "down")
+        await pilot.press("n")
+        await pilot.pause()
+
+        assert app.notify_lists == {"list_a"}
+        assert isinstance(app.screen, ListSelectionPopup)  # stays open
+        assert "🔔" in str(app.screen.query_one(ListView).children[1].children[0].content)
+
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.notify_lists == set()
+
+
 async def test_delete_list_via_popup(make_app, sample_entities):
     config_data = {
         **make_config(),

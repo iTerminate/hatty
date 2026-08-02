@@ -1,8 +1,12 @@
 # hatty — MIT License. See LICENSE file for details.
 """Unit tests for ListController: selection, membership, undo/redo (issue #169)."""
 
-from hatty.const import NOTIFY_LIST_NAME
 from hatty.controllers.lists import ListController
+
+
+class _StubNotifyCtl:
+    def __init__(self):
+        self.notify_lists: set[str] = set()
 
 
 class _StubApp:
@@ -19,6 +23,7 @@ class _StubApp:
         self.confirm_result = True
         self.pushed = []
         self.search_term = ""
+        self.notify_ctl = _StubNotifyCtl()
 
     def persist(self, *keys):
         self.persist_calls.append(keys)
@@ -222,16 +227,18 @@ def test_handle_popup_delete_unknown_list_returns_early():
     assert ctl._app.pushed == []
 
 
-def test_handle_popup_delete_refuses_reserved_notifications_list():
-    # issue #224: the reserved watch-list is a system list, not a user list.
+def test_handle_popup_delete_drops_notify_designation():
+    # issue #24: any list can be a notification source, so deleting one must
+    # also clear its designation rather than leaving a dangling name.
     ctl = _controller()
-    ctl.list_names = [NOTIFY_LIST_NAME]
-    ctl.entity_lists = {NOTIFY_LIST_NAME: ["switch.fan"]}
-    ctl.handle_popup_action({"action": "delete", "list_name": NOTIFY_LIST_NAME})
-    assert NOTIFY_LIST_NAME in ctl.entity_lists
-    assert ctl.list_names == [NOTIFY_LIST_NAME]
-    assert ctl._app.pushed == []  # never even reached the confirm popup
-    assert ctl._app.notifications
+    ctl._app.confirm_result = True
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": ["switch.fan"]}
+    ctl._app.notify_ctl.notify_lists = {"Kitchen"}
+    ctl.handle_popup_action({"action": "delete", "list_name": "Kitchen"})
+    assert "Kitchen" not in ctl.entity_lists
+    assert ctl._app.notify_ctl.notify_lists == set()
+    assert ("lists", "manual_lists", "notify_lists", "default_list") in ctl._app.persist_calls
 
 
 # ── rename_list ───────────────────────────────────────────────────────────────
@@ -245,7 +252,7 @@ def test_rename_list_preserves_position_and_membership():
     assert ctl.list_names == ["Kitchen", "Study", "Garage"]
     assert list(ctl.entity_lists.keys()) == ["Kitchen", "Study", "Garage"]
     assert ctl.entity_lists["Study"] == ["light.b"]
-    assert ("lists", "manual_lists", "default_list") in ctl._app.persist_calls
+    assert ("lists", "manual_lists", "notify_lists", "default_list") in ctl._app.persist_calls
 
 
 def test_rename_list_updates_current_last_and_default():
@@ -274,6 +281,15 @@ def test_rename_list_carries_manual_lock_and_undo_state():
     assert ctl.unlocked_list == "Study"
     assert ctl.undo_stack[0]["list_name"] == "Study"
     assert ctl.redo_stack[0]["list_name"] == "Study"
+
+
+def test_rename_list_carries_notify_designation():
+    ctl = _controller()
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": ["light.a"]}
+    ctl._app.notify_ctl.notify_lists = {"Kitchen"}
+    ctl.rename_list("Kitchen", "Study")
+    assert ctl._app.notify_ctl.notify_lists == {"Study"}
 
 
 def test_rename_list_refuses_collision():
@@ -309,28 +325,6 @@ def test_rename_list_blank_new_name_is_noop():
     ctl.entity_lists = {"Kitchen": []}
     ctl.rename_list("Kitchen", "   ")
     assert ctl.list_names == ["Kitchen"]
-
-
-def test_rename_list_refuses_reserved_notifications_list():
-    ctl = _controller()
-    ctl.list_names = [NOTIFY_LIST_NAME]
-    ctl.entity_lists = {NOTIFY_LIST_NAME: ["switch.fan"]}
-    ctl.rename_list(NOTIFY_LIST_NAME, "My Watch List")
-    assert ctl.list_names == [NOTIFY_LIST_NAME]
-    assert NOTIFY_LIST_NAME in ctl.entity_lists
-
-
-def test_rename_list_refuses_renaming_to_reserved_name():
-    # entity_lists always carries the reserved key (even hidden — see
-    # NotificationController.sync), so the existing name-collision check
-    # doubles as the guard against renaming *onto* it.
-    ctl = _controller()
-    ctl.list_names = ["Kitchen"]
-    ctl.entity_lists = {"Kitchen": ["light.a"], NOTIFY_LIST_NAME: []}
-    ctl.rename_list("Kitchen", NOTIFY_LIST_NAME)
-    assert ctl.list_names == ["Kitchen"]
-    assert ctl.entity_lists["Kitchen"] == ["light.a"]
-    assert ctl._app.persist_calls == []
 
 
 def test_handle_popup_rename_routes_to_rename_list():

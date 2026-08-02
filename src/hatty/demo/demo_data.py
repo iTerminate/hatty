@@ -520,8 +520,16 @@ def demo_collections() -> dict:
                 "cover.living_room_blinds",
                 "lock.front_door",
             ],
+            # Pre-designated as a notify list below (issue #24) so change alerts
+            # show up already in use.
+            "Security": [
+                "binary_sensor.smoke_detector",
+                "binary_sensor.front_door",
+                "lock.front_door",
+            ],
         },
         "manual_lists": ["Favorites"],
+        "notify_lists": ["Security"],
         "default_list": "Living Room",
         "entity_names": {"sensor.internet_speed": "WAN Speed"},
         "dashboards": {

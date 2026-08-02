@@ -1,17 +1,17 @@
 # hatty — MIT License. See LICENSE file for details.
-"""Acceptance tests for entity change alerts (issue #224): a live state_changed
-event on a watched entity should notify + highlight it end to end. The
-negative cases here (unwatched entity, attribute-only change) exist to confirm
-the wiring discriminates correctly at the app level; the same distinctions are
-unit-tested directly in tests/unit/test_notifications.py."""
+"""Acceptance tests for entity change alerts (issue #224, extended for #24): a
+live state_changed event on an entity of a *designated* list should notify +
+highlight it end to end. The negative cases here (unwatched entity,
+attribute-only change) exist to confirm the wiring discriminates correctly at
+the app level; the same distinctions are unit-tested directly in
+tests/unit/test_notifications.py."""
 
-from hatty.const import NOTIFY_LIST_NAME
 from hatty.ui.entity_table import EntitiesTable
 from tests.conftest import make_config, notified
 
 # Notifications default to enabled (toast/beep/highlight on, desktop/ntfy off —
-# see config.default_config), so pre-seeding the reserved list is all this needs.
-_WATCH_CONFIG = make_config(lists={NOTIFY_LIST_NAME: ["switch.fan"]})
+# see config.default_config), so a config with one designated list is all this needs.
+_WATCH_CONFIG = make_config(lists={"Security": ["switch.fan"]}, notify_lists=["Security"])
 
 
 async def test_state_change_alert_wiring(make_app, sample_entities):
@@ -49,14 +49,19 @@ async def test_state_change_alert_wiring(make_app, sample_entities):
         assert table.get_row_at(row_key)  # sanity: row still renders
 
 
-async def test_notifications_disabled_hides_reserved_list_but_keeps_membership(make_app, sample_entities):
-    disabled_config = make_config(lists={NOTIFY_LIST_NAME: ["switch.fan"]}, notifications={"enabled": False})
+async def test_notifications_disabled_mutes_alerts_but_keeps_list_and_designation(make_app, sample_entities):
+    # issue #24: "enabled" is now a pure global mute — it no longer hides the
+    # list (there's no reserved list left to hide) or clears its designation.
+    disabled_config = make_config(
+        lists={"Security": ["switch.fan"]}, notify_lists=["Security"], notifications={"enabled": False}
+    )
     app = make_app(entities=sample_entities, config_data=disabled_config)
     async with app.run_test() as pilot:
         await pilot.pause()
 
-        assert NOTIFY_LIST_NAME not in app.list_names
-        assert app.entity_lists[NOTIFY_LIST_NAME] == ["switch.fan"]  # data intact, just hidden
+        assert "Security" in app.list_names
+        assert app.notify_lists == {"Security"}
+        assert app.entity_lists["Security"] == ["switch.fan"]
 
         # And a state change doesn't alert while disabled.
         old_state = {**sample_entities[1], "state": "off"}

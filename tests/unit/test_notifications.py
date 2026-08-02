@@ -1,11 +1,11 @@
 # hatty — MIT License. See LICENSE file for details.
-"""Unit tests for NotificationController: watch-list visibility and alert
-dispatch, in isolation (issue #224)."""
+"""Unit tests for NotificationController: notify-list designation and alert
+dispatch, in isolation (issue #224, extended for #24)."""
 
 import aiohttp
 import pytest
 
-from hatty.const import DEFAULT_NOTIFICATIONS, NOTIFY_LIST_NAME
+from hatty.const import DEFAULT_NOTIFICATIONS
 from hatty.controllers.notifications import NotificationController, build_ntfy_request, send_test_ntfy
 
 
@@ -67,46 +67,63 @@ def _controller(notifications=None) -> tuple[NotificationController, _StubApp]:
     return NotificationController(app), app
 
 
-# ── sync (visibility) ──────────────────────────────────────────────────────────
+# ── toggle_list / is_watched / watched_entities ─────────────────────────────────
 
 
-def test_sync_seeds_and_shows_reserved_list_when_enabled():
+def test_toggle_list_adds_and_persists():
     ctl, app = _controller()
-    ctl.sync()
-    assert app.entity_lists == {NOTIFY_LIST_NAME: []}
-    assert app.list_names == [NOTIFY_LIST_NAME]
+    now_on = ctl.toggle_list("Security")
+    assert now_on is True
+    assert ctl.notify_lists == {"Security"}
+    assert ("notify_lists",) in app.persist_calls
 
 
-def test_sync_hides_reserved_list_when_disabled_but_keeps_membership():
-    ctl, app = _controller({"enabled": False})
-    app.entity_lists[NOTIFY_LIST_NAME] = ["switch.fan"]
-    app.list_names = [NOTIFY_LIST_NAME]
-    app.current_list_name = NOTIFY_LIST_NAME
-
-    ctl.sync()
-
-    assert NOTIFY_LIST_NAME not in app.list_names
-    assert app.entity_lists[NOTIFY_LIST_NAME] == ["switch.fan"]  # data survives
-    assert app.current_list_name is None  # kicked back to View All
-
-
-def test_sync_reenable_restores_visibility_and_membership():
-    ctl, app = _controller({"enabled": False})
-    app.entity_lists[NOTIFY_LIST_NAME] = ["switch.fan"]
-    ctl.sync()  # disabled: hidden
-    assert NOTIFY_LIST_NAME not in app.list_names
-
-    app.app_config["notifications"]["enabled"] = True
-    ctl.sync()  # re-enabled: visible again, same membership
-    assert app.list_names == [NOTIFY_LIST_NAME]
-    assert app.entity_lists[NOTIFY_LIST_NAME] == ["switch.fan"]
-
-
-def test_sync_is_idempotent():
+def test_toggle_list_removes_and_persists():
     ctl, app = _controller()
-    ctl.sync()
-    ctl.sync()
-    assert app.list_names == [NOTIFY_LIST_NAME]
+    ctl.notify_lists = {"Security"}
+    now_on = ctl.toggle_list("Security")
+    assert now_on is False
+    assert ctl.notify_lists == set()
+    assert ("notify_lists",) in app.persist_calls
+
+
+def test_is_watched_true_when_entity_in_any_notify_list():
+    ctl, app = _controller()
+    ctl.notify_lists = {"Security", "Other"}
+    app.entity_lists = {"Security": ["switch.fan"], "Other": []}
+    assert ctl.is_watched("switch.fan") is True
+
+
+def test_is_watched_false_when_list_not_designated():
+    ctl, app = _controller()
+    app.entity_lists = {"Security": ["switch.fan"]}
+    assert ctl.is_watched("switch.fan") is False
+
+
+def test_watched_entities_unions_designated_lists():
+    ctl, app = _controller()
+    ctl.notify_lists = {"Security", "Climate"}
+    app.entity_lists = {"Security": ["switch.fan", "lock.front_door"], "Climate": ["switch.fan", "climate.a"]}
+    assert ctl.watched_entities() == {"switch.fan", "lock.front_door", "climate.a"}
+
+
+def test_watched_entities_empty_when_nothing_designated():
+    ctl, app = _controller()
+    app.entity_lists = {"Security": ["switch.fan"]}
+    assert ctl.watched_entities() == set()
+
+
+# ── stop_watching_all ────────────────────────────────────────────────────────────
+
+
+def test_stop_watching_all_clears_designation_not_membership():
+    ctl, app = _controller()
+    ctl.notify_lists = {"Security", "Climate"}
+    app.entity_lists = {"Security": ["switch.fan"], "Climate": ["climate.a"]}
+    ctl.stop_watching_all()
+    assert ctl.notify_lists == set()
+    assert app.entity_lists == {"Security": ["switch.fan"], "Climate": ["climate.a"]}
+    assert ("notify_lists",) in app.persist_calls
 
 
 # ── handle_state_change ─────────────────────────────────────────────────────────
@@ -116,7 +133,8 @@ _OLD_STATE = {"entity_id": "switch.fan", "state": "off", "attributes": {"friendl
 
 
 def _watch(ctl, app, entity_id="switch.fan"):
-    app.entity_lists[NOTIFY_LIST_NAME] = [entity_id]
+    ctl.notify_lists = {"Security"}
+    app.entity_lists["Security"] = [entity_id]
 
 
 def test_no_alert_when_disabled():
@@ -196,15 +214,6 @@ def test_highlight_clear_resets_alerted_and_refreshes():
     assert app.refreshed_widgets.count("switch.fan") == 2  # once on alert, once on clear
 
 
-# ── clear_entities ───────────────────────────────────────────────────────────────
-
-
-def test_clear_entities_empties_the_watch_list():
-    ctl, app = _controller()
-    app.entity_lists[NOTIFY_LIST_NAME] = ["switch.fan", "light.lamp"]
-    ctl.clear_entities()
-    assert app.entity_lists[NOTIFY_LIST_NAME] == []
-    assert app.persist_calls == [("lists",)]
 
 
 # ── _ntfy (issue #246: optional Basic auth) ─────────────────────────────────────

@@ -3,7 +3,6 @@
 
 import yaml
 
-from hatty.const import NOTIFY_LIST_NAME
 from tests.conftest import make_config
 
 
@@ -27,10 +26,8 @@ async def test_legacy_yaml_collections_migrate_into_the_db(make_app, sample_enti
         assert stored["entity_names"] == {"sensor.temperature": "Temp"}
         assert stored["dashboards"]["Main"]["rows"] == 2
         assert stored["saved_graphs"]["Trend"]["entity_ids"] == ["sensor.temperature"]
-        # And the app state reflects the migrated data. entity_lists always carries
-        # the reserved notifications list too (issue #224 — seeded so watched
-        # entities persist even while notifications are disabled).
-        assert app.entity_lists == {"living": ["light.living_room_lamp"], NOTIFY_LIST_NAME: []}
+        # And the app state reflects the migrated data.
+        assert app.entity_lists == {"living": ["light.living_room_lamp"]}
         assert app.current_list_name == "living"
 
 
@@ -51,7 +48,7 @@ async def test_db_is_authoritative_over_yaml_on_boot(make_app, sample_entities, 
     app = make_app(entities=sample_entities, config_data=config_data)
     async with app.run_test() as pilot:
         await pilot.pause()
-        assert app.entity_lists == {"from_db": ["switch.fan"], NOTIFY_LIST_NAME: []}
+        assert app.entity_lists == {"from_db": ["switch.fan"]}
         assert app.current_list_name == "from_db"
 
 

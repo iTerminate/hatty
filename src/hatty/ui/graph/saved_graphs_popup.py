@@ -59,9 +59,6 @@ class SavedGraphsPopup(ListPopup):
     }
     """
 
-    # Saved graphs carry no default marker, so a name is taken verbatim.
-    _strip_default_marker = False
-
     def __init__(self):
         super().__init__(id="saved_graphs_popup")
 
@@ -81,7 +78,7 @@ class SavedGraphsPopup(ListPopup):
         self._populate(self.parent.saved_graphs)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        self.dismiss({"action": "open", "name": self._item_name(event.item, strip_default_marker=False)})
+        self.dismiss({"action": "open", "name": self._name_at(event.index)})
 
     def action_rename_graph(self) -> None:
         if not self.selected_name:

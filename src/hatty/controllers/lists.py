@@ -1,7 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
 """List (favorites) state and operations, extracted from HACLI."""
 
-from hatty.const import NOTIFY_LIST_NAME
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.dashboard.screen import DashboardScreen
 
@@ -52,9 +51,6 @@ class ListController:
         list_name = result.get("list_name")
 
         if action == "delete":
-            if list_name == NOTIFY_LIST_NAME:
-                app.notify(f"'{list_name}' cannot be deleted.", severity="information")
-                return
             if list_name not in self.entity_lists:
                 return
 
@@ -66,13 +62,14 @@ class ListController:
                 del self.entity_lists[_name]
                 self.list_names.remove(_name)
                 self.manual_lists.discard(_name)
+                app.notify_ctl.notify_lists.discard(_name)
                 if self.unlocked_list == _name:
                     self.unlocked_list = None
                 if self.current_list_name == _name:
                     self.current_list_name = None
                 if self.default_list_name == _name:
                     self.default_list_name = None
-                app.persist("lists", "manual_lists", "default_list")
+                app.persist("lists", "manual_lists", "notify_lists", "default_list")
                 app.notify(f"List '{_name}' deleted.", title="List Deleted")
                 app._update_entities_display()
 
@@ -93,14 +90,9 @@ class ListController:
 
     def rename_list(self, old_name: str | None, new_name: str | None) -> None:
         app = self._app
-        if old_name == NOTIFY_LIST_NAME:
-            app.notify(f"'{old_name}' cannot be renamed.", severity="information")
-            return
         new_name = (new_name or "").strip()
         if not old_name or old_name not in self.entity_lists or not new_name or old_name == new_name:
             return
-        # entity_lists always carries the reserved-list key (even hidden), so this
-        # also catches (and rejects) renaming a list *to* the reserved name.
         if new_name in self.entity_lists:
             app.notify(f"A list named '{new_name}' already exists.", title="Rename Error", severity="error")
             return
@@ -117,12 +109,15 @@ class ListController:
         if old_name in self.manual_lists:
             self.manual_lists.discard(old_name)
             self.manual_lists.add(new_name)
+        if old_name in app.notify_ctl.notify_lists:
+            app.notify_ctl.notify_lists.discard(old_name)
+            app.notify_ctl.notify_lists.add(new_name)
         if self.unlocked_list == old_name:
             self.unlocked_list = new_name
         for entry in (*self.undo_stack, *self.redo_stack):
             if entry["list_name"] == old_name:
                 entry["list_name"] = new_name
-        app.persist("lists", "manual_lists", "default_list")
+        app.persist("lists", "manual_lists", "notify_lists", "default_list")
         app.set_title_based_on_focused_ui()
         app._update_entities_display()
         app.notify(f"Renamed list '{old_name}' to '{new_name}'.", title="List Renamed")

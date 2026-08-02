@@ -24,6 +24,7 @@ from hatty.const import (
     CONFIG_KEY_LISTS,
     CONFIG_KEY_LOG_HOURS,
     CONFIG_KEY_MANUAL_LISTS,
+    CONFIG_KEY_NOTIFY_LISTS,
     CONFIG_KEY_SAVED_GRAPHS,
     CONFIG_KEY_TERMINAL_TITLE,
     CONFIG_KEY_TERMINAL_TITLE_ENABLED,
@@ -213,6 +214,7 @@ class HACLI(App):
     _last_list_name = _controller_proxy("list_ctl", "last_list_name")
     default_list_name = _controller_proxy("list_ctl", "default_list_name")
     manual_lists = _controller_proxy("list_ctl", "manual_lists")
+    notify_lists = _controller_proxy("notify_ctl", "notify_lists")
     _undo_stack = _controller_proxy("list_ctl", "undo_stack")
     _redo_stack = _controller_proxy("list_ctl", "redo_stack")
 
@@ -314,6 +316,8 @@ class HACLI(App):
             if self.storage.is_empty():
                 # One-time migration from a legacy all-in-YAML config.
                 self.storage.save_all({key: cfg.get(key) for key in storage_module.COLLECTION_KEYS})
+            # One-time migration off the pre-#24 reserved '🔔 Notifications' list.
+            self.storage.migrate_reserved_notify_list()
             loaded = self.storage.load_all()
             cfg.update(loaded)
         except Exception as e:
@@ -335,10 +339,7 @@ class HACLI(App):
         self.dashboard_names = list(self.dashboards.keys())
         self.default_dashboard_name = cfg.get(CONFIG_KEY_DEFAULT_DASHBOARD)
         self.saved_graphs = cfg.get(CONFIG_KEY_SAVED_GRAPHS, {})
-        # Seeds entity_lists[NOTIFY_LIST_NAME] if missing and shows/hides it in
-        # list_names per the "enabled" pref — must run before the auto-select
-        # fallback below so a freshly-seeded reserved list is never picked.
-        self.notify_ctl.sync()
+        self.notify_lists = set(cfg.get(CONFIG_KEY_NOTIFY_LISTS) or [])
 
         saved_theme = cfg.get(CONFIG_KEY_THEME)
         if saved_theme and saved_theme in self.available_themes:
@@ -348,11 +349,10 @@ class HACLI(App):
 
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(cfg.get(CONFIG_KEY_GRAPH_TYPE))
 
-        selectable = [n for n in self.list_names if n != self.notify_ctl.list_name]
         if self.default_list_name and self.default_list_name in self.entity_lists:
             self.current_list_name = self.default_list_name
-        elif selectable:
-            self.current_list_name = selectable[0]
+        elif self.list_names:
+            self.current_list_name = self.list_names[0]
         self._last_list_name = self.current_list_name
 
         ha_config = cfg.get(CONFIG_KEY_HOME_ASSISTANT, {})
@@ -1340,6 +1340,7 @@ class HACLI(App):
             CONFIG_KEY_DASHBOARDS: dashboards,
             CONFIG_KEY_SAVED_GRAPHS: self.app_config.get(CONFIG_KEY_SAVED_GRAPHS) or {},
             CONFIG_KEY_MANUAL_LISTS: self.app_config.get(CONFIG_KEY_MANUAL_LISTS) or set(),
+            CONFIG_KEY_NOTIFY_LISTS: self.app_config.get(CONFIG_KEY_NOTIFY_LISTS) or set(),
             CONFIG_KEY_DEFAULT_LIST: self.app_config.get(CONFIG_KEY_DEFAULT_LIST),
             CONFIG_KEY_DEFAULT_DASHBOARD: self.app_config.get(CONFIG_KEY_DEFAULT_DASHBOARD),
         }
@@ -1819,10 +1820,6 @@ class HACLI(App):
         self.app_config = result
         self.columns = result.get(CONFIG_KEY_COLUMNS, list(DEFAULT_COLUMNS))
         self.entity_names = result.get(CONFIG_KEY_ENTITY_NAMES, {})
-        # Show/hide the reserved notifications list per the (possibly just-toggled)
-        # "enabled" pref, and refresh the title/table in case current_list_name
-        # was reset by sync() (e.g. the user disabled notifications while viewing it).
-        self.notify_ctl.sync()
         self.set_title_based_on_focused_ui()
         new_graph_type = result.get(CONFIG_KEY_GRAPH_TYPE)
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(new_graph_type)

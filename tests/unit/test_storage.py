@@ -241,6 +241,7 @@ def test_load_all_on_empty_db_returns_empty_shapes(tmp_path):
         "dashboards": {},
         "saved_graphs": {},
         "manual_lists": [],
+        "notify_lists": [],
         "default_list": None,
         "default_dashboard": None,
     }
@@ -260,6 +261,67 @@ def test_manual_lists_empty_set_round_trips_as_empty_list(tmp_path):
     s.save_all({"manual_lists": set()})
     loaded = s.load_all()
     assert loaded["manual_lists"] == []
+    s.close()
+
+
+def test_round_trip_notify_lists(tmp_path):
+    s = _open(tmp_path)
+    s.save_all({"notify_lists": {"Security", "Climate"}})
+    loaded = s.load_all()
+    assert loaded["notify_lists"] == ["Climate", "Security"]
+    s.close()
+
+
+def test_notify_lists_empty_set_round_trips_as_empty_list(tmp_path):
+    s = _open(tmp_path)
+    s.save_all({"notify_lists": set()})
+    loaded = s.load_all()
+    assert loaded["notify_lists"] == []
+    s.close()
+
+
+def test_migrate_reserved_notify_list_designates_nonempty_list(tmp_path):
+    # issue #24: a pre-#24 DB carrying entities in the old reserved list should
+    # have it survive as an ordinary designated list, not vanish or stay reserved.
+    s = _open(tmp_path)
+    s.save_all({"lists": {"\U0001f514 Notifications": ["switch.fan"]}})
+    s.migrate_reserved_notify_list()
+    loaded = s.load_all()
+    assert loaded["lists"] == {"\U0001f514 Notifications": ["switch.fan"]}
+    assert loaded["notify_lists"] == ["\U0001f514 Notifications"]
+    s.close()
+
+
+def test_migrate_reserved_notify_list_drops_empty_list(tmp_path):
+    s = _open(tmp_path)
+    s.save_all({"lists": {"\U0001f514 Notifications": []}})
+    s.migrate_reserved_notify_list()
+    loaded = s.load_all()
+    assert loaded["lists"] == {}
+    assert loaded["notify_lists"] == []
+    s.close()
+
+
+def test_migrate_reserved_notify_list_is_a_noop_when_absent(tmp_path):
+    s = _open(tmp_path)
+    s.save_all({"lists": {"Kitchen": ["light.a"]}})
+    s.migrate_reserved_notify_list()
+    loaded = s.load_all()
+    assert loaded["lists"] == {"Kitchen": ["light.a"]}
+    assert loaded["notify_lists"] == []
+    s.close()
+
+
+def test_migrate_reserved_notify_list_runs_only_once(tmp_path):
+    # A user un-toggling the migrated list (or later creating a new list with the
+    # same legacy name) must not be re-designated by a second migration call.
+    s = _open(tmp_path)
+    s.save_all({"lists": {"\U0001f514 Notifications": ["switch.fan"]}})
+    s.migrate_reserved_notify_list()
+    s.save_all({"notify_lists": set()})  # user toggled it off
+    s.migrate_reserved_notify_list()  # would-be second run, e.g. next boot
+    loaded = s.load_all()
+    assert loaded["notify_lists"] == []
     s.close()
 
 
