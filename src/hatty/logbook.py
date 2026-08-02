@@ -176,6 +176,35 @@ def format_log_time(iso_str: str) -> str:
         return iso_str[:8] if len(iso_str) >= 8 else "??:??:??"
 
 
+def format_log_datetime(iso_str: str) -> str:
+    """Local `YYYY-MM-DD HH:MM:SS` for the log-entry popup's full-text view
+    (issue #23) — same defensive fallbacks as format_log_time, just a longer
+    format. Only ever sees the ISO output of entry_when_iso."""
+    if not iso_str:
+        return "??"
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return iso_str
+
+
+def format_log_detail(entry: LogEntry) -> str:
+    """The untruncated block a LogEntryPopup shows for one selected entry
+    (issue #23) — unlike format_log_line, never budgets or truncates, so the
+    full name/detail survive regardless of panel width. One field per line:
+    timestamp, name (⚡-prefixed for an event, matching format_log_line's
+    form), detail, then entity_id when the entry carries one (device-scoped
+    events don't)."""
+    name = f"⚡ {entry['name']}" if entry["kind"] == "event" else entry["name"]
+    lines = [format_log_datetime(entry["when"]), name, entry["detail"]]
+    if entry["entity_id"]:
+        lines.append(entry["entity_id"])
+    return "\n".join(lines)
+
+
 def format_log_line(entry: LogEntry, width: int) -> str:
     """One display line for the log panel, truncated to `width` with a
     trailing "…" — the panel is a docked, non-scrollable-horizontally widget
