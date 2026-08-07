@@ -1,4 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
+from datetime import datetime, timedelta, timezone
+
 from hatty.ui.dashboard.screen import DashboardScreen
 from hatty.ui.dashboard.widgets.graph import GraphSlotWidget
 from hatty.ui.dashboard.widgets.lock import LockSlotWidget
@@ -612,3 +614,44 @@ async def test_assign_gauge_slot_with_bounds_via_popup(make_app, sample_entities
         assert slot["entity_id"] == "sensor.battery"
         assert slot["gauge_min"] == 0.0
         assert slot["gauge_max"] == 20.0
+
+
+_STALE_SENSOR_ENTITY = {
+    "entity_id": "sensor.temperature",
+    "state": "21.5",
+    "attributes": {"friendly_name": "Temperature", "unit_of_measurement": "°C"},
+    "last_changed": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+}
+
+
+def _elapsed_dashboard_config(show_last_changed: bool) -> dict:
+    slot = {"row": 0, "col": 0, "widget_type": "sensor", "entity_id": "sensor.temperature"}
+    if show_last_changed:
+        slot["show_last_changed"] = True
+    return {
+        **make_config(),
+        "lists": {},
+        "dashboards": {"Main": {"rows": 1, "cols": 1, "slots": [slot]}},
+    }
+
+
+async def test_slot_shows_elapsed_time_when_enabled(make_app):
+    app = make_app(entities=[_STALE_SENSOR_ENTITY], config_data=_elapsed_dashboard_config(True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+
+        widget = app.screen.query_one(TextSlotWidget)
+        assert str(widget.query_one("#slot_elapsed").content) == "2h ago"
+
+
+async def test_slot_omits_elapsed_time_when_disabled(make_app):
+    app = make_app(entities=[_STALE_SENSOR_ENTITY], config_data=_elapsed_dashboard_config(False))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+
+        widget = app.screen.query_one(TextSlotWidget)
+        assert not widget.query("#slot_elapsed")
