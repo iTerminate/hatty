@@ -34,10 +34,11 @@ def demo_entities() -> list[dict]:
     """The curated entity set, exercising every domain with UI surface: sensor,
     light, climate, switch, binary_sensor, cover, lock, media_player, fan,
     input_number."""
-    now = _iso(_now())
+    now = _now()
 
-    def e(entity_id: str, state: str, attributes: dict) -> dict:
-        return {"entity_id": entity_id, "state": state, "attributes": attributes, "last_changed": now}
+    def e(entity_id: str, state: str, attributes: dict, changed_min_ago: int = 0) -> dict:
+        changed = _iso(now - timedelta(minutes=changed_min_ago))
+        return {"entity_id": entity_id, "state": state, "attributes": attributes, "last_changed": changed}
 
     return [
         # ── Sensors (numeric) ──
@@ -82,11 +83,13 @@ def demo_entities() -> list[dict]:
            "hvac_action": "idle", "hvac_modes": ["heat", "cool", "off"],
            "min_temp": 7, "max_temp": 35, "target_temp_step": 0.5, "unit_of_measurement": "°C"}),
         # ── Binary sensors ──
-        e("binary_sensor.front_door", "off", {"friendly_name": "Front Door", "device_class": "door"}),
+        e("binary_sensor.front_door", "off", {"friendly_name": "Front Door", "device_class": "door"},
+          changed_min_ago=240),
         e("binary_sensor.living_room_motion", "off",
           {"friendly_name": "Living Room Motion", "device_class": "motion"}),
         e("binary_sensor.smoke_detector", "off", {"friendly_name": "Smoke Detector", "device_class": "smoke"}),
-        e("binary_sensor.washing_machine", "on", {"friendly_name": "Washing Machine", "device_class": "running"}),
+        e("binary_sensor.washing_machine", "on", {"friendly_name": "Washing Machine", "device_class": "running"},
+          changed_min_ago=22),
         # A Zigbee button has no meaningful state beyond its battery — but the
         # device log (`i` then `v`) is reached from an entity row, so it needs
         # one to be reachable at all. Its interest is its device events (issue #17):
@@ -97,7 +100,7 @@ def demo_entities() -> list[dict]:
         e("cover.living_room_blinds", "open", {"friendly_name": "Living Room Blinds", "current_position": 70}),
         e("cover.garage_door", "closed", {"friendly_name": "Garage Door", "current_position": 0}),
         # ── Lock ──
-        e("lock.front_door", "locked", {"friendly_name": "Front Door Lock"}),
+        e("lock.front_door", "locked", {"friendly_name": "Front Door Lock"}, changed_min_ago=240),
         # ── Media player ──
         # supported_features 384447 = every MediaPlayerEntityFeature bit this app
         # controls (const.MEDIA_FEAT's values summed); not imported here to keep
@@ -548,7 +551,8 @@ def demo_collections() -> dict:
                     {"row": 1, "col": 2, "widget_type": "sensor", "entity_id": "sensor.living_room_humidity"},
                     {"row": 2, "col": 0, "widget_type": "graph", "entity_id": "sensor.living_room_temperature",
                      "col_span": 2},
-                    {"row": 2, "col": 2, "widget_type": "binary_sensor", "entity_id": "binary_sensor.front_door"},
+                    {"row": 2, "col": 2, "widget_type": "binary_sensor", "entity_id": "binary_sensor.front_door",
+                     "show_last_changed": True},
                 ],
             },
             "Living Room": {
@@ -571,8 +575,10 @@ def demo_collections() -> dict:
                             ],
                         },
                     },
-                    {"row": 1, "col": 1, "widget_type": "cover", "entity_id": "cover.living_room_blinds"},
-                    {"row": 1, "col": 2, "widget_type": "lock", "entity_id": "lock.front_door"},
+                    {"row": 1, "col": 1, "widget_type": "cover", "entity_id": "cover.living_room_blinds",
+                     "show_last_changed": True},
+                    {"row": 1, "col": 2, "widget_type": "lock", "entity_id": "lock.front_door",
+                     "show_last_changed": True},
                     {
                         "row": 2, "col": 0, "widget_type": "panel", "entity_id": None,
                         "entity_ids": [
