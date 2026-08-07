@@ -107,10 +107,14 @@ class DashboardSlotPopup(PopupScreen):
 
     DEFAULT_CSS = """
     #dashboard_slot_container {
-        width: auto;
+        /* Width is set explicitly in Python (_apply_preview_visibility, issue #36):
+           `auto` doesn't work here — the Footer() composed inside this container is
+           full-width, so `auto` resolves to the whole screen instead of the content's
+           actual width, leaving the dialog stuck against the left edge uncentred. */
         max-width: 100%;
     }
     #slot_body {
+        width: auto;
         height: auto;
     }
     #slot_main {
@@ -383,7 +387,13 @@ class DashboardSlotPopup(PopupScreen):
         self._preview_timer = self.set_timer(0.3, lambda: self._rebuild_preview(entity_id))
 
     def _apply_preview_visibility(self) -> None:
-        self.query_one("#widget_preview").display = preview_fits(self.app.size.width)
+        # Ties the dialog's width to the same show/hide decision (issue #36): with
+        # #dashboard_slot_container's width no longer `auto` (see DEFAULT_CSS), this is
+        # what centres it instead of stretching it to the terminal's full width.
+        show_preview = preview_fits(self.app.size.width)
+        self.query_one("#widget_preview").display = show_preview
+        width = MAIN_WIDTH + PREVIEW_GAP + PREVIEW_WIDTH + POPUP_CHROME if show_preview else MAIN_WIDTH + POPUP_CHROME
+        self.query_one("#dashboard_slot_container").styles.width = width
 
     def on_resize(self, event) -> None:
         # Terminal resized while the popup is open (issue #11) — re-decide

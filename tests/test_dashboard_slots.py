@@ -3,7 +3,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import Button, Checkbox, ListView, Select, Static
 
 from hatty.ui.dashboard.screen import DashboardScreen, DashboardSlotWidget
-from hatty.ui.dashboard.slot_popup import DashboardSlotPopup
+from hatty.ui.dashboard.slot_popup import MAIN_WIDTH, POPUP_CHROME, PREVIEW_GAP, PREVIEW_WIDTH, DashboardSlotPopup
 from hatty.ui.dashboard.widgets.graph import GraphSlotWidget
 from hatty.ui.dashboard.widgets.panel import PanelSlotWidget
 from hatty.ui.dashboard.widgets.text import TextSlotWidget
@@ -665,3 +665,42 @@ async def test_slot_popup_up_down_move_gauge_cursor_within_entity_table(make_app
         await pilot.pause()
         assert popup.focused is table
         assert table.cursor_coordinate.row == start_row + 1
+
+
+async def test_slot_popup_is_centred_with_preview_shown(make_app, open_dashboard):
+    # Regression for issue #36: #dashboard_slot_container used to stretch to the
+    # terminal's full width (an inner Footer() defeats `width: auto`), leaving the
+    # dialog stuck against the left edge instead of centred.
+    app = make_app()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+        assert popup.query_one("#widget_preview").display is True
+
+        region = popup.query_one("#dashboard_slot_container").region
+        assert region.width == MAIN_WIDTH + PREVIEW_GAP + PREVIEW_WIDTH + POPUP_CHROME
+        left_margin = region.x
+        right_margin = 120 - (region.x + region.width)
+        assert abs(left_margin - right_margin) <= 1
+
+
+async def test_slot_popup_is_centred_with_preview_hidden(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+        assert popup.query_one("#widget_preview").display is False
+
+        region = popup.query_one("#dashboard_slot_container").region
+        assert region.width == MAIN_WIDTH + POPUP_CHROME
+        left_margin = region.x
+        right_margin = 80 - (region.x + region.width)
+        assert abs(left_margin - right_margin) <= 1
