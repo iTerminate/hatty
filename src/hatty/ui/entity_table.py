@@ -20,7 +20,7 @@ def is_dead(entity: Entity) -> bool:
     return entity.get("state") in DEAD_STATES
 
 
-def _format_relative(iso_str: str) -> str:
+def format_relative(iso_str: str) -> str:
     if not iso_str:
         return ""
     try:
@@ -140,7 +140,7 @@ COLUMNS = {
     "value": ("Value", lambda e, lists, cur, pending: _format_value(e, pending)),
     "entity_id": ("Entity ID", lambda e, lists, cur, pending: e.get("entity_id", "")),
     "device_class": ("Class", lambda e, lists, cur, pending: e.get("attributes", {}).get("device_class") or ""),
-    "last_changed": ("Changed", lambda e, lists, cur, pending: _format_relative(e.get("last_changed", ""))),
+    "last_changed": ("Changed", lambda e, lists, cur, pending: format_relative(e.get("last_changed", ""))),
     "in_list": ("✓", lambda e, lists, cur, pending: "✓" if _is_in_list(e, lists, cur) else ""),
 }
 

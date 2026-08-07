@@ -64,8 +64,15 @@ class GaugeSlotWidget(EntitySlotWidget):
     }
     """
 
-    def __init__(self, entity_id: str | None, gauge_min: float | None = None, gauge_max: float | None = None):
-        super().__init__(entity_id)
+    def __init__(
+        self,
+        entity_id: str | None,
+        gauge_min: float | None = None,
+        gauge_max: float | None = None,
+        *,
+        show_last_changed: bool = False,
+    ):
+        super().__init__(entity_id, show_last_changed=show_last_changed)
         self._gauge_min = gauge_min
         self._gauge_max = gauge_max
 

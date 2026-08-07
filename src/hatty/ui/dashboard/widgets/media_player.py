@@ -44,8 +44,8 @@ class MediaPlayerSlotWidget(EntitySlotWidget):
     }
     """
 
-    def __init__(self, entity_id: str | None):
-        super().__init__(entity_id)
+    def __init__(self, entity_id: str | None, *, show_last_changed: bool = False):
+        super().__init__(entity_id, show_last_changed=show_last_changed)
         self._attrs: EntityAttributes = {}
 
     def compose(self) -> ComposeResult:
