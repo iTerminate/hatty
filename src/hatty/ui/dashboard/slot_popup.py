@@ -38,9 +38,9 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.events import Key
 from textual.timer import Timer
-from textual.widgets import Button, DataTable, Footer, Input, Label, ListItem, ListView, Select
+from textual.widgets import Button, Checkbox, DataTable, Footer, Input, Label, ListItem, ListView, Select
 
-from hatty.const import WIDGET_TYPES
+from hatty.const import LAST_CHANGED_WIDGET_TYPES, WIDGET_TYPES
 from hatty.ui.dashboard.widget_match import compatible_widget_types, entity_matches_widget_type
 from hatty.ui.dashboard.widgets.base import build_slot_content
 from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_name
@@ -132,6 +132,9 @@ class DashboardSlotPopup(PopupScreen):
         width: 1fr;
         margin-right: 1;
     }
+    #show_last_changed_check {
+        margin-bottom: 1;
+    }
     #type_step_buttons {
         height: 3;
         margin-bottom: 1;
@@ -153,6 +156,7 @@ class DashboardSlotPopup(PopupScreen):
         self._panel_entity_ids: list[str] = list(slot.get("entity_ids", [])) if slot else []
         self._gauge_min: float | None = slot.get("gauge_min") if slot else None
         self._gauge_max: float | None = slot.get("gauge_max") if slot else None
+        self._show_last_changed: bool = bool(slot.get("show_last_changed")) if slot else False
         self._step = "type"
         self._select_initialized = False
         # Entity-first order (issue #3): flips step "type"/"entity"'s meaning —
@@ -196,6 +200,9 @@ class DashboardSlotPopup(PopupScreen):
                     with Horizontal(id="gauge_bounds_row"):
                         yield Input(placeholder="min (auto)", id="gauge_min_input")
                         yield Input(placeholder="max (auto)", id="gauge_max_input")
+                    yield Checkbox(
+                        "Show time since last change", value=self._show_last_changed, id="show_last_changed_check"
+                    )
                     yield EntitiesTable(id="entity_picker_table", cursor_type="row")
                     yield Label("Selected — Shift+↑/↓ reorder · Del remove", id="panel_added_hint")
                     yield ListView(id="panel_added_list")
@@ -233,6 +240,7 @@ class DashboardSlotPopup(PopupScreen):
             self.query_one("#panel_added_list").display = False
             self.query_one("#btn_panel_done").display = False
             self.query_one("#gauge_bounds_row").display = False
+            self.query_one("#show_last_changed_check").display = False
         self._apply_preview_visibility()
         self._rebuild_preview()
 
@@ -264,6 +272,9 @@ class DashboardSlotPopup(PopupScreen):
     def _is_gauge_mode(self) -> bool:
         return self.query_one("#widget_type_select", Select).value == "gauge"
 
+    def _supports_last_changed(self) -> bool:
+        return self.query_one("#widget_type_select", Select).value in LAST_CHANGED_WIDGET_TYPES
+
     def _is_multi_add(self) -> bool:
         """True whenever the entity picker accumulates several entities instead
         of dismissing on the first pick: a real "panel" slot, or fill mode
@@ -285,6 +296,11 @@ class DashboardSlotPopup(PopupScreen):
                 self.query_one("#gauge_min_input", Input).value = f"{self._gauge_min:g}"
             if self._gauge_max is not None:
                 self.query_one("#gauge_max_input", Input).value = f"{self._gauge_max:g}"
+        # Fill mode packs many entities under one type, so there's no single
+        # entity whose last_changed the checkbox could refer to.
+        show_check = self.query_one("#show_last_changed_check", Checkbox)
+        show_check.display = self._supports_last_changed() and not self._fill_mode
+        show_check.value = self._show_last_changed
 
     def _relevant_entities(self) -> list[dict]:
         widget_type = cast(str, self.query_one("#widget_type_select", Select).value)
@@ -308,6 +324,12 @@ class DashboardSlotPopup(PopupScreen):
             current_list_name=None,
             columns=["name", "entity_id"],
         )
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id != "show_last_changed_check":
+            return
+        self._show_last_changed = event.value
+        self._rebuild_preview()
 
     def on_search_input_search_changed(self, event: SearchInput.SearchChanged) -> None:
         event.stop()
@@ -365,6 +387,8 @@ class DashboardSlotPopup(PopupScreen):
                 slot["gauge_min"] = self._gauge_min
             if self._gauge_max is not None:
                 slot["gauge_max"] = self._gauge_max
+        if self._show_last_changed and self._supports_last_changed():
+            slot["show_last_changed"] = True
         preview.remove_children()
         preview.mount(build_slot_content(slot))
 
@@ -381,6 +405,8 @@ class DashboardSlotPopup(PopupScreen):
                         result[key] = float(raw)
                     except ValueError:
                         pass
+        if self._show_last_changed and widget_type in LAST_CHANGED_WIDGET_TYPES:
+            result["show_last_changed"] = True
         self.dismiss(result)
 
     def _entity_label(self, entity_id: str) -> str:

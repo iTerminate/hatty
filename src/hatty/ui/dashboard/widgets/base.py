@@ -5,10 +5,17 @@ from textual.containers import Vertical
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+from hatty.const import LAST_CHANGED_WIDGET_TYPES
 from hatty.types import Entity
+from hatty.ui.entity_table import format_relative
 
 if TYPE_CHECKING:
     from hatty.main import HACLI
+
+# How often an opted-in slot re-renders its "Nm ago" text on its own — nothing
+# else on the dashboard ticks on a clock, so slots showing elapsed time own a
+# small timer of their own (issue #33).
+ELAPSED_TICK_SECONDS = 30
 
 
 def slot_label(slot: dict | None) -> str:
@@ -32,13 +39,21 @@ class EntitySlotWidget(Vertical):
         background: $accent 30%;
         border: round $accent;
     }
+    EntitySlotWidget #slot_elapsed {
+        color: $text-muted;
+    }
     """
 
-    def __init__(self, entity_id: str | None):
+    def __init__(self, entity_id: str | None, *, show_last_changed: bool = False):
         super().__init__()
         self.entity_id = entity_id
+        self.show_last_changed = show_last_changed
+        self._last_changed = ""
 
     def on_mount(self) -> None:
+        if self.show_last_changed:
+            self.mount(Label("", id="slot_elapsed"))
+            self.set_interval(ELAPSED_TICK_SECONDS, self._refresh_elapsed)
         entity = self.app.find_entity(self.entity_id) if self.entity_id else None
         self.update_entity(entity)
 
@@ -50,7 +65,15 @@ class EntitySlotWidget(Vertical):
         if not self.entity_id or entity is None:
             self._render_empty()
             return
+        if self.show_last_changed:
+            self._last_changed = entity.get("last_changed", "")
+            self._refresh_elapsed()
         self._render_entity(entity, pending)
+
+    def _refresh_elapsed(self) -> None:
+        elapsed = self.query("#slot_elapsed")
+        if elapsed:
+            elapsed.first(Label).update(format_relative(self._last_changed))
 
     def _render_entity(self, entity: Entity, pending: str | None) -> None:
         raise NotImplementedError
@@ -70,12 +93,16 @@ class EntitySlotWidget(Vertical):
 # module-level import here would be circular.
 
 
+def _wants_elapsed(slot: dict) -> bool:
+    return bool(slot.get("show_last_changed")) and slot["widget_type"] in LAST_CHANGED_WIDGET_TYPES
+
+
 def _single_entity_factory(module_name: str, class_name: str):
     def factory(slot: dict):
         import importlib
 
         cls = getattr(importlib.import_module(module_name), class_name)
-        return cls(slot.get("entity_id"))
+        return cls(slot.get("entity_id"), show_last_changed=_wants_elapsed(slot))
 
     return factory
 
@@ -83,7 +110,12 @@ def _single_entity_factory(module_name: str, class_name: str):
 def _gauge_factory(slot: dict) -> Widget:
     from hatty.ui.dashboard.widgets.gauge import GaugeSlotWidget
 
-    return GaugeSlotWidget(slot.get("entity_id"), gauge_min=slot.get("gauge_min"), gauge_max=slot.get("gauge_max"))
+    return GaugeSlotWidget(
+        slot.get("entity_id"),
+        gauge_min=slot.get("gauge_min"),
+        gauge_max=slot.get("gauge_max"),
+        show_last_changed=_wants_elapsed(slot),
+    )
 
 
 def _panel_factory(slot: dict) -> Widget:

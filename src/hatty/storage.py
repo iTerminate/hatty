@@ -16,9 +16,11 @@ Shapes (see `_SCHEMA` for the actual columns):
 - `dashboards`: dict keyed by name, each `{rows, cols, slots: [...]}` — a flat
   list of `{row, col, widget_type, entity_id}` for occupied cells only. A
   `panel` slot carries `entity_ids` instead of `entity_id`; a `gauge` slot may
-  add `gauge_min`/`gauge_max`; any slot may add `row_span`/`col_span` (absent =
-  1); a `split` slot carries a `children` fragment — a nested `{rows, cols,
-  slots}` mini-grid whose own slots can't span or nest further.
+  add `gauge_min`/`gauge_max`; any single-entity slot may add
+  `show_last_changed` (true = show elapsed time since the entity's last state
+  change); any slot may add `row_span`/`col_span` (absent = 1); a `split` slot
+  carries a `children` fragment — a nested `{rows, cols, slots}` mini-grid
+  whose own slots can't span or nest further.
 - `saved_graphs`: dict keyed by name, each `{entity_ids, graph_type, hours,
   colors}` — `colors` (optional) maps entity_id → plotext color name.
 - `manual_lists`: a set of list names currently in manual-sort order rather
@@ -77,6 +79,7 @@ CREATE TABLE IF NOT EXISTS dashboard_slots (
     gauge_min REAL, gauge_max REAL,
     entity_ids TEXT,
     children TEXT,
+    show_last_changed INTEGER,
     PRIMARY KEY (dashboard, row, col)
 );
 CREATE TABLE IF NOT EXISTS saved_graphs (
@@ -154,6 +157,8 @@ class Storage:
         slot_columns = {r["name"] for r in self._db.execute("PRAGMA table_info(dashboard_slots)")}
         if "children" not in slot_columns:
             self._db.execute("ALTER TABLE dashboard_slots ADD COLUMN children TEXT")
+        if "show_last_changed" not in slot_columns:
+            self._db.execute("ALTER TABLE dashboard_slots ADD COLUMN show_last_changed INTEGER")
         dashboard_columns = {r["name"] for r in self._db.execute("PRAGMA table_info(dashboards)")}
         if "row_height" not in dashboard_columns:
             self._db.execute("ALTER TABLE dashboards ADD COLUMN row_height INTEGER")
@@ -242,7 +247,8 @@ class Storage:
             dashboards[row["name"]] = dash
         for row in self._db.execute(
             "SELECT dashboard, row, col, widget_type, entity_id, row_span, col_span, "
-            "gauge_min, gauge_max, entity_ids, children FROM dashboard_slots ORDER BY dashboard, row, col"
+            "gauge_min, gauge_max, entity_ids, children, show_last_changed "
+            "FROM dashboard_slots ORDER BY dashboard, row, col"
         ):
             dash = dashboards.get(row["dashboard"])
             if dash is None:
@@ -267,6 +273,8 @@ class Storage:
             children = _load_json(row["children"])
             if children is not None:
                 slot["children"] = children
+            if row["show_last_changed"]:
+                slot["show_last_changed"] = True
             dash["slots"].append(slot)
         return dashboards
 
@@ -340,8 +348,8 @@ class Storage:
             for slot in dash.get("slots", []):
                 self._db.execute(
                     "INSERT INTO dashboard_slots (dashboard, row, col, widget_type, entity_id, "
-                    "row_span, col_span, gauge_min, gauge_max, entity_ids, children) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "row_span, col_span, gauge_min, gauge_max, entity_ids, children, show_last_changed) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         name,
                         slot.get("row"),
@@ -354,6 +362,7 @@ class Storage:
                         slot.get("gauge_max"),
                         _dump_json(slot.get("entity_ids")),
                         _dump_json(slot.get("children")),
+                        1 if slot.get("show_last_changed") else None,
                     ),
                 )
 

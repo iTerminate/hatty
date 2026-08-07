@@ -155,6 +155,11 @@ WIDGET_TYPE_DOMAINS = {
     "weather": "weather",
 }
 
+# Widget types that can carry the per-slot "show_last_changed" option: every
+# single-entity widget. "graph" already plots a time axis; "panel"/"split" hold
+# many entities, so there is no single last_changed to show.
+LAST_CHANGED_WIDGET_TYPES = frozenset(WIDGET_TYPES) - {"graph", "panel"}
+
 # Entity table columns shown when the config carries no "columns" key.
 DEFAULT_COLUMNS = ["name", "value", "last_changed", "in_list"]
 

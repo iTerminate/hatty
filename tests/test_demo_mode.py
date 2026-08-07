@@ -24,6 +24,9 @@ async def test_demo_mode_boots_populated_offline():
         assert app.current_list_name == "Living Room"
         assert "Home" in app.dashboards
         assert "Temperatures" in app.saved_graphs
+        home_slots = app.dashboards["Home"]["slots"]
+        front_door_slot = next(s for s in home_slots if s["entity_id"] == "binary_sensor.front_door")
+        assert front_door_slot["show_last_changed"] is True
 
         # …and demo mode never opened the SQLite DB.
         assert app.storage is None

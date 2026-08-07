@@ -69,6 +69,8 @@ def test_round_trip_dashboards_with_spans_and_gauge_and_panel(tmp_path):
                  "gauge_min": 400, "gauge_max": 2000},
                 {"row": 2, "col": 1, "widget_type": "panel", "entity_id": None,
                  "entity_ids": ["light.a", "switch.b"]},
+                {"row": 1, "col": 2, "widget_type": "binary_sensor", "entity_id": "binary_sensor.door",
+                 "show_last_changed": True},
             ],
         }
     }
@@ -87,6 +89,10 @@ def test_round_trip_dashboards_with_spans_and_gauge_and_panel(tmp_path):
     # Panel entity_ids preserved.
     assert slots[(2, 1)]["entity_ids"] == ["light.a", "switch.b"]
     assert slots[(2, 1)]["entity_id"] is None
+    # show_last_changed round-trips when set...
+    assert slots[(1, 2)]["show_last_changed"] is True
+    # ...and stays absent (legacy shape) when never set.
+    assert "show_last_changed" not in slots[(0, 0)]
     s.close()
 
 
@@ -152,6 +158,42 @@ def test_children_column_added_to_pre_split_db(tmp_path):
     ]}}})
     loaded = s.load_all()["dashboards"]["Main"]
     assert loaded["slots"][0]["children"] == {"rows": 1, "cols": 2, "slots": []}
+    s.close()
+
+
+def test_show_last_changed_column_added_to_pre_elapsed_db(tmp_path):
+    # A DB created before the show_last_changed column existed must be migrated on connect.
+    import sqlite3
+
+    db = tmp_path / "hatty.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE dashboard_slots (
+            dashboard TEXT, row INTEGER, col INTEGER,
+            widget_type TEXT, entity_id TEXT,
+            row_span INTEGER, col_span INTEGER,
+            gauge_min REAL, gauge_max REAL,
+            entity_ids TEXT,
+            children TEXT,
+            PRIMARY KEY (dashboard, row, col)
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO dashboard_slots (dashboard, row, col, widget_type, entity_id, row_span, col_span) "
+        "VALUES ('Main', 0, 0, 'sensor', 'sensor.a', 1, 1)"
+    )
+    conn.commit()
+    conn.close()
+
+    s = _open(tmp_path)
+    s.save_all({"dashboards": {"Main": {"rows": 1, "cols": 1, "slots": [
+        {"row": 0, "col": 0, "widget_type": "sensor", "entity_id": "sensor.a", "show_last_changed": True},
+    ]}}})
+    loaded = s.load_all()["dashboards"]["Main"]
+    assert loaded["slots"][0]["show_last_changed"] is True
     s.close()
 
 

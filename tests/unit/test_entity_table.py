@@ -7,10 +7,10 @@ from textual.app import App, ComposeResult
 from hatty.ui.entity_table import (
     DEFAULT_COLUMNS,
     EntitiesTable,
-    _format_relative,
     entity_matches,
     entity_title,
     entity_unit,
+    format_relative,
     get_display_name,
     is_dead,
 )
@@ -276,30 +276,30 @@ def test_default_columns_constant():
 
 def test_format_relative_just_now():
     iso = datetime.now(timezone.utc).isoformat()
-    assert _format_relative(iso) == "just now"
+    assert format_relative(iso) == "just now"
 
 
 def test_format_relative_minutes():
     iso = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
-    assert _format_relative(iso) == "5m ago"
+    assert format_relative(iso) == "5m ago"
 
 
 def test_format_relative_hours():
     iso = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
-    assert _format_relative(iso) == "3h ago"
+    assert format_relative(iso) == "3h ago"
 
 
 def test_format_relative_days():
     iso = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-    assert _format_relative(iso) == "2d ago"
+    assert format_relative(iso) == "2d ago"
 
 
 def test_format_relative_empty_string():
-    assert _format_relative("") == ""
+    assert format_relative("") == ""
 
 
 def test_format_relative_invalid():
-    assert _format_relative("not-a-date") == "not-a-date"
+    assert format_relative("not-a-date") == "not-a-date"
 
 
 def test_entity_matches_by_entity_id():
