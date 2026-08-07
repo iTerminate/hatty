@@ -1,6 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.coordinate import Coordinate
-from textual.widgets import Button, ListView, Select, Static
+from textual.widgets import Button, Checkbox, ListView, Select, Static
 
 from hatty.ui.dashboard.screen import DashboardScreen, DashboardSlotWidget
 from hatty.ui.dashboard.slot_popup import DashboardSlotPopup
@@ -461,3 +461,96 @@ async def test_widget_preview_shown_in_panel_mode_on_wide_terminal(make_app, ope
         assert preview.display is True
         assert preview.query_one(PanelSlotWidget).entity_ids == ["switch.fan"]
         assert "Fan Switch" in _panel_list_labels(popup)
+
+
+async def test_assign_sensor_slot_with_show_last_changed_via_popup(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+
+        popup = app.screen
+        popup.query_one("#widget_type_select", Select).value = "sensor"
+        await pilot.pause()
+        popup.query_one("#btn_next_step").press()
+        await pilot.pause()
+
+        checkbox = popup.query_one("#show_last_changed_check", Checkbox)
+        assert checkbox.display
+        checkbox.value = True
+        await pilot.pause()
+
+        table = popup.query_one("#entity_picker_table")
+        table.jump_cursor_to_row_key("sensor.temperature")
+        table.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        slot = app.dashboards["Main"]["slots"][0]
+        assert slot["widget_type"] == "sensor"
+        assert slot["entity_id"] == "sensor.temperature"
+        assert slot["show_last_changed"] is True
+
+
+async def test_show_last_changed_checkbox_hidden_for_graph_and_panel(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+
+        popup = app.screen
+        select = popup.query_one("#widget_type_select", Select)
+
+        select.value = "graph"
+        await pilot.pause()
+        popup.query_one("#btn_next_step").press()
+        await pilot.pause()
+        assert not popup.query_one("#show_last_changed_check", Checkbox).display
+
+        await pilot.press("escape")  # back to type step
+        await pilot.pause()
+        select.value = "panel"
+        await pilot.pause()
+        popup.query_one("#btn_next_step").press()
+        await pilot.pause()
+        assert not popup.query_one("#show_last_changed_check", Checkbox).display
+
+
+async def test_show_last_changed_checkbox_prefilled_on_reopen(make_app):
+    config = {
+        **make_config(),
+        "lists": {},
+        "dashboards": {
+            "Main": {
+                "rows": 1,
+                "cols": 1,
+                "slots": [
+                    {
+                        "row": 0,
+                        "col": 0,
+                        "widget_type": "sensor",
+                        "entity_id": "sensor.temperature",
+                        "show_last_changed": True,
+                    }
+                ],
+            }
+        },
+    }
+    app = make_app(config_data=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+
+        popup = app.screen
+        popup.query_one("#btn_next_step").press()
+        await pilot.pause()
+
+        assert popup.query_one("#show_last_changed_check", Checkbox).value is True

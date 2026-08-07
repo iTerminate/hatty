@@ -641,7 +641,7 @@ class DashboardScreen(Screen):
         def callback(result: dict | None) -> None:
             if result is None:
                 return
-            extra = {k: result[k] for k in ("gauge_min", "gauge_max") if k in result}
+            extra = {k: result[k] for k in ("gauge_min", "gauge_max", "show_last_changed") if k in result}
             # Reassigning a slot keeps its footprint (child cells never span).
             if slot and parent is None:
                 for key in ("row_span", "col_span"):
