@@ -26,8 +26,10 @@ def enclosing_row(widget: Widget | None, row_ids: tuple[str, ...]) -> Widget | N
 
 
 def focus_within_row(row: Widget, focused: Widget, step: int) -> None:
-    """Cycle focus among `row`'s buttons, wrapping at the ends."""
-    buttons = list(row.query(Button))
+    """Cycle focus among `row`'s buttons, wrapping at the ends. Skips buttons
+    hidden via `.display` — light_screen/media_player_screen's rows never hide
+    a composed button, but DashboardSlotPopup's `#btn_entity_first` can be."""
+    buttons = [button for button in row.query(Button) if button.display]
     if not buttons:
         return
     index = next((i for i, button in enumerate(buttons) if button is focused), 0)

@@ -29,6 +29,14 @@ inert, since no slot widget defines a click/key handler of its own. It lives
 in a fixed pane to the right of the main column, shown only when the terminal
 is wide enough to fit both side by side (`preview_fits`, issue #11); on
 narrow terminals it's hidden outright rather than shuffled by step or type.
+
+`up`/`down` are a priority binding (issue #36) that always steps focus one
+field at a time, mirroring `light_screen.py`/`media_player_screen.py` — the
+entity table, the selected-entities list, and an open type dropdown keep
+their own up/down row cursor instead (released via `check_action`).
+`left`/`right` cycle within `#type_step_buttons` when one of its buttons is
+focused, else step focus like up/down; a focused `Input` or open dropdown
+keeps its own native left/right.
 """
 
 from typing import TYPE_CHECKING, cast
@@ -38,12 +46,13 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.events import Key
 from textual.timer import Timer
-from textual.widgets import Button, Checkbox, DataTable, Footer, Input, Label, ListItem, ListView, Select
+from textual.widgets import Button, Checkbox, DataTable, Footer, Input, Label, ListItem, ListView, OptionList, Select
 
 from hatty.const import LAST_CHANGED_WIDGET_TYPES, WIDGET_TYPES
 from hatty.ui.dashboard.widget_match import compatible_widget_types, entity_matches_widget_type
 from hatty.ui.dashboard.widgets.base import build_slot_content
 from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_name
+from hatty.ui.focus_nav import enclosing_row, focus_within_row, nav_focus
 from hatty.ui.popup_base import PopupScreen
 from hatty.ui.search_input import SearchInput
 
@@ -73,6 +82,11 @@ class DashboardSlotPopup(PopupScreen):
 
     AUTO_FOCUS = "#widget_type_select"
 
+    # The only row where left/right should cycle within it (wrapping) and up/down
+    # should jump out as a block, rather than stepping through each button (issue #36,
+    # mirrors light_screen.py/media_player_screen.py's _BUTTON_ROW_IDS convention).
+    BUTTON_ROW_IDS = ("type_step_buttons",)
+
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
         Binding("q", "cancel", "Cancel", show=False),
@@ -84,6 +98,11 @@ class DashboardSlotPopup(PopupScreen):
         Binding("shift+up", "reorder_selected(-1)", "Move Up", show=False),
         Binding("shift+down", "reorder_selected(1)", "Move Down", show=False),
         Binding("delete", "remove_selected", "Remove", show=False),
+        # Priority so up/down always move focus instead of being swallowed by the
+        # entity table's/selected-list's own cursor; check_action releases it while
+        # those (or an open type dropdown) are focused so their cursor keeps working.
+        Binding("up", "nav_focus(-1)", "Focus Up", show=False, priority=True),
+        Binding("down", "nav_focus(1)", "Focus Down", show=False, priority=True),
     ]
 
     DEFAULT_CSS = """
@@ -505,47 +524,42 @@ class DashboardSlotPopup(PopupScreen):
                 self._update_mode_visibility()
         self._rebuild_preview()
 
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        if action == "nav_focus":
+            # Let the entity table, the selected-entities list, and an open type
+            # dropdown's overlay keep their own up/down row cursor.
+            return not isinstance(self.focused, (DataTable, ListView, OptionList))
+        return True
+
+    def action_nav_focus(self, direction: int) -> None:
+        nav_focus(self, self.BUTTON_ROW_IDS, direction)
+
     def on_key(self, event: Key) -> None:
-        if self._step == "type":
-            self._handle_type_step_key(event)
-        elif self._step == "entity" and self._is_multi_add():
-            focused = self.focused
+        focused = self.focused
+        # Multi-add's search <-> Done shortcut (issue #254): the entity table below
+        # keeps its own row cursor, so down can't reach Done from the search box.
+        if self._step == "entity" and self._is_multi_add():
             if event.key == "right" and focused is self.query_one("#entity_search_input"):
                 self.set_focus(self.query_one("#btn_panel_done"))
                 event.prevent_default()
+                return
             elif event.key == "left" and focused is self.query_one("#btn_panel_done"):
                 self.set_focus(self.query_one("#entity_search_input"))
                 event.prevent_default()
-
-    def _handle_type_step_key(self, event: Key) -> None:
-        select = self.query_one("#widget_type_select")
-        next_button = self.query_one("#btn_next_step")
-        focused = self.focused
-        # No third stop once "Pick Entity First" is gone: fill mode never
-        # composes it, and entity-first's revisited type step hides it.
-        entity_first_button = None if self._fill_mode or self._entity_first else self.query_one("#btn_entity_first")
-        if entity_first_button is None:
-            if event.key == "right" and focused is select:
-                self.set_focus(next_button)
-                event.prevent_default()
-            elif event.key == "left" and focused is next_button:
-                self.set_focus(select)
-                event.prevent_default()
+                return
+        # A focused Input or an open type dropdown's overlay keep their own native
+        # left/right (cursor movement, option highlight); everything else either
+        # cycles within its enclosing button row or steps focus by one field.
+        if event.key not in ("left", "right") or isinstance(focused, (Input, OptionList)):
             return
-        if event.key == "right":
-            if focused is select:
-                self.set_focus(next_button)
-                event.prevent_default()
-            elif focused is next_button:
-                self.set_focus(entity_first_button)
-                event.prevent_default()
+        row = enclosing_row(focused, self.BUTTON_ROW_IDS)
+        if row is not None and focused is not None:
+            focus_within_row(row, focused, 1 if event.key == "right" else -1)
         elif event.key == "left":
-            if focused is entity_first_button:
-                self.set_focus(next_button)
-                event.prevent_default()
-            elif focused is next_button:
-                self.set_focus(select)
-                event.prevent_default()
+            self.focus_previous()
+        else:
+            self.focus_next()
+        event.stop()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn_next_step":

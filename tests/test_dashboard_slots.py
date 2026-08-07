@@ -554,3 +554,114 @@ async def test_show_last_changed_checkbox_prefilled_on_reopen(make_app):
         await pilot.pause()
 
         assert popup.query_one("#show_last_changed_check", Checkbox).value is True
+
+
+async def test_slot_popup_down_from_type_select_reaches_next_button(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+        assert popup.focused is popup.query_one("#widget_type_select", Select)
+
+        await pilot.press("down")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#btn_next_step", Button)
+
+
+async def test_slot_popup_left_right_cycle_within_type_step_buttons(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.set_focus(popup.query_one("#btn_next_step", Button))
+        await pilot.pause()
+
+        await pilot.press("right")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#btn_entity_first", Button)
+
+        # Wraps back within the row rather than leaving it (issue #36).
+        await pilot.press("right")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#btn_next_step", Button)
+
+
+async def test_slot_popup_up_from_type_step_buttons_returns_to_select(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.set_focus(popup.query_one("#btn_entity_first", Button))
+        await pilot.pause()
+
+        await pilot.press("up")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#widget_type_select", Select)
+
+
+async def test_slot_popup_down_walks_from_search_to_entity_table(make_app, open_dashboard):
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#widget_type_select", Select).value = "sensor"
+        await pilot.pause()
+        popup.query_one("#btn_next_step", Button).press()
+        await pilot.pause()
+        popup.query_one("#entity_search_input", SearchInput).focus()
+        await pilot.pause()
+
+        # "sensor" isn't a gauge, so #gauge_bounds_row is hidden and skipped.
+        await pilot.press("down")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#show_last_changed_check", Checkbox)
+
+        await pilot.press("down")
+        await pilot.pause()
+        assert popup.focused is popup.query_one("#entity_picker_table", EntitiesTable)
+
+
+async def test_slot_popup_up_down_move_gauge_cursor_within_entity_table(make_app, open_dashboard):
+    # The entity table keeps its own up/down row cursor rather than losing
+    # focus (issue #36) — check_action releases nav_focus while it's focused.
+    app = make_app()
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("E")  # edit mode
+        await pilot.press("a")
+        await pilot.pause()
+        popup = app.screen
+        assert isinstance(popup, DashboardSlotPopup)
+
+        popup.query_one("#widget_type_select", Select).value = "sensor"
+        await pilot.pause()
+        popup.query_one("#btn_next_step", Button).press()
+        await pilot.pause()
+        table = popup.query_one("#entity_picker_table", EntitiesTable)
+        table.focus()
+        await pilot.pause()
+        start_row = table.cursor_coordinate.row
+
+        await pilot.press("down")
+        await pilot.pause()
+        assert popup.focused is table
+        assert table.cursor_coordinate.row == start_row + 1
