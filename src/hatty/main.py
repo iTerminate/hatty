@@ -1,6 +1,6 @@
 # hatty — MIT License. See LICENSE file for details.
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -42,8 +42,9 @@ from hatty.controllers.connection import ConnectionController
 from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
 from hatty.controllers.lists import ListController
+from hatty.controllers.logbook import LogbookController
 from hatty.controllers.notifications import NotificationController
-from hatty.logbook import LogEntry, entry_when_iso, is_continuous_sensor, normalize_entries
+from hatty.logbook import LogEntry
 from hatty.service_calls import _CONTROL_SERVICE_BUILDERS
 from hatty.types import Entity
 from hatty.ui.activity_log_panel import ActivityLogPanel
@@ -52,12 +53,10 @@ from hatty.ui.config_screen import ConfigScreen
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.controls.control_popup import EntityControlPopup
 from hatty.ui.dashboard.screen import DashboardScreen
-from hatty.ui.device_tree_screen import device_display_name
 from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_name
 from hatty.ui.graph.entity_detail import EntityDetailPanel
 from hatty.ui.help_popup import HelpPopup
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from hatty.ui.log_entry_popup import LogEntryPopup
 from hatty.ui.rename_entity_popup import RenameEntityPopup
 from hatty.ui.search_input import SearchInput
 
@@ -105,9 +104,8 @@ class HACLI(App):
         Binding("c", "show_column_config", "Columns", show=False),
         Binding("a", "toggle_activity_log", "Activity Log", show=False),
         Binding("i", "toggle_entity_log", "Entity Log", show=False),
-        Binding("v", "cycle_log_scope", "Log Scope", show=False),
+        Binding("v", "show_log_scope", "Log Scope", show=False),
         Binding("f", "maximize_log", "Maximize Log", show=False),
-        Binding("V", "show_log_entries", "Log Entry Text", show=False),
         Binding("left", "log_older", "Older Events", show=False, priority=True),
         Binding("right", "log_newer", "Newer Events", show=False, priority=True),
         Binding("g", "toggle_graph", "Graph", show=False),
@@ -145,6 +143,7 @@ class HACLI(App):
         self.graph_ctl = GraphController(self)
         self.conn_ctl = ConnectionController(self)
         self.notify_ctl = NotificationController(self)
+        self.log_ctl = LogbookController(self)
 
         self.all_entities: list = []
         self.entity_registry: list = []
@@ -158,19 +157,6 @@ class HACLI(App):
         self.columns = list(DEFAULT_COLUMNS)
         self.ha_url = ""
         self.current_view = "entities"
-        self._log_entity_ids: set[str] = set()
-        self._log_query_ids: list[str] = []
-        self._log_device_ids: list[str] = []
-        self._log_generation: int = 0
-        # The `v`-cycled scope: _log_base is where the log was opened from
-        # (a fixed entity set, or the entity table), _log_base_ids/_log_base_label
-        # are a snapshot taken at open time, and _log_view is the current step.
-        self._log_base: str = self._LOG_BASE_TABLE
-        self._log_base_ids: list[str] = []
-        self._log_base_label: str = ""
-        self._log_view: str = "base"
-        self._log_title_base: str = ""
-        self._log_end: datetime | None = None
         self._update_pending = False
         self.pending_call_status: dict[str, str] = {}
         self._pending_call_timers: dict[str, Timer] = {}
@@ -204,6 +190,19 @@ class HACLI(App):
     @property
     def log_hours(self) -> float:
         return self.app_config.get(CONFIG_KEY_LOG_HOURS, DEFAULT_LOG_HOURS)
+
+    # ── LogHost hooks (LogbookController) — see controllers/logbook.py ──────
+    LOG_PANEL_ID: str = "activity_log_panel"
+    LOG_SUPPORTS_LIVE: bool = True
+
+    def log_window(self, session) -> tuple[float, "datetime | None"]:
+        return self.log_hours, session.end
+
+    def log_title_suffix(self, session) -> str:
+        return self.log_ctl.range_suffix(session)
+
+    def on_log_entries(self, entries: list[LogEntry]) -> None:
+        pass
 
     # ── Domain state lives on the controllers; these proxies preserve the app's
     #    historical surface — screens and tests read *and assign* these directly.
@@ -767,8 +766,8 @@ class HACLI(App):
             self.notify("No graph available for this entity type.", severity="warning")
             return
 
-        if self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible"):
-            self._close_log_panel()
+        if self.log_ctl.is_open(self):
+            self.log_ctl.close(self)
 
         self.graph_ctl.open_graph_for(entity_id, entity)
 
@@ -810,74 +809,18 @@ class HACLI(App):
 
         self.spawn(_load_and_refresh())
 
-    def _close_log_panel(self) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        log_panel.remove_class("-visible")
-        log_panel.remove_class("-maximized")
-        self._log_entity_ids.clear()
-        self._log_query_ids = []
-        self._log_device_ids = []
-        self._log_base_ids = []
-        self._log_view = "base"
-        self._log_end = None
-        self.spawn(self.client.unsubscribe_logbook())
-        self.refresh_bindings()
-
     def action_maximize_log(self) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        if not log_panel.has_class("-visible"):
+        if not self.log_ctl.is_open(self):
             return
-        log_panel.set_maximized(not log_panel.has_class("-maximized"))
-
-    def action_show_log_entries(self) -> None:
-        """`V` — browse the open log's retained entries and read a
-        truncated line's full text (issue #23)."""
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        if not log_panel.has_class("-visible"):
-            return
-        entries = log_panel.entries
-        if not entries:
-            self.notify("No activity log entries to show.", title="Activity Log")
-            return
-        self.push_screen(LogEntryPopup(entries, log_panel.title_text))
+        maximizing = not log_panel.has_class("-maximized")
+        log_panel.set_hint(self._LOG_HINT_MAXIMIZED if maximizing else self._LOG_HINT)
+        log_panel.set_maximized(maximizing)
+        if not maximizing:
+            self.query_one("#entities_table", EntitiesTable).focus()
 
-    _LOG_HINT = "v scope · f maximize · V full text · ←/→ older/newer · T timeframe · a/i close"
-
-    # `v`'s activity-log scope cycle (issue #27, mirroring the fullscreen
-    # graph's `v` from issue #21). _log_base names where the open log's base
-    # entity set came from: a fixed set (the inline graph's lines, or `i`'s
-    # single entity) only ever widens through the first two views; the
-    # entity table (an active list, or the no-list "first 50" fallback) also
-    # offers the two cursor-scoped views.
-    _LOG_BASE_ENTITIES = "entities"
-    _LOG_BASE_TABLE = "table"
-    _LOG_VIEWS_ENTITIES = ("base", "base_devices")
-    _LOG_VIEWS_TABLE = (*_LOG_VIEWS_ENTITIES, "cursor", "cursor_device")
-    _LOG_VIEW_TITLES = {
-        "base": "Activity Log",
-        "base_devices": "Device Log",
-        "cursor": "Activity Log",
-        "cursor_device": "Device Log",
-    }
-
-    @staticmethod
-    def _format_log_hours(hours: float) -> str:
-        return f"{int(hours)}h" if hours == int(hours) else f"{hours:.1f}h"
-
-    def _log_range_suffix(self) -> str:
-        """`(last Xh)` while live, or the paged-back window's full start–end
-        range — mirrors the fullscreen graph's window-status suffix."""
-        from hatty.ui.graph.plot_time import ts_to_full
-
-        if self._log_end is None:
-            return f"  (last {self._format_log_hours(self.log_hours)})"
-        end = self._log_end
-        start = end - timedelta(hours=self.log_hours)
-        return f"  ({ts_to_full(start.isoformat())} – {ts_to_full(end.isoformat())})"
-
-    def _set_log_title(self) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        log_panel.set_title(self._log_title_base + self._log_range_suffix())
+    _LOG_HINT = "v scope · f maximize · ←/→ older/newer · T timeframe · a/i close"
+    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · T timeframe"
 
     def _graph_entity_ids(self) -> list[str]:
         """The graphed entity plus its `+` comparison lines, primary first."""
@@ -899,192 +842,32 @@ class HACLI(App):
             label += f" +{len(entity_ids) - 1} more"
         return label
 
-    def _set_log_scope(self, entity_ids: list[str], title: str, device_ids: list[str] | None = None) -> None:
-        """Point the open panel at a new scope and refetch, leaving the paged
-        window (_log_end) and the maximized state alone — `v` cycles scope in
-        place, unlike _open_log_panel, which (re)opens from scratch."""
-        self._log_entity_ids = set(entity_ids)
-        self._log_query_ids = list(entity_ids)
-        self._log_device_ids = list(device_ids) if device_ids else []
-        self._log_title_base = title
-        self.query_one("#activity_log_panel", ActivityLogPanel).clear()
-        self._reload_log()
-
-    def _open_log_panel(
-        self,
-        entity_ids: list[str],
-        title: str,
-        device_ids: list[str] | None = None,
-        *,
-        base: str = _LOG_BASE_TABLE,
-        base_ids: list[str] | None = None,
-        base_label: str = "",
-    ) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        self._log_end = None
-        self._log_base = base
-        self._log_base_ids = list(base_ids) if base_ids is not None else list(entity_ids)
-        self._log_base_label = base_label
-        self._log_view = "base"
-        log_panel.set_hint(self._LOG_HINT)
-        log_panel.remove_class("-maximized")
-        log_panel.add_class("-visible")
-        self.refresh_bindings()
-        self._set_log_scope(entity_ids, title, device_ids)
-
-    def _reload_log(self) -> None:
-        self._log_generation += 1
-        current_gen = self._log_generation
-        self._set_log_title()
-        self.spawn(self._load_activity_log(self._log_query_ids, current_gen, self._log_device_ids))
-        self.spawn(self._resync_log_subscription())
-
-    async def _resync_log_subscription(self) -> None:
-        """Realign the live logbook/event_stream subscription with the panel's
-        current scope/live-ness (issue #19) — called on every open, page, and
-        timeframe change, so a stale subscription never survives a scope
-        change. Always unsubscribes first: the real client allocates a fresh
-        WS id per subscribe, so an old one would otherwise leak server-side."""
-        await self.client.unsubscribe_logbook()
-        if self._log_end is None:
-            panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-            if panel.has_class("-visible"):
-                await self.client.subscribe_logbook(self._log_query_ids, self._log_device_ids)
-
     def action_log_older(self) -> None:
-        now = datetime.now(timezone.utc)
-        self._log_end = (self._log_end or now) - timedelta(hours=self.log_hours)
-        self._reload_log()
+        self.log_ctl.page(self, -1)
 
     def action_log_newer(self) -> None:
-        if self._log_end is None:
+        self.log_ctl.page(self, 1)
+
+    def action_show_log_scope(self) -> None:
+        """`v` — preview and pick the open log's scope (issue #38, replacing
+        the old blind cycle from issue #27). check_action gates this off
+        while the log is closed."""
+        from hatty.ui.log_scope_popup import LogScopePopup
+
+        session = self.log_ctl.session_for(self)
+        if session is None:
             return
-        now = datetime.now(timezone.utc)
-        new_end = self._log_end + timedelta(hours=self.log_hours)
-        self._log_end = None if new_end >= now else new_end
-        self._reload_log()
+        entity_names, device_names = self.log_ctl.display_names()
+        resolved = self.log_ctl.resolved_options(self)
 
-    # A device log covering a whole list can expand to many sibling entities; cap
-    # the set so a single logbook GET's entity= param can't blow up.
-    _DEVICE_LOG_MAX_ENTITIES = 200
-    # Every device_id widens the WS logbook query's event-type set (HA's
-    # async_determine_event_types), making device count the expensive axis —
-    # cap it independently of the entity cap above.
-    _DEVICE_LOG_MAX_DEVICES = 50
+        def callback(result: str | None) -> None:
+            self.log_ctl.handle_scope_popup_result(self, result)
 
-    def _cap_log_scope(self, entity_ids: list[str], device_ids: list[str]) -> tuple[list[str], list[str]]:
-        """Truncate a widened (entity_ids, device_ids) pair to the caps above,
-        notifying once per truncation — shared by every device-scoped view."""
-        if len(entity_ids) > self._DEVICE_LOG_MAX_ENTITIES:
-            entity_ids = entity_ids[: self._DEVICE_LOG_MAX_ENTITIES]
-            self.notify(
-                f"Showing device log for the first {self._DEVICE_LOG_MAX_ENTITIES} entities.",
-                title="Device Log",
-            )
-        if len(device_ids) > self._DEVICE_LOG_MAX_DEVICES:
-            device_ids = device_ids[: self._DEVICE_LOG_MAX_DEVICES]
-            self.notify(
-                f"Showing device log for the first {self._DEVICE_LOG_MAX_DEVICES} devices.",
-                title="Device Log",
-            )
-        return entity_ids, device_ids
-
-    def _get_device_entity_ids(self, entity_id: str) -> tuple[list[str], str, str | None]:
-        """Sibling entity_ids sharing entity_id's device, its display label,
-        and the device_id itself (None when the entity has no device — the
-        WS logbook query then falls back to entity-only scope)."""
-        entity = self.find_entity(entity_id)
-        label = get_display_name(entity) if entity else entity_id
-
-        reg_entry = next((e for e in self.entity_registry if e.get("entity_id") == entity_id), None)
-        device_id = reg_entry.get("device_id") if reg_entry else None
-
-        if not device_id:
-            return ([entity_id], label, None)
-
-        siblings = [
-            e["entity_id"] for e in self.entity_registry if e.get("device_id") == device_id and e.get("entity_id")
-        ]
-        if not siblings:
-            siblings = [entity_id]
-
-        return (siblings, label, device_id)
-
-    def _device_ids_for_entities(self, entity_ids: list[str]) -> list[str]:
-        """Distinct device_ids backing any of entity_ids, order-preserving —
-        used by both surfaces' `v`-cycled device-scoped event log views
-        (issue #18, #21, #27)."""
-        reg_device = {e.get("entity_id"): e.get("device_id") for e in self.entity_registry}
-        device_ids: list[str] = []
-        seen: set[str] = set()
-        for entity_id in entity_ids:
-            device_id = reg_device.get(entity_id)
-            if device_id and device_id not in seen:
-                seen.add(device_id)
-                device_ids.append(device_id)
-        return device_ids
-
-    def _device_log_title(self, prefix: str, label: str, device_ids: list[str]) -> str:
-        suffix = f" ({len(device_ids)} devices)" if len(device_ids) > 1 else ""
-        return f"{prefix} — {label}{suffix}"
-
-    def _log_views(self) -> tuple[str, ...]:
-        """The `v` cycle for the open log's base — the table base additionally
-        offers the two cursor-scoped views (issue #27)."""
-        return self._LOG_VIEWS_TABLE if self._log_base == self._LOG_BASE_TABLE else self._LOG_VIEWS_ENTITIES
-
-    def _log_view_scope(self, view: str) -> tuple[list[str], list[str], str] | None:
-        """(entity_ids, device_ids, title) for one step of the `v` cycle, or
-        None if it can't resolve right now (a cursor view with no selected
-        row) — action_cycle_log_scope skips over a None step."""
-        base_ids = list(self._log_base_ids)
-        label = self._log_base_label
-        title_prefix = self._LOG_VIEW_TITLES[view]
-
-        if view == "base":
-            return base_ids, [], f"{title_prefix} — {label}"
-        if view == "base_devices":
-            device_ids = self._device_ids_for_entities(base_ids)
-            entity_ids, device_ids = self._cap_log_scope(base_ids, device_ids)
-            return entity_ids, device_ids, self._device_log_title(title_prefix, label, device_ids)
-
-        entity_id = self._selected_entity_id()
-        if not entity_id:
-            return None
-        if view == "cursor":
-            entity = self.find_entity(entity_id)
-            cursor_label = get_display_name(entity) if entity else entity_id
-            return [entity_id], [], f"{title_prefix} — {cursor_label}"
-        if view == "cursor_device":
-            entity_ids, cursor_label, device_id = self._get_device_entity_ids(entity_id)
-            if not device_id:
-                self.notify(f"No device found for {entity_id}. Showing single entity log.", title="Device Log")
-            return entity_ids, [device_id] if device_id else [], f"{title_prefix} — {cursor_label}"
-        return None
-
-    def action_cycle_log_scope(self) -> None:
-        """`v` — advance the open log's scope one step, wrapping (issue #27,
-        mirroring the fullscreen graph's `v`, issue #21). A scope change, not
-        a reopen: the paged window and the maximized state survive. Views
-        that can't resolve right now are skipped. check_action gates this
-        off while the log is closed."""
-        views = self._log_views()
-        index = views.index(self._log_view)
-        for step in range(1, len(views) + 1):
-            view = views[(index + step) % len(views)]
-            scope = self._log_view_scope(view)
-            if scope is None:
-                continue
-            entity_ids, device_ids, title = scope
-            self._log_view = view
-            self._set_log_scope(entity_ids, title, device_ids)
-            return
+        self.push_screen(LogScopePopup(resolved, session.option_id, entity_names, device_names), callback)
 
     def action_toggle_activity_log(self) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-
-        if log_panel.has_class("-visible"):
-            self._close_log_panel()
+        if self.log_ctl.is_open(self):
+            self.log_ctl.close(self)
             return
 
         graph_ids = self._open_graph_log_ids()
@@ -1093,19 +876,16 @@ class HACLI(App):
 
         if graph_ids:
             label = self._log_label_for_ids(graph_ids)
-            self._open_log_panel(
-                graph_ids,
-                f"Activity Log — {label}",
-                base=self._LOG_BASE_ENTITIES,
-                base_ids=graph_ids,
-                base_label=label,
-            )
+            options = [
+                self.log_ctl.base_option("entities", label, graph_ids, with_devices=False),
+                self.log_ctl.base_option("entities_devices", label, graph_ids, with_devices=True),
+            ]
+            self.log_ctl.open(self, options=options, option_id="entities", hint=self._LOG_HINT)
             return
 
         if self.current_list_name:
             entity_ids = list(self.entity_lists.get(self.current_list_name, []))
             base_label = self.current_list_name
-            title = f"Activity Log — {base_label}"
         else:
             entity_ids = [e["entity_id"] for e in self.all_entities]
             if len(entity_ids) > 50:
@@ -1115,19 +895,22 @@ class HACLI(App):
                     title="Activity Log",
                 )
             base_label = "All Entities"
-            title = "Activity Log — All Entities" if entity_ids else "Activity Log"
 
         if not entity_ids:
             self.notify("No entities to log. Select a list or add entities.", severity="warning")
             return
 
-        self._open_log_panel(entity_ids, title, base=self._LOG_BASE_TABLE, base_label=base_label)
+        options = [
+            self.log_ctl.base_option("list", base_label, entity_ids, with_devices=False),
+            self.log_ctl.base_option("list_devices", base_label, entity_ids, with_devices=True),
+            self.log_ctl.cursor_option("cursor", self._selected_entity_id, with_device=False),
+            self.log_ctl.cursor_option("cursor_device", self._selected_entity_id, with_device=True),
+        ]
+        self.log_ctl.open(self, options=options, option_id="list", hint=self._LOG_HINT)
 
     def action_toggle_entity_log(self) -> None:
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-
-        if log_panel.has_class("-visible"):
-            self._close_log_panel()
+        if self.log_ctl.is_open(self):
+            self.log_ctl.close(self)
             return
 
         graph_ids = self._open_graph_log_ids()
@@ -1142,13 +925,11 @@ class HACLI(App):
         entity = self.find_entity(entity_id)
         label = get_display_name(entity) if entity else entity_id
 
-        self._open_log_panel(
-            [entity_id],
-            f"Activity Log — {label}",
-            base=self._LOG_BASE_ENTITIES,
-            base_ids=[entity_id],
-            base_label=label,
-        )
+        options = [
+            self.log_ctl.base_option("entities", label, [entity_id], with_devices=False),
+            self.log_ctl.base_option("entities_devices", label, [entity_id], with_devices=True),
+        ]
+        self.log_ctl.open(self, options=options, option_id="entities", hint=self._LOG_HINT)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
         if self._detail_entity_id is None:
@@ -1174,90 +955,6 @@ class HACLI(App):
         if entity_id:
             self.toggle_or_open_controls(entity_id)
 
-    def normalize_log_entries(self, raw: list[dict]) -> list[LogEntry]:
-        """Raw REST/WS logbook entries -> the single shape the log panel and
-        the graph's event marks consume. WS entries have an epoch `when` and
-        no `name` on state entries (issue #17) — this resolves both."""
-        entity_names = {e["entity_id"]: get_display_name(e) for e in self.all_entities if e.get("entity_id")}
-        device_classes = {
-            e["entity_id"]: e.get("attributes", {}).get("device_class") or ""
-            for e in self.all_entities
-            if e.get("entity_id")
-        }
-        units = {
-            e["entity_id"]: e.get("attributes", {}).get("unit_of_measurement") or ""
-            for e in self.all_entities
-            if e.get("entity_id")
-        }
-        for reg in self.entity_registry:
-            entity_id = reg.get("entity_id")
-            if entity_id and entity_id not in entity_names:
-                entity_names[entity_id] = reg.get("name") or reg.get("original_name") or entity_id
-            if entity_id and not device_classes.get(entity_id):
-                device_classes[entity_id] = reg.get("device_class") or reg.get("original_device_class") or ""
-        device_names = {d["id"]: device_display_name(d) for d in self.device_registry if d.get("id")}
-        return normalize_entries(raw, entity_names, device_names, device_classes, units)
-
-    def _continuous_log_ids(self, entity_ids: list[str]) -> list[str]:
-        """The subset of entity_ids that are continuous sensors (issue #29)
-        — HA's logbook silently excludes these, so fetch_log_entries fills
-        the gap with history-derived entries. Order-preserving."""
-        result = []
-        for entity_id in entity_ids:
-            entity = self.find_entity(entity_id)
-            if entity and is_continuous_sensor(entity_id, entity.get("attributes", {})):
-                result.append(entity_id)
-        return result
-
-    async def fetch_log_entries(
-        self,
-        entity_ids: list[str],
-        hours: float,
-        end: datetime | None = None,
-        device_ids: list[str] | None = None,
-    ) -> list[dict] | None:
-        """The one seam both log surfaces call instead of client.fetch_logbook
-        directly — merges in history-derived entries for continuous sensors
-        (issue #29), which HA's own logbook never returns. Failure semantics
-        of the base fetch are preserved: a None here still means "ask HA
-        failed", not "nothing to show"."""
-        entries = await self.client.fetch_logbook(entity_ids, hours=hours, end=end, device_ids=device_ids)
-        continuous_ids = self._continuous_log_ids(entity_ids)
-        if not continuous_ids:
-            return entries
-
-        semaphore = asyncio.Semaphore(8)
-
-        async def _fetch(entity_id: str) -> list[dict]:
-            async with semaphore:
-                result = await self.client.fetch_state_log(entity_id, hours=hours, end=end)
-                return result or []
-
-        synthesized: list[dict] = []
-        for rows in await asyncio.gather(*(_fetch(eid) for eid in continuous_ids)):
-            synthesized.extend(rows)
-        if not synthesized:
-            return entries
-
-        merged = list(entries or []) + synthesized
-        merged.sort(key=lambda e: entry_when_iso(e.get("when")))
-        return merged
-
-    async def _load_activity_log(
-        self, entity_ids: list[str], generation: int, device_ids: list[str] | None = None
-    ) -> None:
-        entries = await self.fetch_log_entries(
-            entity_ids, hours=self.log_hours, end=self._log_end, device_ids=device_ids
-        )
-        panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        if not panel.has_class("-visible") or self._log_generation != generation:
-            return
-        if entries is None:
-            self.notify("Failed to load activity log from Home Assistant.", title="Activity Log", severity="error")
-            panel.load_history([])
-        else:
-            panel.load_history(self.normalize_log_entries(entries))
-
     def action_cycle_graph_type(self) -> None:
         panel = self.query_one("#detail_panel", EntityDetailPanel)
         panel.cycle_graph_type()
@@ -1271,7 +968,7 @@ class HACLI(App):
         # The two panels are mutually exclusive (opening either closes the
         # other), so `T` unambiguously targets whichever is open — the
         # activity log's timeframe when it's visible, the graph's otherwise.
-        if self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible"):
+        if self.log_ctl.is_open(self):
             self._show_log_duration_popup()
             return
 
@@ -1296,7 +993,7 @@ class HACLI(App):
                 return
             self.app_config[CONFIG_KEY_LOG_HOURS] = hours
             self.persist()
-            self._reload_log()
+            self.log_ctl.reload(self)
 
         self.push_screen(GraphDurationPopup(current, title="Activity Log Timeframe"), callback)
 
@@ -1444,17 +1141,10 @@ class HACLI(App):
         elif action == "add_to_graph":
             panel = self.query_one("#detail_panel", EntityDetailPanel)
             return panel.has_class("-visible")
-        elif action == "maximize_log":
-            return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-        elif action == "show_log_entries":
-            return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-        elif action == "cycle_log_scope":
-            return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
-        elif action == "log_older":
-            return self.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
+        elif action in ("maximize_log", "show_log_scope", "log_older"):
+            return self.log_ctl.is_open(self)
         elif action == "log_newer":
-            log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-            return log_panel.has_class("-visible") and self._log_end is not None
+            return self.log_ctl.is_open(self) and self.log_ctl.paged_back(self)
         elif action == "toggle_graph":
             panel = self.query_one("#detail_panel", EntityDetailPanel)
             if panel.has_class("-visible"):
@@ -1477,7 +1167,9 @@ class HACLI(App):
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if log_panel.has_class("-maximized"):
             # First escape restores the normal-width panel; a further escape/toggle closes it.
+            log_panel.set_hint(self._LOG_HINT)
             log_panel.set_maximized(False)
+            self.query_one("#entities_table", EntitiesTable).focus()
             return
 
         search_input = self.query_one("#search_input", SearchInput)

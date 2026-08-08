@@ -111,9 +111,10 @@ async def test_demo_mode_serves_devices_and_areas_and_populates_tree():
 
 
 async def test_demo_mode_device_log_shows_a_device_event():
-    """`i` then `v` on the demo Zigbee button's battery entity surfaces its
-    device events (issue #17) — proof --demo exercises the same WS-shaped
-    normalization path a real logbook/get_events response would."""
+    """`i` then `v` (the scope popup, issue #38) on the demo Zigbee button's
+    battery entity surfaces its device events (issue #17) — proof --demo
+    exercises the same WS-shaped normalization path a real logbook/
+    get_events response would."""
     app = HACLI(demo=True)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -130,7 +131,9 @@ async def test_demo_mode_device_log_shows_a_device_event():
         await pilot.pause()
         await pilot.press("i")  # opens the entity-scoped view
         await pilot.pause()
-        await pilot.press("v")  # advances to the device view, adding device_ids
+        await pilot.press("v")  # opens the scope popup
+        await pilot.pause()
+        await pilot.press("down", "enter")  # picks the device-widened option, adding device_ids
         await pilot.pause()
 
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)

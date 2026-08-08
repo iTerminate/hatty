@@ -34,10 +34,12 @@ User Keybindings → HACLI (main.py) → HAClient (client.py) ↔ Home Assistant
                          _update_entities_display() → EntitiesTable
 ```
 
-Domain state lives on four controllers instantiated in `HACLI.__init__`, each holding one slice and
+Domain state lives on controllers instantiated in `HACLI.__init__`, each holding one slice and
 taking an injected app reference: `controllers/lists.py` (`app.list_ctl`), `dashboards.py`
 (`app.dash_ctl`), `graphs.py` (`app.graph_ctl`), `connection.py` (`app.conn_ctl` — the HA websocket
-message pump, `handle_ha_message`/`_HA_MESSAGE_HANDLERS`). **`HACLI` keeps its old attribute surface
+message pump, `handle_ha_message`/`_HA_MESSAGE_HANDLERS`), `notifications.py` (`app.notify_ctl`),
+`logbook.py` (`app.log_ctl` — the activity log's scope/paging/fetch/subscription state machine,
+shared by `HACLI`'s docked panel and `GraphPreviewScreen`'s). **`HACLI` keeps its old attribute surface
 via property pairs** (`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so
 screens and tests read/assign through the app unchanged; new UI code should call controllers
 directly instead (`self.app.dash_ctl.set_slot(...)`).
