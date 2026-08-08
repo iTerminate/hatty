@@ -29,13 +29,13 @@ from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.timer import Timer
-from textual.widget import Widget
 from textual.widgets import Button, Footer, Label, OptionList, Select, Static
 
 from hatty.const import media_supports
 from hatty.ui.controls.light_screen import DEBOUNCE_SECONDS
 from hatty.ui.controls.percentage_slider import PercentageSlider
 from hatty.ui.entity_table import get_display_name
+from hatty.ui.focus_nav import enclosing_row, focus_within_row, nav_focus
 
 if TYPE_CHECKING:
     from hatty.main import HACLI
@@ -305,9 +305,9 @@ class MediaPlayerControlScreen(ModalScreen):
         if isinstance(focused, (PercentageSlider, OptionList)):
             return
         if event.key in ("left", "right"):
-            row = self._enclosing_row(focused)
+            row = enclosing_row(focused, _BUTTON_ROW_IDS)
             if row is not None and focused is not None:
-                self._focus_within_row(row, focused, 1 if event.key == "right" else -1)
+                focus_within_row(row, focused, 1 if event.key == "right" else -1)
             elif event.key == "left":
                 self.focus_previous()
             else:
@@ -338,38 +338,7 @@ class MediaPlayerControlScreen(ModalScreen):
         # A focused slider (or any other single widget) just steps one at a time; a
         # button row (transport/toggle) is skipped as a whole block (mirrors
         # light_screen.py's #286 pattern).
-        row = self._enclosing_row(self.focused)
-        if row is not None:
-            self._focus_out_of_row(row, direction)
-        elif direction > 0:
-            self.focus_next()
-        else:
-            self.focus_previous()
-
-    def _enclosing_row(self, widget: Widget | None) -> Widget | None:
-        """The `#transport_buttons`/`#toggle_buttons` Horizontal row containing `widget`, if any."""
-        if widget is None:
-            return None
-        for node in widget.ancestors_with_self:
-            if isinstance(node, Widget) and node.id in _BUTTON_ROW_IDS:
-                return node
-        return None
-
-    def _focus_within_row(self, row: Widget, focused: Widget, step: int) -> None:
-        """Cycle focus among `row`'s buttons, wrapping at the ends."""
-        buttons = list(row.query(Button))
-        if not buttons:
-            return
-        index = next((i for i, button in enumerate(buttons) if button is focused), 0)
-        buttons[(index + step) % len(buttons)].focus()
-
-    def _focus_out_of_row(self, row: Widget, step: int) -> None:
-        """Move focus in `step`'s direction, skipping the whole row as one unit."""
-        step_focus = self.focus_next if step > 0 else self.focus_previous
-        for _ in range(len(self.focus_chain)):
-            landed = step_focus()
-            if landed is None or row not in landed.ancestors_with_self:
-                return
+        nav_focus(self, _BUTTON_ROW_IDS, direction)
 
     def action_toggle_play_pause(self) -> None:
         if not self.supports_play_pause:

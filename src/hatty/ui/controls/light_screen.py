@@ -31,7 +31,6 @@ from textual.color import Color
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.timer import Timer
-from textual.widget import Widget
 from textual.widgets import Button, Footer, Input, Label, OptionList, Static, TabbedContent, TabPane, Tabs
 from textual.widgets.option_list import Option
 from textual_colorpicker import ColorPicker
@@ -39,6 +38,7 @@ from textual_colorpicker import ColorPicker
 from hatty.ui.controls.kelvin_slider import KelvinSlider
 from hatty.ui.controls.percentage_slider import PercentageSlider
 from hatty.ui.entity_table import get_display_name
+from hatty.ui.focus_nav import enclosing_row, focus_within_row, nav_focus
 from hatty.ui.popup_base import PopupScreen
 
 if TYPE_CHECKING:
@@ -426,30 +426,6 @@ class LightControlScreen(ModalScreen):
             self.action_open_color_picker()
             event.stop()
 
-    def _enclosing_row(self, widget: Widget | None) -> Widget | None:
-        """The `#color_swatches`/`#white_presets` Horizontal row containing `widget`, if any."""
-        if widget is None:
-            return None
-        for node in widget.ancestors_with_self:
-            if isinstance(node, Widget) and node.id in _BUTTON_ROW_IDS:
-                return node
-        return None
-
-    def _focus_within_row(self, row: Widget, focused: Widget, step: int) -> None:
-        buttons = list(row.query(Button))
-        if not buttons:
-            return
-        index = next((i for i, button in enumerate(buttons) if button is focused), 0)
-        buttons[(index + step) % len(buttons)].focus()
-
-    def _focus_out_of_row(self, row: Widget, step: int) -> None:
-        """Move focus in `step`'s direction, skipping the whole row as one unit."""
-        step_focus = self.focus_next if step > 0 else self.focus_previous
-        for _ in range(len(self.focus_chain)):
-            landed = step_focus()
-            if landed is None or row not in landed.ancestors_with_self:
-                return
-
     def on_key(self, event: events.Key) -> None:
         # Left/right walk the focus chain unless a slider/input owns them — or the tab
         # bar, where they natively switch panes (issue #88). Up/down are handled as
@@ -459,9 +435,9 @@ class LightControlScreen(ModalScreen):
         if isinstance(focused, (Input, PercentageSlider, KelvinSlider, Tabs)):
             return
         if event.key in ("left", "right"):
-            row = self._enclosing_row(focused)
+            row = enclosing_row(focused, _BUTTON_ROW_IDS)
             if row is not None and focused is not None:
-                self._focus_within_row(row, focused, 1 if event.key == "right" else -1)
+                focus_within_row(row, focused, 1 if event.key == "right" else -1)
             elif event.key == "left":
                 self.focus_previous()
             else:
@@ -499,13 +475,7 @@ class LightControlScreen(ModalScreen):
     def action_nav_focus(self, direction: int) -> None:
         # A focused slider (or any single widget) just steps one at a time; a row
         # (swatches/presets) is skipped as a whole block (issue #286).
-        row = self._enclosing_row(self.focused)
-        if row is not None:
-            self._focus_out_of_row(row, direction)
-        elif direction > 0:
-            self.focus_next()
-        else:
-            self.focus_previous()
+        nav_focus(self, _BUTTON_ROW_IDS, direction)
 
     def action_toggle_power(self) -> None:
         entity = self.app.find_entity(self._entity_id) or self._entity
