@@ -63,8 +63,8 @@ class LogScope:
 
 @dataclass(frozen=True)
 class LogScopeOption:
-    """One row of the `v` scope popup (or, pre-#38's popup, one step of the
-    blind cycle). `resolve` is pure — see the module docstring."""
+    """One row of the `v` scope popup (`LogScopePopup`, `ui/log_scope_popup.py`).
+    `resolve` is pure — see the module docstring."""
 
     id: str
     label: str
@@ -254,21 +254,6 @@ class LogbookController:
     def handle_scope_popup_result(self, host: LogHost, result: "str | None") -> None:
         if result is not None:
             self.apply_option(host, result)
-
-    def next_option_id(self, host: LogHost) -> "str | None":
-        """The next option in the cycle that actually resolves right now,
-        wrapping — temporary, used only while `v` is still a blind cycle
-        (pre-scope-popup, issue #38); deleted once LogScopePopup lands."""
-        session = self.session_for(host)
-        if session is None or not session.options:
-            return None
-        ids = [o.id for o in session.options]
-        index = ids.index(session.option_id) if session.option_id in ids else -1
-        for step in range(1, len(ids) + 1):
-            option = session.options[(index + step) % len(ids)]
-            if option.resolve() is not None:
-                return option.id
-        return None
 
     # ── window / paging ──────────────────────────────────────────────────────
 

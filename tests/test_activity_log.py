@@ -8,7 +8,18 @@ from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
 from hatty.ui.graph.entity_detail import EntityDetailPanel
-from tests.conftest import NO_LIST_CONFIG
+from tests.conftest import NO_LIST_CONFIG, make_config
+
+
+async def test_a_with_an_empty_active_list_notifies_and_stays_hidden(make_app, sample_entities):
+    config = {**make_config(), "lists": {"my_list": []}, "default_list": "my_list"}
+    app = make_app(entities=sample_entities, config_data=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        assert not panel.has_class("-visible")
 
 
 async def test_a_opens_activity_log_panel_and_a_again_closes_it(make_app):

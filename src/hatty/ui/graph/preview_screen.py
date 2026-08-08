@@ -152,7 +152,7 @@ class GraphPreviewScreen(Screen):
         Binding("C", "pick_color", "Color Picker"),
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("a", "toggle_event_log", "Activity Log"),
-        Binding("v", "cycle_log_view", "Log View"),
+        Binding("v", "show_log_scope", "Log View"),
         Binding("f", "maximize_log", "Maximize Log", show=False),
         Binding("V", "show_log_entries", "Full Text", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -214,7 +214,7 @@ class GraphPreviewScreen(Screen):
         (
             "Activity log",
             frozenset(
-                {"toggle_event_log", "cycle_log_view", "maximize_log", "show_log_entries", "close_event_log"}
+                {"toggle_event_log", "show_log_scope", "maximize_log", "show_log_entries", "close_event_log"}
             ),
         ),
         ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
@@ -312,7 +312,7 @@ class GraphPreviewScreen(Screen):
             return self._log_visible()
         if action == "show_log_entries":
             return self._log_visible()
-        if action == "cycle_log_view":
+        if action == "show_log_scope":
             return self._log_visible()
         if action == "go_back":
             return not self._cursor_mode and not self._log_visible()
@@ -795,7 +795,7 @@ class GraphPreviewScreen(Screen):
         self.app.log_ctl.close(self)
         self._redraw()
 
-    _LOG_HINT = "v view · f max · V full text · a close · ←/→ page with the graph"
+    _LOG_HINT = "v scope · f max · V full text · a close · ←/→ page with the graph"
     _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · a close · ←/→ page with the graph"
 
     def action_close_event_log(self) -> None:
@@ -860,12 +860,22 @@ class GraphPreviewScreen(Screen):
             return
         self._open_event_log()
 
-    def action_cycle_log_view(self) -> None:
-        """`v` — advance through the scope options, wrapping (issue #21). A
-        no-op while the log is closed (gated by check_action)."""
-        next_id = self.app.log_ctl.next_option_id(self)
-        if next_id is not None:
-            self.app.log_ctl.apply_option(self, next_id)
+    def action_show_log_scope(self) -> None:
+        """`v` — preview and pick the open log's scope (issue #38, replacing
+        the old blind cycle from issue #21). A no-op while the log is closed
+        (gated by check_action)."""
+        from hatty.ui.log_scope_popup import LogScopePopup
+
+        session = self.app.log_ctl.session_for(self)
+        if session is None:
+            return
+        entity_names, device_names = self.app.log_ctl.display_names()
+        resolved = self.app.log_ctl.resolved_options(self)
+
+        def callback(result: str | None) -> None:
+            self.app.log_ctl.handle_scope_popup_result(self, result)
+
+        self.app.push_screen(LogScopePopup(resolved, session.option_id, entity_names, device_names), callback)
 
     async def _refresh_events_if_open(self) -> None:
         session = self.app.log_ctl.session_for(self)

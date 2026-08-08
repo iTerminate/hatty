@@ -330,19 +330,16 @@ async def test_apply_option_resubscribes_with_the_new_scope():
     assert app.client.subscribe_calls[-1] == (["light.b"], [])
 
 
-# ── next_option_id (the pre-popup blind cycle) ──────────────────────────────
+# ── resolved_options / handle_scope_popup_result (the `v` scope popup) ─────
 
 
-def test_next_option_id_skips_unresolvable_options():
+def test_resolved_options_includes_unresolvable_as_none():
     ctl, app = _controller()
     host = _StubHost()
     options = [
         ctl.base_option("list", "my_list", ["light.a"], with_devices=False),
-        ctl.base_option("list_devices", "my_list", ["light.a"], with_devices=True),
         ctl.cursor_option("cursor", lambda: None, with_device=False),
-        ctl.cursor_option("cursor_device", lambda: None, with_device=True),
     ]
-    # Built directly rather than via open() — open() would spawn a fetch we don't need here.
     session = LogSession(
         host=host,
         panel_id=host.LOG_PANEL_ID,
@@ -355,7 +352,42 @@ def test_next_option_id_skips_unresolvable_options():
         title_base="Activity Log — my_list",
     )
     ctl._sessions[id(host)] = session
-    assert ctl.next_option_id(host) == "list_devices"
+    resolved = ctl.resolved_options(host)
+    assert [scope is not None for _option, scope in resolved] == [True, False]
+
+
+def test_resolved_options_empty_without_a_session():
+    ctl, app = _controller()
+    assert ctl.resolved_options(_StubHost()) == []
+
+
+async def test_handle_scope_popup_result_applies_the_chosen_option():
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [
+        ctl.base_option("a", "a", ["light.a"], with_devices=False),
+        ctl.base_option("b", "b", ["light.b"], with_devices=False),
+    ]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+
+    ctl.handle_scope_popup_result(host, "b")
+    await app.run_spawned()
+    assert ctl.session_for(host).option_id == "b"
+
+
+async def test_handle_scope_popup_result_none_leaves_scope_untouched():
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [
+        ctl.base_option("a", "a", ["light.a"], with_devices=False),
+        ctl.base_option("b", "b", ["light.b"], with_devices=False),
+    ]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+
+    ctl.handle_scope_popup_result(host, None)
+    assert ctl.session_for(host).option_id == "a"
 
 
 # ── paging ───────────────────────────────────────────────────────────────────

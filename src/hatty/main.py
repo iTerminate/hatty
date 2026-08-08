@@ -105,7 +105,7 @@ class HACLI(App):
         Binding("c", "show_column_config", "Columns", show=False),
         Binding("a", "toggle_activity_log", "Activity Log", show=False),
         Binding("i", "toggle_entity_log", "Entity Log", show=False),
-        Binding("v", "cycle_log_scope", "Log Scope", show=False),
+        Binding("v", "show_log_scope", "Log Scope", show=False),
         Binding("f", "maximize_log", "Maximize Log", show=False),
         Binding("V", "show_log_entries", "Log Entry Text", show=False),
         Binding("left", "log_older", "Older Events", show=False, priority=True),
@@ -862,15 +862,22 @@ class HACLI(App):
     def action_log_newer(self) -> None:
         self.log_ctl.page(self, 1)
 
-    def action_cycle_log_scope(self) -> None:
-        """`v` — advance the open log's scope one step, wrapping (issue #27,
-        mirroring the fullscreen graph's `v`, issue #21). A scope change, not
-        a reopen: the paged window and the maximized state survive. Options
-        that can't resolve right now are skipped. check_action gates this
-        off while the log is closed."""
-        next_id = self.log_ctl.next_option_id(self)
-        if next_id is not None:
-            self.log_ctl.apply_option(self, next_id)
+    def action_show_log_scope(self) -> None:
+        """`v` — preview and pick the open log's scope (issue #38, replacing
+        the old blind cycle from issue #27). check_action gates this off
+        while the log is closed."""
+        from hatty.ui.log_scope_popup import LogScopePopup
+
+        session = self.log_ctl.session_for(self)
+        if session is None:
+            return
+        entity_names, device_names = self.log_ctl.display_names()
+        resolved = self.log_ctl.resolved_options(self)
+
+        def callback(result: str | None) -> None:
+            self.log_ctl.handle_scope_popup_result(self, result)
+
+        self.push_screen(LogScopePopup(resolved, session.option_id, entity_names, device_names), callback)
 
     def action_toggle_activity_log(self) -> None:
         if self.log_ctl.is_open(self):
@@ -1148,7 +1155,7 @@ class HACLI(App):
         elif action == "add_to_graph":
             panel = self.query_one("#detail_panel", EntityDetailPanel)
             return panel.has_class("-visible")
-        elif action in ("maximize_log", "show_log_entries", "cycle_log_scope", "log_older"):
+        elif action in ("maximize_log", "show_log_entries", "show_log_scope", "log_older"):
             return self.log_ctl.is_open(self)
         elif action == "log_newer":
             return self.log_ctl.is_open(self) and self.log_ctl.paged_back(self)
