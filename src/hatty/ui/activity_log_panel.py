@@ -2,9 +2,9 @@
 """The activity log side panel: a docked, togglable log of Home Assistant
 logbook entries, hosted both on the main entity table (`a`/`i` open it —
 list or single-entity scope; scoped to the graphed entity/entities instead
-when the inline graph panel is open — and `v` cycles the scope, issue #27)
-and on the fullscreen graph screen (`a` opens it, `v` cycles its scope,
-issue #21; its events additionally marked on the plot).
+when the inline graph panel is open — and `v` opens a scope popup, issue
+#38) and on the fullscreen graph screen (`a` opens it, `v` opens the same
+popup, issue #21; its events additionally marked on the plot).
 
 The panel itself is dumb — a title, a bottom hint line (`set_hint`) the host
 screen fills in with its own keys (since the two hosts offer different
@@ -173,12 +173,6 @@ class ActivityLogPanel(Widget):
     @property
     def title_text(self) -> str:
         return self._title
-
-    @property
-    def entries(self) -> list[LogEntry]:
-        """A snapshot of the retained entries, newest last — what
-        LogEntryPopup (issue #23) browses."""
-        return list(self._entries)
 
     @staticmethod
     def _dedupe_key(entry: LogEntry) -> tuple[str, str, str]:

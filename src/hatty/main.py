@@ -57,7 +57,6 @@ from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_nam
 from hatty.ui.graph.entity_detail import EntityDetailPanel
 from hatty.ui.help_popup import HelpPopup
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from hatty.ui.log_entry_popup import LogEntryPopup
 from hatty.ui.rename_entity_popup import RenameEntityPopup
 from hatty.ui.search_input import SearchInput
 
@@ -107,7 +106,6 @@ class HACLI(App):
         Binding("i", "toggle_entity_log", "Entity Log", show=False),
         Binding("v", "show_log_scope", "Log Scope", show=False),
         Binding("f", "maximize_log", "Maximize Log", show=False),
-        Binding("V", "show_log_entries", "Log Entry Text", show=False),
         Binding("left", "log_older", "Older Events", show=False, priority=True),
         Binding("right", "log_newer", "Newer Events", show=False, priority=True),
         Binding("g", "toggle_graph", "Graph", show=False),
@@ -821,19 +819,7 @@ class HACLI(App):
         if not maximizing:
             self.query_one("#entities_table", EntitiesTable).focus()
 
-    def action_show_log_entries(self) -> None:
-        """`V` — browse the open log's retained entries and read a
-        truncated line's full text (issue #23)."""
-        if not self.log_ctl.is_open(self):
-            return
-        log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        entries = log_panel.entries
-        if not entries:
-            self.notify("No activity log entries to show.", title="Activity Log")
-            return
-        self.push_screen(LogEntryPopup(entries, log_panel.title_text))
-
-    _LOG_HINT = "v scope · f maximize · V full text · ←/→ older/newer · T timeframe · a/i close"
+    _LOG_HINT = "v scope · f maximize · ←/→ older/newer · T timeframe · a/i close"
     _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · T timeframe"
 
     def _graph_entity_ids(self) -> list[str]:
@@ -1155,7 +1141,7 @@ class HACLI(App):
         elif action == "add_to_graph":
             panel = self.query_one("#detail_panel", EntityDetailPanel)
             return panel.has_class("-visible")
-        elif action in ("maximize_log", "show_log_entries", "show_log_scope", "log_older"):
+        elif action in ("maximize_log", "show_log_scope", "log_older"):
             return self.log_ctl.is_open(self)
         elif action == "log_newer":
             return self.log_ctl.is_open(self) and self.log_ctl.paged_back(self)
