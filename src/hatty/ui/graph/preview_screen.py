@@ -792,7 +792,7 @@ class GraphPreviewScreen(Screen):
         self.app.log_ctl.close(self)
         self._redraw()
 
-    _LOG_HINT = "v scope · f max · V full text · a close · ←/→ page with the graph"
+    _LOG_HINT = "v scope · f max · a close · ←/→ page with the graph"
     _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · a close · ←/→ page with the graph"
 
     def action_close_event_log(self) -> None:
