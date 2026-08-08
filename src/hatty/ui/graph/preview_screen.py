@@ -795,19 +795,36 @@ class GraphPreviewScreen(Screen):
         self.app.log_ctl.close(self)
         self._redraw()
 
+    _LOG_HINT = "v view · f max · V full text · a close · ←/→ page with the graph"
+    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · a close · ←/→ page with the graph"
+
     def action_close_event_log(self) -> None:
         """escape/q — a further escape/toggle closes; a maximized panel gets
         un-maximized first, mirroring the main screen's action_go_back. `a`/`A`
         (action_toggle_event_log) close outright instead, bypassing this."""
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
         if log_panel.has_class("-maximized"):
+            log_panel.set_hint(self._LOG_HINT)
             log_panel.set_maximized(False)
+            # The screen itself isn't focusable, so self.focus() would no-op —
+            # explicitly blur (Screen.set_focus(widget) is a no-op unless the
+            # target is focusable, and there's no natural "home" widget here
+            # the way the main table is for HACLI).
+            self.set_focus(None)
             return
         self._close_event_log()
 
     def action_maximize_log(self) -> None:
         log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        log_panel.set_maximized(not log_panel.has_class("-maximized"))
+        maximizing = not log_panel.has_class("-maximized")
+        log_panel.set_hint(self._LOG_HINT_MAXIMIZED if maximizing else self._LOG_HINT)
+        log_panel.set_maximized(maximizing)
+        if not maximizing:
+            # The screen itself isn't focusable, so self.focus() would no-op —
+            # explicitly blur (Screen.set_focus(widget) is a no-op unless the
+            # target is focusable, and there's no natural "home" widget here
+            # the way the main table is for HACLI).
+            self.set_focus(None)
 
     def action_show_log_entries(self) -> None:
         """`V` — browse the open log's retained entries and read a
@@ -835,12 +852,7 @@ class GraphPreviewScreen(Screen):
             self.app.log_ctl.base_option("entities", label, self._entity_ids, with_devices=False),
             self.app.log_ctl.base_option("entities_devices", label, self._entity_ids, with_devices=True),
         ]
-        self.app.log_ctl.open(
-            self,
-            options=options,
-            option_id="entities",
-            hint="v view · f max · V full text · a close · ←/→ page with the graph",
-        )
+        self.app.log_ctl.open(self, options=options, option_id="entities", hint=self._LOG_HINT)
 
     def action_toggle_event_log(self) -> None:
         if self.app.log_ctl.is_open(self):

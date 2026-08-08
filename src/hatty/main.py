@@ -815,7 +815,11 @@ class HACLI(App):
         if not self.log_ctl.is_open(self):
             return
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
-        log_panel.set_maximized(not log_panel.has_class("-maximized"))
+        maximizing = not log_panel.has_class("-maximized")
+        log_panel.set_hint(self._LOG_HINT_MAXIMIZED if maximizing else self._LOG_HINT)
+        log_panel.set_maximized(maximizing)
+        if not maximizing:
+            self.query_one("#entities_table", EntitiesTable).focus()
 
     def action_show_log_entries(self) -> None:
         """`V` — browse the open log's retained entries and read a
@@ -830,6 +834,7 @@ class HACLI(App):
         self.push_screen(LogEntryPopup(entries, log_panel.title_text))
 
     _LOG_HINT = "v scope · f maximize · V full text · ←/→ older/newer · T timeframe · a/i close"
+    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · T timeframe"
 
     def _graph_entity_ids(self) -> list[str]:
         """The graphed entity plus its `+` comparison lines, primary first."""
@@ -1169,7 +1174,9 @@ class HACLI(App):
         log_panel = self.query_one("#activity_log_panel", ActivityLogPanel)
         if log_panel.has_class("-maximized"):
             # First escape restores the normal-width panel; a further escape/toggle closes it.
+            log_panel.set_hint(self._LOG_HINT)
             log_panel.set_maximized(False)
+            self.query_one("#entities_table", EntitiesTable).focus()
             return
 
         search_input = self.query_one("#search_input", SearchInput)
