@@ -5,6 +5,7 @@ reopen, so the paged window and the maximized state survive it."""
 
 from textual.widgets import Label, Log
 
+import hatty.controllers.logbook as logbook_module
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from tests.conftest import make_config
 
@@ -28,13 +29,13 @@ async def test_v_preserves_the_paged_window(make_app, sample_entities, sample_re
         await pilot.pause()
         await pilot.press("left")
         await pilot.pause()
-        paged_end = app._log_end
+        paged_end = app.log_ctl.session_for(app).end
         assert paged_end is not None
 
         await pilot.press("v")
         await pilot.pause()
 
-        assert app._log_end == paged_end
+        assert app.log_ctl.session_for(app).end == paged_end
         last_call = app.client.logbook_calls[-1]
         assert last_call[2] == paged_end  # end
 
@@ -105,7 +106,7 @@ async def test_v_v_v_retargets_the_live_append_filter(make_app, sample_entities,
         await pilot.pause()
         await pilot.press("v")  # cursor_device: sibling kitchen_light now in scope
         await pilot.pause()
-        assert app._log_entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp", "light.kitchen_light"}
 
         app.client.logbook_subscription_id = None
         log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
@@ -171,13 +172,13 @@ async def test_v_skips_the_cursor_views_when_no_row_is_selected(make_app, sample
         assert panel.has_class("-visible")
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Activity Log — my_list")
-        assert app._log_entity_ids == {"light.living_room_lamp", "sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp", "sensor.temperature"}
 
 
-async def test_v_caps_the_widened_scope(make_app, sample_entities, sample_registry):
+async def test_v_caps_the_widened_scope(make_app, sample_entities, sample_registry, monkeypatch):
     config = _list_config(["light.living_room_lamp", "sensor.temperature"])
     app = make_app(entities=sample_entities, config_data=config, registry=sample_registry)
-    app._DEVICE_LOG_MAX_DEVICES = 1
+    monkeypatch.setattr(logbook_module, "_DEVICE_LOG_MAX_DEVICES", 1)
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("a")
@@ -207,11 +208,11 @@ async def test_v_walks_the_fixed_base_through_two_views_and_wraps(make_app, samp
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Device Log")
         assert app.client.logbook_calls[-1][3] == ["dev_abc"]
-        assert app._log_entity_ids == {"light.living_room_lamp"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}
 
         await pilot.press("v")  # wraps — a fixed base has no cursor views
         await pilot.pause()
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Activity Log")
         assert app.client.logbook_calls[-1][3] == []
-        assert app._log_entity_ids == {"light.living_room_lamp"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}

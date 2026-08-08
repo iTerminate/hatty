@@ -34,7 +34,7 @@ async def test_v_adds_the_lists_device_ids_without_expanding_siblings(make_app, 
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-        assert app._log_entity_ids == {"light.living_room_lamp"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}
         assert app.client.logbook_calls[-1][3] == ["dev_abc"]
 
 
@@ -63,7 +63,7 @@ async def test_v_passes_through_entity_without_device(make_app, sample_entities,
         await pilot.pause()
         await pilot.press("v")
         await pilot.pause()
-        assert app._log_entity_ids == {"switch.fan"}
+        assert app.log_ctl.session_for(app).entity_ids == {"switch.fan"}
 
 
 async def test_v_sends_every_device_id_over_the_list(make_app, sample_entities, sample_registry):
@@ -92,17 +92,17 @@ async def test_v_cycles_the_list_base_through_four_scopes_and_wraps(make_app, sa
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-        assert app._log_entity_ids == {"light.living_room_lamp", "sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp", "sensor.temperature"}
         assert app.client.logbook_calls[-1][3] == []
 
         await pilot.press("v")  # 2: list entities' devices
         await pilot.pause()
-        assert app._log_entity_ids == {"light.living_room_lamp", "sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp", "sensor.temperature"}
         assert set(app.client.logbook_calls[-1][3]) == {"dev_abc", "dev_xyz"}
 
         await pilot.press("v")  # 3: the cursor entity alone
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         assert app.client.logbook_calls[-1][3] == []
         title = str(panel.query_one("#log_title", Label).content)
         assert title.startswith("Activity Log — Temperature Sensor")
@@ -110,13 +110,13 @@ async def test_v_cycles_the_list_base_through_four_scopes_and_wraps(make_app, sa
         await pilot.press("v")  # 4: the cursor entity's device
         await pilot.pause()
         assert app.client.logbook_calls[-1][3] == ["dev_xyz"]
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         title = str(panel.query_one("#log_title", Label).content)
         assert "devices)" not in title  # a single device never shows the count suffix
 
         await pilot.press("v")  # wraps back to the plain list scope
         await pilot.pause()
-        assert app._log_entity_ids == {"light.living_room_lamp", "sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp", "sensor.temperature"}
         assert app.client.logbook_calls[-1][3] == []
         assert panel.has_class("-visible")  # the cycle never closes the panel
 

@@ -34,7 +34,7 @@ async def test_i_v_advances_to_device_view_and_sends_the_entitys_device_id(
         assert "Device Log" in title
         assert "Living Room Lamp" in title
         # This view widens the event-type query, not the entity set.
-        assert app._log_entity_ids == {"light.living_room_lamp"}
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}
         # issue #17: the device view is the one scope that queries device-scoped events.
         assert app.client.logbook_calls[-1][3] == ["dev_abc"]
 
@@ -129,28 +129,7 @@ async def test_device_log_fallback_when_no_device_id(make_app, sample_entities, 
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-        assert app._log_entity_ids == {"switch.fan"}
-
-
-async def test_get_device_entity_ids_returns_siblings(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        entity_ids, label, device_id = app._get_device_entity_ids("light.living_room_lamp")
-        assert device_id == "dev_abc"
-        assert set(entity_ids) == {"light.living_room_lamp", "light.kitchen_light"}
-        assert "Living Room Lamp" in label
-
-
-async def test_get_device_entity_ids_fallback_empty_device_id(make_app, sample_entities):
-    registry_with_empty = [
-        {"entity_id": "light.living_room_lamp", "device_id": ""},
-    ]
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=registry_with_empty)
-    async with app.run_test():
-        entity_ids, label, device_id = app._get_device_entity_ids("light.living_room_lamp")
-        assert device_id is None
-        assert entity_ids == ["light.living_room_lamp"]
+        assert app.log_ctl.session_for(app).entity_ids == {"switch.fan"}
 
 
 async def test_v_is_a_noop_when_no_entities(make_app):
@@ -172,7 +151,7 @@ async def test_v_opens_device_log_for_entity_with_different_device(make_app, sam
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
 
 
 async def test_v_scopes_to_graphed_entity_and_wraps_after_two_views(make_app, sample_entities, sample_registry):
@@ -198,11 +177,11 @@ async def test_v_scopes_to_graphed_entity_and_wraps_after_two_views(make_app, sa
 
         await pilot.press("a")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
 
         await pilot.press("v")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
         assert "Device Log" in title
         assert "Temperature Sensor" in title

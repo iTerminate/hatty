@@ -220,15 +220,9 @@ class GraphPreviewScreen(Screen):
         ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
     )
 
-    # The fullscreen graph's log scopes, cycled by `v` (issue #21) — widening
-    # from just the plotted entities, to their devices' events too. HACLI has
-    # its own same-named _log_view (issue #27) for the main screen's log — a
-    # different state machine, no relation to this class's.
-    _LOG_VIEWS = ("entity", "device")
-    _LOG_VIEW_TITLES = {
-        "entity": "Activity Log",
-        "device": "Device Log",
-    }
+    # LogHost hooks (LogbookController, issue #38) — see controllers/logbook.py.
+    LOG_PANEL_ID: str = "preview_log_panel"
+    LOG_SUPPORTS_LIVE: bool = False
 
     def __init__(
         self,
@@ -264,10 +258,6 @@ class GraphPreviewScreen(Screen):
         self._cursor_mode = False
         self._cursor_index = 0
         self._events: list[LogEntry] = []
-        # Which of _LOG_VIEWS the open log panel/worker is fetching for
-        # (issue #21); reset to "entity" on every open, advanced by `v`,
-        # read by _log_scope.
-        self._log_view = "entity"
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -329,10 +319,17 @@ class GraphPreviewScreen(Screen):
         return True
 
     def _log_visible(self) -> bool:
-        try:
-            return self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible")
-        except Exception:
-            return False
+        return self.app.log_ctl.is_open(self)
+
+    def log_window(self, session) -> "tuple[float, datetime]":
+        return self._window_hours(), self._window_end or datetime.now(timezone.utc)
+
+    def log_title_suffix(self, session) -> str:
+        return ""
+
+    def on_log_entries(self, entries: list[LogEntry]) -> None:
+        self._events = entries
+        self._redraw()
 
     def compose(self) -> ComposeResult:
         yield Label("", id="preview_title")
@@ -795,10 +792,8 @@ class GraphPreviewScreen(Screen):
         self.app.action_show_help()
 
     def _close_event_log(self) -> None:
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        log_panel.remove_class("-visible")
+        self.app.log_ctl.close(self)
         self._redraw()
-        self.refresh_bindings()
 
     def action_close_event_log(self) -> None:
         """escape/q — a further escape/toggle closes; a maximized panel gets
@@ -834,71 +829,36 @@ class GraphPreviewScreen(Screen):
             entity = self.app.find_entity(self._entity_id)
             self._update_display(entity)
 
-    def _event_log_title(self) -> str:
-        entity = self.app.find_entity(self._entity_id)
-        label = get_display_name(entity) if entity else self._entity_id
-        if len(self._entity_ids) > 1:
-            label += f" +{len(self._entity_ids) - 1} more"
-        return f"{self._LOG_VIEW_TITLES[self._log_view]} — {label}"
-
-    def _log_scope(self) -> tuple[list[str], list[str] | None]:
-        """entity_ids/device_ids to fetch for the current _log_view — the
-        plotted entities alone, or widened to their devices' events too
-        (issue #18)."""
-        if self._log_view == "entity":
-            return self._entity_ids, None
-        return self._entity_ids, self.app._device_ids_for_entities(self._entity_ids)
-
-    def _reload_event_log(self) -> None:
-        """Shared by opening and by `v` cycling — clear, retitle, refetch."""
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        log_panel.set_title(self._event_log_title())
-        log_panel.clear()
-        self.run_worker(self._load_events(), exclusive=True, group="events")
-        self.refresh_bindings()
-
     def _open_event_log(self) -> None:
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        self._log_view = "entity"
-        log_panel.set_hint("v view · f max · V full text · a close · ←/→ page with the graph")
-        log_panel.set_maximized(False)
-        log_panel.add_class("-visible")
-        self._reload_event_log()
+        label = self.app._log_label_for_ids(self._entity_ids)
+        options = [
+            self.app.log_ctl.base_option("entities", label, self._entity_ids, with_devices=False),
+            self.app.log_ctl.base_option("entities_devices", label, self._entity_ids, with_devices=True),
+        ]
+        self.app.log_ctl.open(
+            self,
+            options=options,
+            option_id="entities",
+            hint="v view · f max · V full text · a close · ←/→ page with the graph",
+        )
 
     def action_toggle_event_log(self) -> None:
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if log_panel.has_class("-visible"):
+        if self.app.log_ctl.is_open(self):
             self._close_event_log()
             return
         self._open_event_log()
 
     def action_cycle_log_view(self) -> None:
-        """`v` — advance through _LOG_VIEWS, wrapping (issue #21). A no-op
-        while the log is closed (gated by check_action)."""
-        index = self._LOG_VIEWS.index(self._log_view)
-        self._log_view = self._LOG_VIEWS[(index + 1) % len(self._LOG_VIEWS)]
-        self._reload_event_log()
+        """`v` — advance through the scope options, wrapping (issue #21). A
+        no-op while the log is closed (gated by check_action)."""
+        next_id = self.app.log_ctl.next_option_id(self)
+        if next_id is not None:
+            self.app.log_ctl.apply_option(self, next_id)
 
     async def _refresh_events_if_open(self) -> None:
-        if self.query_one("#preview_log_panel", ActivityLogPanel).has_class("-visible"):
-            await self._load_events()
-
-    async def _load_events(self) -> None:
-        end = self._window_end or datetime.now(timezone.utc)
-        hours = self._window_hours()
-        entity_ids, device_ids = self._log_scope()
-        entries = await self.app.fetch_log_entries(entity_ids, hours=hours, end=end, device_ids=device_ids)
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if not log_panel.has_class("-visible"):
-            return  # closed while the fetch was in flight
-        if entries is None:
-            self.notify("Failed to load activity log from Home Assistant.", title="Activity Log", severity="error")
-            self._events = []
-            log_panel.load_history([])
-        else:
-            self._events = self.app.normalize_log_entries(entries)
-            log_panel.load_history(self._events)
-        self._redraw()
+        session = self.app.log_ctl.session_for(self)
+        if session is not None:
+            await self.app.log_ctl.load(session)
 
     def action_show_list_popup(self) -> None:
         # Mirror DashboardScreen: dismiss the fullscreen graph and jump straight back
