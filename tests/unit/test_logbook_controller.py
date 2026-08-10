@@ -330,6 +330,104 @@ async def test_apply_option_resubscribes_with_the_new_scope():
     assert app.client.subscribe_calls[-1] == (["light.b"], [])
 
 
+# ── follow_cursor ────────────────────────────────────────────────────────────
+
+
+async def test_follow_cursor_noops_for_a_base_scope():
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [ctl.base_option("list", "my_list", ["light.a"], with_devices=False)]
+    ctl.open(host, options=options, option_id="list", hint="")
+    await app.run_spawned()
+    calls_before = len(app.client.logbook_calls)
+
+    ctl.follow_cursor(host)
+    await app.run_spawned()
+
+    assert len(app.client.logbook_calls) == calls_before
+
+
+async def test_follow_cursor_reapplies_a_cursor_scope_that_moved():
+    ctl, app = _controller()
+    host = _StubHost()
+    app.all_entities = [
+        {"entity_id": "light.a", "attributes": {"friendly_name": "Lamp A"}},
+        {"entity_id": "light.b", "attributes": {"friendly_name": "Lamp B"}},
+    ]
+    selected = "light.a"
+    options = [ctl.cursor_option("cursor", lambda: selected, with_device=False)]
+    ctl.open(host, options=options, option_id="cursor", hint="")
+    await app.run_spawned()
+    assert app.client.logbook_calls[-1][0] == ["light.a"]
+
+    selected = "light.b"
+    ctl.follow_cursor(host)
+    await app.run_spawned()
+
+    assert app.client.logbook_calls[-1][0] == ["light.b"]
+    assert host.panel_widget.title == "Activity Log — Lamp B"
+
+
+async def test_follow_cursor_skips_reload_when_scope_is_unchanged():
+    ctl, app = _controller()
+    host = _StubHost()
+    app.all_entities = [{"entity_id": "light.a", "attributes": {"friendly_name": "Lamp A"}}]
+    options = [ctl.cursor_option("cursor", lambda: "light.a", with_device=False)]
+    ctl.open(host, options=options, option_id="cursor", hint="")
+    await app.run_spawned()
+    calls_before = len(app.client.logbook_calls)
+    cleared_before = host.panel_widget.cleared
+
+    ctl.follow_cursor(host)
+    await app.run_spawned()
+
+    assert len(app.client.logbook_calls) == calls_before
+    assert host.panel_widget.cleared == cleared_before
+
+
+async def test_follow_cursor_is_quiet_about_no_device_notice():
+    ctl, app = _controller()
+    host = _StubHost()
+    app.all_entities = [
+        {"entity_id": "switch.fan", "attributes": {}},
+        {"entity_id": "light.a", "attributes": {}},
+    ]
+    app.entity_registry = [{"entity_id": "light.a", "device_id": "dev_1"}]
+    selected = "light.a"
+    options = [ctl.cursor_option("cursor_device", lambda: selected, with_device=True)]
+    ctl.open(host, options=options, option_id="cursor_device", hint="")
+    await app.run_spawned()
+    assert app.notifications == []
+
+    selected = "switch.fan"  # no device -> would notify "No device found" if not quiet
+    ctl.follow_cursor(host)
+    await app.run_spawned()
+
+    assert app.notifications == []
+    assert app.client.logbook_calls[-1][0] == ["switch.fan"]
+
+
+async def test_follow_cursor_noops_while_maximized():
+    ctl, app = _controller()
+    host = _StubHost()
+    app.all_entities = [
+        {"entity_id": "light.a", "attributes": {"friendly_name": "Lamp A"}},
+        {"entity_id": "light.b", "attributes": {"friendly_name": "Lamp B"}},
+    ]
+    selected = "light.a"
+    options = [ctl.cursor_option("cursor", lambda: selected, with_device=False)]
+    ctl.open(host, options=options, option_id="cursor", hint="")
+    await app.run_spawned()
+    host.panel_widget.add_class("-maximized")
+    calls_before = len(app.client.logbook_calls)
+
+    selected = "light.b"
+    ctl.follow_cursor(host)
+    await app.run_spawned()
+
+    assert len(app.client.logbook_calls) == calls_before
+
+
 # ── resolved_options / handle_scope_popup_result (the `v` scope popup) ─────
 
 

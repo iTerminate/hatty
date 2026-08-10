@@ -22,7 +22,12 @@ from the list.
 LogScopeOption.resolve is pure (never notifies) so every option can be
 resolved just to preview it (the `v` scope popup, issue #38) without side
 effects; apply_option is the only place that surfaces cap/no-device notices,
-exactly once, for the option actually applied.
+exactly once, for the option actually applied (unless called quiet=True).
+
+A cursor_option-backed session tracks the table cursor live: HACLI debounces
+DataTable.CellHighlighted into follow_cursor, which quietly re-applies the
+active option when the resolved scope actually changed. A maximized panel
+opts out — the table isn't what's focused there.
 """
 
 import asyncio
@@ -64,11 +69,14 @@ class LogScope:
 @dataclass(frozen=True)
 class LogScopeOption:
     """One row of the `v` scope popup (`LogScopePopup`, `ui/log_scope_popup.py`).
-    `resolve` is pure — see the module docstring."""
+    `resolve` is pure — see the module docstring. `follows_cursor` marks a
+    cursor_option so LogbookController.follow_cursor knows to re-resolve it
+    as the table selection moves."""
 
     id: str
     label: str
     resolve: Callable[[], LogScope | None]
+    follows_cursor: bool = False
 
 
 @dataclass
@@ -213,7 +221,7 @@ class LogbookController:
             return LogScope([entity_id], [], f"Activity Log — {cursor_label}")
 
         label = "Selected entity's device" if with_device else "Selected entity"
-        return LogScopeOption(option_id, label, _resolve)
+        return LogScopeOption(option_id, label, _resolve, follows_cursor=True)
 
     # ── applying a scope ─────────────────────────────────────────────────────
 
@@ -223,12 +231,13 @@ class LogbookController:
             return []
         return [(option, option.resolve()) for option in session.options]
 
-    def apply_option(self, host: LogHost, option_id: str) -> None:
+    def apply_option(self, host: LogHost, option_id: str, *, quiet: bool = False) -> None:
         """Resolve `option_id` and point the session at it — clears +
         retitles + refetches + resyncs the subscription, leaving the paged
         window and maximized state alone (a scope change in place, not a
         reopen). The only place a resolved LogScope's cap/no-device facts
-        get surfaced as a notification."""
+        get surfaced as a notification, unless quiet=True (follow_cursor's
+        silent re-apply as the table selection moves)."""
         session = self.session_for(host)
         if session is None:
             return
@@ -238,11 +247,12 @@ class LogbookController:
         scope = option.resolve()
         if scope is None:
             return
-        if scope.no_device:
-            self._app.notify(
-                "No device found for the selected entity. Showing single entity log.", title="Device Log"
-            )
-        self._notify_caps(scope.entity_total, scope.device_total)
+        if not quiet:
+            if scope.no_device:
+                self._app.notify(
+                    "No device found for the selected entity. Showing single entity log.", title="Device Log"
+                )
+            self._notify_caps(scope.entity_total, scope.device_total)
         session.option_id = option_id
         session.entity_ids = set(scope.entity_ids)
         session.query_ids = list(scope.entity_ids)
@@ -254,6 +264,31 @@ class LogbookController:
     def handle_scope_popup_result(self, host: LogHost, result: "str | None") -> None:
         if result is not None:
             self.apply_option(host, result)
+
+    def follow_cursor(self, host: LogHost) -> None:
+        """Re-point a cursor-scoped session at the table's new selection.
+        No-op for base scopes, for a maximized panel (the log list owns
+        focus there, not the table), and when the cursor resolves to the
+        same scope already applied (moving between siblings of one device
+        under cursor_device)."""
+        session = self.session_for(host)
+        if session is None:
+            return
+        option = next((o for o in session.options if o.id == session.option_id), None)
+        if option is None or not option.follows_cursor:
+            return
+        if session.panel().has_class("-maximized"):
+            return
+        scope = option.resolve()
+        if scope is None:
+            return
+        if (
+            scope.entity_ids == session.query_ids
+            and scope.device_ids == session.device_ids
+            and scope.title == session.title_base
+        ):
+            return
+        self.apply_option(host, session.option_id, quiet=True)
 
     # ── window / paging ──────────────────────────────────────────────────────
 
