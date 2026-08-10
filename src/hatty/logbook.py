@@ -192,9 +192,11 @@ def format_log_datetime(iso_str: str) -> str:
 
 
 def format_log_detail(entry: LogEntry) -> str:
-    """The untruncated block a LogEntryPopup shows for one selected entry
-    (issue #23) — unlike format_log_line, never budgets or truncates, so the
-    full name/detail survive regardless of panel width. One field per line:
+    """The untruncated block ActivityLogPanel's maximized detail region shows
+    for the selected entry (issue #23, moved from the now-deleted
+    LogEntryPopup by issue #38) — unlike format_log_line, never budgets or
+    truncates, so the full name/detail survive regardless of panel width.
+    One field per line:
     timestamp, name (⚡-prefixed for an event, matching format_log_line's
     form), detail, then entity_id when the entry carries one (device-scoped
     events don't)."""
