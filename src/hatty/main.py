@@ -160,6 +160,7 @@ class HACLI(App):
         self._update_pending = False
         self.pending_call_status: dict[str, str] = {}
         self._pending_call_timers: dict[str, Timer] = {}
+        self._log_cursor_timer: Timer | None = None
         # Fire-and-forget tasks hold a reference here so asyncio can't GC them
         # mid-flight; done tasks remove themselves.
         self._bg_tasks: set[asyncio.Task] = set()
@@ -821,6 +822,8 @@ class HACLI(App):
 
     _LOG_HINT = "v scope · f maximize · ←/→ older/newer · T timeframe · a/i close"
     _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · T timeframe"
+    # Coalesces held arrow-key repeats before a cursor-scoped log refetches + resubscribes.
+    _LOG_CURSOR_DEBOUNCE = 0.3
 
     def _graph_entity_ids(self) -> list[str]:
         """The graphed entity plus its `+` comparison lines, primary first."""
@@ -932,18 +935,23 @@ class HACLI(App):
         self.log_ctl.open(self, options=options, option_id="entities", hint=self._LOG_HINT)
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
-        if self._detail_entity_id is None:
+        if event.data_table.id != "entities_table":
             return
-
         entity_id = event.cell_key.row_key.value
-        if not entity_id or entity_id == self._detail_entity_id:
+        if not entity_id:
             return
 
-        entity = self.find_entity(entity_id)
-        if not entity:
+        if self._detail_entity_id is not None:
+            if entity_id != self._detail_entity_id:
+                entity = self.find_entity(entity_id)
+                if entity:
+                    self.graph_ctl.follow_cursor(entity_id, entity)
             return
 
-        self.graph_ctl.follow_cursor(entity_id, entity)
+        # A cursor-scoped log refetches + resubscribes, so coalesce held arrow keys.
+        if self._log_cursor_timer is not None:
+            self._log_cursor_timer.stop()
+        self._log_cursor_timer = self.set_timer(self._LOG_CURSOR_DEBOUNCE, lambda: self.log_ctl.follow_cursor(self))
 
     def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
         # Enter on the entities table toggles the selected entity (mirrors the dashboard's Enter).
