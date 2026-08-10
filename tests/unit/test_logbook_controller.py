@@ -85,7 +85,6 @@ class _StubHost:
 
     def __init__(self):
         self.panel_widget = _StubPanel()
-        self.entries_seen: list = []
 
     def query_one(self, selector, widget_type=None):
         return self.panel_widget
@@ -95,9 +94,6 @@ class _StubHost:
 
     def log_title_suffix(self, session):
         return ""
-
-    def on_log_entries(self, entries):
-        self.entries_seen.append(entries)
 
 
 class _StubFetchOnlyHost(_StubHost):

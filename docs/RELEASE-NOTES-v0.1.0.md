@@ -54,7 +54,7 @@ area, create or rename areas, or spin up a new dashboard from everything in an a
 
 A dockable logbook panel, on both the entity table (`a`/`i`) and the fullscreen graph (`a`), with
 scope cycling, time-window paging, and live streaming as events happen. Device events (a Zigbee
-button press, say) get marked `⚡` and drawn directly on the graph.
+button press, say) get marked `⚡` in the log list.
 
 Home Assistant's own logbook quietly omits continuous sensors (temperature, humidity, power) — so
 hatty synthesizes their log entries from history instead. The REST and WebSocket logbook APIs

@@ -14,10 +14,9 @@ resource — `live_session()` picks the one session (if any) allowed to hold
 it, unambiguous by construction since only one host is live-capable.
 
 Only HACLI is live-capable (LOG_SUPPORTS_LIVE = True). GraphPreviewScreen
-stays fetch-only on purpose: its plot event marks are driven by the entries
-list `load()` hands back via `host.on_log_entries`, and a live append
-wouldn't route through that — subscribing would silently desync the marks
-from the list.
+stays fetch-only on purpose: its log window follows the graph's own
+paged/zoomed span, and a live WS append is always anchored to "now" — it
+would inject entries outside whatever span is currently plotted.
 
 LogScopeOption.resolve is pure (never notifies) so every option can be
 resolved just to preview it (the `v` scope popup, issue #38) without side
@@ -111,7 +110,6 @@ class LogHost(Protocol):
     def query_one(self, selector: str, expect_type: type) -> ActivityLogPanel: ...
     def log_window(self, session: LogSession) -> "tuple[float, datetime | None]": ...
     def log_title_suffix(self, session: LogSession) -> str: ...
-    def on_log_entries(self, entries: list[LogEntry]) -> None: ...
 
 
 class LogbookController:
@@ -317,7 +315,6 @@ class LogbookController:
         else:
             normalized = self.normalize(entries)
         panel.load_history(normalized)
-        host.on_log_entries(normalized)
 
     def page(self, host: LogHost, direction: int) -> None:
         """direction<0 pages older, >0 pages newer (snapping back to live at
