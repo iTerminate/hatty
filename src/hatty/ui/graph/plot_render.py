@@ -141,26 +141,6 @@ def render_binary(plt, primary: BinarySeries, extras, *, extend_to: str | None) 
     return t0
 
 
-def render_event_marks(plt, t0: datetime, event_ts: list[str], *, color: str = "magenta", limit: int = 200) -> None:
-    """Vertical markers for logbook events at their x-position relative to
-    `t0` — the fullscreen graph's "events on the graph" overlay (issue #2).
-    Timestamps before `t0` (outside the plotted window) are skipped; a busy
-    window is capped at `limit` marks so it doesn't blanket the plot."""
-    to_secs = secs_since(t0)
-    drawn = 0
-    for ts in event_ts:
-        if drawn >= limit:
-            break
-        try:
-            secs = to_secs(ts)
-        except (ValueError, TypeError):
-            continue
-        if secs < 0:
-            continue
-        plt.vline(secs, color=color)
-        drawn += 1
-
-
 def numeric_stats_line(values: list[float], unit: str) -> str:
     mn, mx = min(values), max(values)
     avg = sum(values) / len(values)

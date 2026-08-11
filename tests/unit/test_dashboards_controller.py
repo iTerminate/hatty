@@ -454,3 +454,47 @@ def test_import_defaults_slots_when_missing():
     payload = {"hatty_dashboard": 1, "name": "A", "dashboard": {"rows": 2, "cols": 2}}
     final = ctl.import_from_payload(payload)
     assert ctl.dashboards[final]["slots"] == []
+
+
+# ── dashboard_entity_ids ─────────────────────────────────────────────────────
+
+
+def test_dashboard_entity_ids_collects_single_and_panel_slots_deduped():
+    ctl = _controller()
+    ctl.create("A", 1, 3)
+    ctl.dashboards["A"]["slots"] = [
+        {"row": 0, "col": 0, "widget_type": "switch", "entity_id": "switch.fan"},
+        {"row": 0, "col": 1, "widget_type": "panel", "entity_id": None, "entity_ids": ["light.a", "light.b"]},
+        # A duplicate of switch.fan (e.g. also panel-listed elsewhere) shouldn't repeat.
+        {"row": 0, "col": 2, "widget_type": "switch", "entity_id": "switch.fan"},
+    ]
+    assert ctl.dashboard_entity_ids("A") == ["switch.fan", "light.a", "light.b"]
+
+
+def test_dashboard_entity_ids_recurses_into_split_children():
+    ctl = _controller()
+    ctl.create("A", 1, 1)
+    ctl.dashboards["A"]["slots"] = [
+        {
+            "row": 0,
+            "col": 0,
+            "widget_type": "split",
+            "entity_id": None,
+            "children": {
+                "rows": 1,
+                "cols": 2,
+                "slots": [
+                    {"row": 0, "col": 0, "widget_type": "switch", "entity_id": "switch.fan"},
+                    {"row": 0, "col": 1, "widget_type": "panel", "entity_id": None, "entity_ids": ["light.a"]},
+                ],
+            },
+        }
+    ]
+    assert ctl.dashboard_entity_ids("A") == ["switch.fan", "light.a"]
+
+
+def test_dashboard_entity_ids_skips_empty_slots():
+    ctl = _controller()
+    ctl.create("A", 1, 1)
+    ctl.dashboards["A"]["slots"] = [{"row": 0, "col": 0, "widget_type": "panel", "entity_id": None}]
+    assert ctl.dashboard_entity_ids("A") == []

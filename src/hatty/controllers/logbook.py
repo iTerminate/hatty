@@ -1,8 +1,9 @@
 # hatty — MIT License. See LICENSE file for details.
-"""Shared activity-log state machine for both log hosts (HACLI's docked panel
-and GraphPreviewScreen's fullscreen-graph panel), extracted so issue #28 (a
-third, device-tree-scoped host) is a matter of wiring, not another copy of
-this file (issue #38).
+"""Shared activity-log state machine for three log hosts: HACLI's docked
+panel, GraphPreviewScreen's fullscreen-graph panel, and DashboardScreen's
+docked panel — extracted (issue #38) so a new host is a matter of wiring,
+not another copy of this file. (A fourth, device-tree-scoped host is issue
+#28, still open.)
 
 One LogbookController (app.log_ctl) holds a LogSession per open host, keyed
 by id(host) — not a single global session, since the main screen's log and a
@@ -10,14 +11,18 @@ pushed GraphPreviewScreen's log can both be `-visible` at once (opening a
 fullscreen graph via `G` does not close the main log; only the docked-panel
 toggle does that mutual-exclusion dance). HAClient has exactly one
 logbook_subscription_id, though, so a *live* WS subscription is a singleton
-resource — `live_session()` picks the one session (if any) allowed to hold
-it, unambiguous by construction since only one host is live-capable.
+resource — `live_session()` picks among the sessions allowed to hold it.
 
-Only HACLI is live-capable (LOG_SUPPORTS_LIVE = True). GraphPreviewScreen
-stays fetch-only on purpose: its plot event marks are driven by the entries
-list `load()` hands back via `host.on_log_entries`, and a live append
-wouldn't route through that — subscribing would silently desync the marks
-from the list.
+HACLI and DashboardScreen are both live-capable (LOG_SUPPORTS_LIVE = True);
+either's panel can be `-visible` while the other is hidden behind it (the
+main screen's panel stays `-visible` when `d` pushes the dashboard on top).
+When more than one live-capable session is visible and now-anchored,
+`live_session()` prefers whichever host is the screen currently on top —
+the singleton subscription always follows what the user is looking at, and
+`close()`/screen-transition hooks resync it to whatever remains live.
+GraphPreviewScreen stays fetch-only on purpose: its log window follows the
+graph's own paged/zoomed span, and a live WS append is always anchored to
+"now" — it would inject entries outside whatever span is currently plotted.
 
 LogScopeOption.resolve is pure (never notifies) so every option can be
 resolved just to preview it (the `v` scope popup, issue #38) without side
@@ -35,6 +40,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
+
+from textual.css.query import NoMatches
 
 from hatty.logbook import LogEntry, entry_when_iso, is_continuous_sensor, normalize_entries, normalize_entry
 from hatty.types import Entity
@@ -111,7 +118,6 @@ class LogHost(Protocol):
     def query_one(self, selector: str, expect_type: type) -> ActivityLogPanel: ...
     def log_window(self, session: LogSession) -> "tuple[float, datetime | None]": ...
     def log_title_suffix(self, session: LogSession) -> str: ...
-    def on_log_entries(self, entries: list[LogEntry]) -> None: ...
 
 
 class LogbookController:
@@ -153,11 +159,22 @@ class LogbookController:
         session = self._sessions.pop(id(host), None)
         if session is None:
             return
-        panel = session.panel()
-        panel.remove_class("-visible")
-        panel.remove_class("-maximized")
+        try:
+            panel = session.panel()
+        except NoMatches:
+            # The host is mid-teardown (e.g. a screen's on_unmount closing its
+            # own session so it can't linger — see LogHost's docstring) and its
+            # children, including the panel, are already gone. Nothing left to
+            # un-visible/un-maximize; still resync the subscription below.
+            panel = None
+        if panel is not None:
+            panel.remove_class("-visible")
+            panel.remove_class("-maximized")
         if session.supports_live:
-            self._app.spawn(self._app.client.unsubscribe_logbook())
+            # Don't just drop the subscription — another live session (e.g. the
+            # main screen's, left `-visible` behind a dismissed dashboard) may
+            # still want it.
+            self._app.spawn(self.resync_subscription())
         self._app.refresh_bindings()
 
     def session_for(self, host: LogHost) -> "LogSession | None":
@@ -317,7 +334,6 @@ class LogbookController:
         else:
             normalized = self.normalize(entries)
         panel.load_history(normalized)
-        host.on_log_entries(normalized)
 
     def page(self, host: LogHost, direction: int) -> None:
         """direction<0 pages older, >0 pages newer (snapping back to live at
@@ -493,13 +509,20 @@ class LogbookController:
 
     def live_session(self) -> "LogSession | None":
         """The one session that may own the WS subscription: live-capable
-        host, window anchored to now, panel actually visible. At most one
-        exists (GraphPreviewScreen is fetch-only), so no stack/priority is
-        needed to pick among sessions."""
-        for session in self._sessions.values():
-            if session.supports_live and session.end is None and session.is_visible():
+        host, window anchored to now, panel actually visible. Two can
+        qualify at once (the main screen's panel stays `-visible` behind a
+        pushed DashboardScreen) — in that case prefer whichever host is the
+        screen currently on top, since that's the panel the user can
+        actually see."""
+        candidates = [s for s in self._sessions.values() if s.supports_live and s.end is None and s.is_visible()]
+        if len(candidates) <= 1:
+            return candidates[0] if candidates else None
+        screen = self._app.screen
+        base = self._app.screen_stack[0]
+        for session in candidates:
+            if session.host is screen or (session.host is self._app and screen is base):
                 return session
-        return None
+        return candidates[0]
 
     async def resync_subscription(self) -> None:
         """Realign the live logbook/event_stream subscription with whichever

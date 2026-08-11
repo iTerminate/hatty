@@ -27,6 +27,17 @@ dropping on an empty cell moves, on an occupied one swaps, across grids via
 `DashboardController.move_slot_across`. Splits can't nest and can't land
 inside a child grid. `u` in edit mode unsplits when at most one child is
 occupied.
+
+**Activity log** (Use mode only — `a` in Edit mode assigns a slot instead):
+`a` opens the docked activity log, scoped to the whole dashboard by default;
+`v` previews/picks a narrower scope (the dashboard, its devices, the cursor's
+slot entity, or that entity's device); `f` maximizes it into a selectable
+entry list. `[`/`]` page older/newer while docked; once maximized the grid is
+hidden and `←`/`→` take over paging (mirroring the main screen and the
+fullscreen graph). This is a third `LogbookController` host (`app.log_ctl`,
+`controllers/logbook.py`) and, like the main screen, live — its live WS
+subscription and the main screen's are handed off between whichever screen
+is on top (`LogbookController.live_session`).
 """
 
 import json
@@ -44,6 +55,7 @@ from textual.widgets import Footer, Header, Static
 from textual_fspicker import FileOpen, FileSave, Filters
 
 from hatty.const import CONFIG_KEY_GRAPH_TYPE
+from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.dashboard.cursor import GridCursor
 from hatty.ui.dashboard.layout import exceeds_bounds, slot_covering, slot_span
@@ -60,6 +72,9 @@ from hatty.ui.dashboard.widgets.thermostat import ThermostatSlotWidget
 from hatty.ui.list_selection_popup import ListSelectionPopup
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
+    from hatty.controllers.logbook import LogSession
     from hatty.main import HACLI
     from hatty.types import Entity
 
@@ -186,6 +201,13 @@ class DashboardScreen(Screen):
         {"grab_move", "edit_slot", "clear_slot", "resize_slot", "split_slot", "unsplit_slot", "fill_split"}
     )
 
+    # LogHost identity (LogbookController) — see controllers/logbook.py; the
+    # log_window/log_title_suffix hooks live below with the rest of the log actions.
+    LOG_PANEL_ID: str = "dashboard_log_panel"
+    LOG_SUPPORTS_LIVE: bool = True
+    _LOG_HINT = "v scope · f maximize · [ / ] older/newer · a close"
+    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · a close"
+
     IDLE_TIMEOUT: float = 5.0
 
     # Minimum rows a single grid cell gets: when the dashboard has too many rows
@@ -214,6 +236,13 @@ class DashboardScreen(Screen):
         Binding("s", "split_slot", "Split"),
         Binding("u", "unsplit_slot", "Unsplit", show=False),
         Binding("f", "fill_split", "Fill"),
+        # Activity log (Use mode only; `a`/`f` double up with Edit mode above,
+        # gated apart by check_action like enter's toggle_slot/grab_move split)
+        Binding("a", "toggle_activity_log", "Activity Log", show=False),
+        Binding("v", "show_log_scope", "Log Scope", show=False),
+        Binding("f", "maximize_log", "Maximize Log", show=False),
+        Binding("left_square_bracket", "log_older", "Older Events", show=False),
+        Binding("right_square_bracket", "log_newer", "Newer Events", show=False),
         # Both modes
         Binding("l", "show_list_popup", "Back to List", show=False),
         Binding("d", "manage_dashboards", "Dashboards"),
@@ -244,6 +273,12 @@ class DashboardScreen(Screen):
                     "show_help",
                     "go_back",
                 }
+            ),
+        ),
+        (
+            "Activity log",
+            frozenset(
+                {"toggle_activity_log", "show_log_scope", "maximize_log", "log_older", "log_newer"}
             ),
         ),
     )
@@ -296,6 +331,7 @@ class DashboardScreen(Screen):
         self._widget_active = False
         self._idle_mode = False
         self._idle_timer: Timer | None = None
+        self._log_cursor_timer: Timer | None = None
 
     @property
     def _cursor_path(self) -> list[tuple[int, int]]:
@@ -335,6 +371,7 @@ class DashboardScreen(Screen):
         with VerticalScroll(id="dashboard_scroll") as scroll:
             scroll.can_focus = False
             yield Grid(id="dashboard_grid")
+        yield ActivityLogPanel(id="dashboard_log_panel")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -349,9 +386,33 @@ class DashboardScreen(Screen):
         if self._idle_timer is not None:
             self._idle_timer.stop()
             self._idle_timer = None
+        if self._log_cursor_timer is not None:
+            self._log_cursor_timer.stop()
+            self._log_cursor_timer = None
+        # A session is only ever removed by close() — leaving this out would let a
+        # dismissed screen's live-capable session linger and (via id() reuse) risk
+        # aliasing a later host.
+        self.app.log_ctl.close(self)
+
+    def on_screen_resume(self, event) -> None:
+        # Re-point the singleton WS logbook subscription at this screen's log
+        # (if any) now that it's the one on top — e.g. popping back here from a
+        # pushed GraphPreviewScreen.
+        if self.app.log_ctl.is_open(self):
+            self.app.spawn(self.app.log_ctl.resync_subscription())
+
+    def on_screen_suspend(self, event) -> None:
+        # Mirror of on_screen_resume: hand the subscription to whatever live
+        # session remains now that this screen is no longer on top.
+        if self.app.log_ctl.is_open(self):
+            self.app.spawn(self.app.log_ctl.resync_subscription())
 
     def watch_edit_mode(self, edit_mode: bool) -> None:
         self.set_class(edit_mode, "-edit")
+        if edit_mode and self.app.log_ctl.is_open(self):
+            # The log is a Use-mode affordance; closing it on entering Edit mode
+            # also keeps the double-bound a/f keys unambiguous.
+            self._close_log()
         self.refresh_bindings()
         # _update_mode_banner queries a widget, so guard against the initial pre-mount call.
         if self.is_mounted:
@@ -368,6 +429,12 @@ class DashboardScreen(Screen):
                 event.stop()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "toggle_activity_log":
+            return not self.edit_mode
+        if action in ("show_log_scope", "maximize_log", "log_older"):
+            return not self.edit_mode and self.app.log_ctl.is_open(self)
+        if action == "log_newer":
+            return not self.edit_mode and self.app.log_ctl.is_open(self) and self.app.log_ctl.paged_back(self)
         if action in self.USE_ONLY_ACTIONS:
             return not self.edit_mode
         if action in self.EDIT_ONLY_ACTIONS:
@@ -546,6 +613,7 @@ class DashboardScreen(Screen):
         for widget in self._top_slot_widgets():
             if widget.covers(*self._top_cell()):
                 widget.scroll_visible(animate=False)  # keep the cursor on-screen when scrolled
+        self._schedule_log_follow()
 
     def _slot_at_cursor(self) -> dict | None:
         return self._cursor.slot_at(self._current_dashboard())
@@ -563,10 +631,12 @@ class DashboardScreen(Screen):
     def _descend_into_split(self) -> None:
         self._cursor.descend()
         self._apply_cursor_highlight()
+        self._schedule_log_follow()
 
     def _ascend_from_split(self) -> None:
         self._cursor.ascend()
         self._apply_cursor_highlight()
+        self._schedule_log_follow()
 
     def _split_anchor(self) -> tuple[int, int] | None:
         """Anchor of the split slot covering the cursor's top cell, if any."""
@@ -587,6 +657,13 @@ class DashboardScreen(Screen):
             split._selected = None
 
     def action_move_cursor(self, d_row: int, d_col: int) -> None:
+        # A maximized log hides the grid and gives the entry list focus (which
+        # itself handles up/down); left/right fall through here to page the
+        # log instead of moving a cursor over a grid the user can't see.
+        if self._log_maximized():
+            if d_col:
+                self.app.log_ctl.page(self, d_col)
+            return
         # Widget interaction (thermostat setpoint, panel cursor) only happens after
         # explicitly entering the widget with Enter/s — arrows always navigate the grid
         # otherwise. Edit mode always navigates.
@@ -1029,12 +1106,95 @@ class DashboardScreen(Screen):
     def action_show_device_tree(self) -> None:
         self.app.action_show_device_tree()
 
+    # ── Activity log (a third LogbookController host — controllers/logbook.py) ──
+
+    def log_window(self, session: "LogSession") -> "tuple[float, datetime | None]":
+        return self.app.log_hours, session.end
+
+    def log_title_suffix(self, session: "LogSession") -> str:
+        return self.app.log_ctl.range_suffix(session)
+
+    def _log_maximized(self) -> bool:
+        return self.query_one("#dashboard_log_panel", ActivityLogPanel).has_class("-maximized")
+
+    def action_toggle_activity_log(self) -> None:
+        if self.app.log_ctl.is_open(self):
+            self._close_log()
+            return
+
+        name = self.app.current_dashboard_name
+        entity_ids = self.app.dash_ctl.dashboard_entity_ids(name) if name else []
+        if not entity_ids:
+            self.app.notify("No entities on this dashboard to log.", severity="warning")
+            return
+
+        log_ctl = self.app.log_ctl
+        options = [
+            log_ctl.base_option("dashboard", name, entity_ids, with_devices=False),
+            log_ctl.base_option("dashboard_devices", name, entity_ids, with_devices=True),
+            log_ctl.cursor_option("cursor", self._entity_at_cursor, with_device=False),
+            log_ctl.cursor_option("cursor_device", self._entity_at_cursor, with_device=True),
+        ]
+        log_ctl.open(self, options=options, option_id="dashboard", hint=self._LOG_HINT)
+
+    def _close_log(self) -> None:
+        panel = self.query_one("#dashboard_log_panel", ActivityLogPanel)
+        if panel.has_class("-maximized"):
+            panel.set_maximized(False)
+            # The grid isn't focusable the way the main table is — explicitly blur.
+            self.set_focus(None)
+        self.app.log_ctl.close(self)
+
+    def action_show_log_scope(self) -> None:
+        """`v` — preview and pick the open log's scope. A no-op while the log
+        is closed (gated by check_action)."""
+        from hatty.ui.log_scope_popup import LogScopePopup
+
+        session = self.app.log_ctl.session_for(self)
+        if session is None:
+            return
+        entity_names, device_names = self.app.log_ctl.display_names()
+        resolved = self.app.log_ctl.resolved_options(self)
+
+        def callback(result: str | None) -> None:
+            self.app.log_ctl.handle_scope_popup_result(self, result)
+
+        self.app.push_screen(LogScopePopup(resolved, session.option_id, entity_names, device_names), callback)
+
+    def action_maximize_log(self) -> None:
+        panel = self.query_one("#dashboard_log_panel", ActivityLogPanel)
+        maximizing = not panel.has_class("-maximized")
+        panel.set_hint(self._LOG_HINT_MAXIMIZED if maximizing else self._LOG_HINT)
+        panel.set_maximized(maximizing)
+        if not maximizing:
+            self.set_focus(None)
+
+    def action_log_older(self) -> None:
+        self.app.log_ctl.page(self, -1)
+
+    def action_log_newer(self) -> None:
+        self.app.log_ctl.page(self, 1)
+
+    _LOG_CURSOR_DEBOUNCE = 0.3  # coalesces held arrow-key repeats before a cursor-scoped log refetches
+
+    def _schedule_log_follow(self) -> None:
+        if not self.app.log_ctl.is_open(self):
+            return
+        if self._log_cursor_timer is not None:
+            self._log_cursor_timer.stop()
+        self._log_cursor_timer = self.set_timer(
+            self._LOG_CURSOR_DEBOUNCE, lambda: self.app.log_ctl.follow_cursor(self)
+        )
+
     def action_go_back(self) -> None:
-        # Esc backs out one level: exit active widget, drop a grabbed widget,
-        # ascend out of a split, leave Edit mode, then dismiss the screen.
-        # While a widget is grabbed, esc ascends out of a split first (carrying
-        # the grab along — issue #220) and only releases the grab once back at
-        # the top level.
+        # Esc backs out one level: un-maximize the log, exit active widget, drop
+        # a grabbed widget, ascend out of a split, leave Edit mode, close an open
+        # log, then dismiss the screen. While a widget is grabbed, esc ascends
+        # out of a split first (carrying the grab along — issue #220) and only
+        # releases the grab once back at the top level.
+        if self._log_maximized():
+            self.action_maximize_log()
+            return
         if self._grabbed is not None:
             if len(self._cursor_path) > 1:
                 self._ascend_from_split()
@@ -1049,6 +1209,9 @@ class DashboardScreen(Screen):
             return
         if self.edit_mode:
             self.edit_mode = False
+            return
+        if self.app.log_ctl.is_open(self):
+            self._close_log()
             return
 
         def _do_leave(confirmed: bool | None) -> None:

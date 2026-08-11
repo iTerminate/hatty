@@ -37,10 +37,7 @@ button press). `f` maximizes the panel to the full screen width and turns it
 into a selectable list with an inline untruncated detail region (issue #22,
 upgraded by #38 — no separate browse popup anymore); `a` always closes
 outright even while maximized, while `escape`/`q` restore the normal width
-first and only close on a further press. While open, each logged event is
-additionally marked on the plot itself (`plot_render.render_event_marks`) —
-numeric and binary graphs only; climate graphs still show the log list but
-skip the marks.
+first and only close on a further press.
 
 `ALLOWED_APP_ACTIONS` is this screen's carve-out from `HACLI.check_action`'s
 "pushed screen" lockdown — only the app-level keys that still do something on
@@ -62,7 +59,6 @@ from textual.screen import Screen
 from textual.widgets import Footer, Label
 from textual_plotext import PlotextPlot
 
-from hatty.logbook import LogEntry
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import entity_title, entity_unit, get_display_name
 from hatty.ui.graph.binary_history import binary_stats, value_to_state
@@ -77,7 +73,6 @@ from hatty.ui.graph.plot_render import (
     plot_width,
     render_binary,
     render_climate,
-    render_event_marks,
     render_numeric,
 )
 from hatty.ui.graph.plot_time import secs_since
@@ -256,7 +251,6 @@ class GraphPreviewScreen(Screen):
         self._active_entity_index = 0
         self._cursor_mode = False
         self._cursor_index = 0
-        self._events: list[LogEntry] = []
 
     # Delegating properties over the pure GraphWindow, so existing reads/writes
     # of these attrs across the screen and tests keep working unchanged.
@@ -323,10 +317,6 @@ class GraphPreviewScreen(Screen):
 
     def log_title_suffix(self, session) -> str:
         return ""
-
-    def on_log_entries(self, entries: list[LogEntry]) -> None:
-        self._events = entries
-        self._redraw()
 
     def compose(self) -> ComposeResult:
         yield Label("", id="preview_title")
@@ -614,7 +604,6 @@ class GraphPreviewScreen(Screen):
             if self._cursor_mode:
                 self._cursor_index = max(0, min(len(self._data) - 1, self._cursor_index))
                 plt.vline(secs_since(t0)(self._data[self._cursor_index][0]), color="white")
-            self._draw_event_marks(plt, t0)
             return binary_end_iso
 
         extras = []
@@ -636,22 +625,7 @@ class GraphPreviewScreen(Screen):
             self._plot_width(),
             cursor_index=cursor_index,
         )
-        self._draw_event_marks(plt, t0)
         return None
-
-    def _draw_event_marks(self, plt, t0: datetime) -> None:
-        """Mark each logged event's timestamp on the plot, only while the
-        event log is open (issue #2's graph/log integration). Magenta for a
-        plotted line's own state changes, cyan for device events (issue #18,
-        e.g. a zha_event button press)."""
-        if not self._events:
-            return
-        log_panel = self.query_one("#preview_log_panel", ActivityLogPanel)
-        if not log_panel.has_class("-visible"):
-            return
-        state_events = [e for e in self._events if e["kind"] == "state"]
-        render_event_marks(plt, t0, [e["when"] for e in state_events])
-        render_event_marks(plt, t0, [e["when"] for e in self._events if e["kind"] == "event"], color="cyan")
 
     def _stats_text(self, entity: "Entity | None", unit: str, binary_end_iso: str | None) -> str:
         if self._cursor_mode:

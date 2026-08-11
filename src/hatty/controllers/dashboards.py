@@ -240,6 +240,28 @@ class DashboardController:
         children = split.setdefault("children", {"rows": 1, "cols": 1, "slots": []})
         return children.setdefault("slots", []), children.get("rows", 1), children.get("cols", 1)
 
+    def dashboard_entity_ids(self, name: str) -> list[str]:
+        """Every entity on `name`, grid order, deduped — a slot's `entity_id`,
+        a panel slot's `entity_ids`, and the slots inside a split's `children`
+        (splits can't nest, so one level of recursion covers every slot)."""
+        entity_ids: list[str] = []
+        seen: set[str] = set()
+
+        def _collect(slots: list[dict]) -> None:
+            for slot in slots:
+                panel_ids = slot.get("entity_ids")
+                ids = panel_ids if panel_ids is not None else [slot.get("entity_id")]
+                for entity_id in ids:
+                    if entity_id and entity_id not in seen:
+                        seen.add(entity_id)
+                        entity_ids.append(entity_id)
+                children = slot.get("children")
+                if children:
+                    _collect(children.get("slots", []))
+
+        _collect(self.dashboards[name]["slots"])
+        return entity_ids
+
     def set_slot(
         self,
         dashboard_name: str,
