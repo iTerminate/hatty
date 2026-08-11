@@ -1,7 +1,8 @@
 # hatty — MIT License. See LICENSE file for details.
 """format_log_detail/format_log_datetime (issue #23): the untruncated
-per-field text a LogEntryPopup shows for a selected entry — mirrors
-test_log_line_format.py's style for format_log_line."""
+per-field text ActivityLogPanel's maximized detail region shows for the
+selected entry (issue #38) — mirrors test_log_line_format.py's style for
+format_log_line."""
 
 from hatty.logbook import LogEntry, format_log_datetime, format_log_detail, format_log_time
 

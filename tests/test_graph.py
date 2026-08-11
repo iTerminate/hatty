@@ -458,7 +458,7 @@ async def test_stray_list_bindings_disabled_on_fullscreen_graph(make_app, sample
             "rename_entity",
             "show_column_config",
             "toggle_activity_log",
-            "cycle_log_scope",
+            "show_log_scope",
             "toggle_graph",
             "add_to_graph",
         ):

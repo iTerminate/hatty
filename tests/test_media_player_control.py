@@ -2,8 +2,10 @@
 from textual.widgets import Button, OptionList, Select, Static
 
 from hatty.const import MEDIA_FEAT
+from hatty.ui.controls import media_player_screen
 from hatty.ui.controls.media_player_screen import MediaPlayerControlScreen
 from hatty.ui.controls.percentage_slider import PercentageSlider
+from hatty.ui.focus_nav import enclosing_row
 from hatty.ui.help_popup import HelpPopup
 from tests.conftest import make_config
 
@@ -382,7 +384,7 @@ async def test_down_skips_rest_of_transport_row_as_a_block(make_app):
         await pilot.press("down")
         await pilot.pause()
 
-        assert screen._enclosing_row(app.focused) is None
+        assert enclosing_row(app.focused, media_player_screen._BUTTON_ROW_IDS) is None
         assert app.focused is screen.query_one("#field_source", Select)
 
 
@@ -400,7 +402,7 @@ async def test_down_enters_toggle_row_at_shuffle_then_skips_out_on_repeat(make_a
 
         await pilot.press("down")  # already inside the row -> skip the whole block
         await pilot.pause()
-        assert screen._enclosing_row(app.focused) is None
+        assert enclosing_row(app.focused, media_player_screen._BUTTON_ROW_IDS) is None
 
 
 async def test_up_from_toggle_row_reaches_field_sound_mode(make_app):

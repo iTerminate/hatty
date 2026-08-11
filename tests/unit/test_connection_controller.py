@@ -47,12 +47,24 @@ class _StubClient:
         return None
 
 
-class _StubLogPanel:
-    """No log panel is ever mounted in this pump-only test file — always
-    reports "closed" so ha_connected's resubscribe check is a no-op here."""
+class _StubLogCtl:
+    """Records the LogbookController calls ConnectionController drives —
+    no session is ever open in this pump-only test file, so these are just
+    call recorders, not a functioning controller."""
 
-    def has_class(self, name):
-        return False
+    def __init__(self):
+        self.reconnect_resubscribes = 0
+        self.state_changes = []
+        self.stream_frames = []
+
+    def resubscribe_after_reconnect(self):
+        self.reconnect_resubscribes += 1
+
+    def handle_state_change(self, entity_id, new_state):
+        self.state_changes.append((entity_id, new_state))
+
+    def handle_stream_frame(self, raw_entries):
+        self.stream_frames.append(raw_entries)
 
 
 class _StubApp:
@@ -64,16 +76,13 @@ class _StubApp:
         self.client = _StubClient()
         self.graph_ctl = _StubGraphCtl()
         self.notify_ctl = _StubNotifyCtl()
+        self.log_ctl = _StubLogCtl()
         self.all_entities = []
         self.entity_registry = []
         self.device_registry = []
         self.area_registry = []
         self.entity_names = {}
         self.sub_title = ""
-        self._log_entity_ids = set()
-        self._log_query_ids = []
-        self._log_device_ids = []
-        self._log_end = None
         self._detail_entity_id = None
         self.notifications = []
         self.spawned = []
@@ -100,9 +109,6 @@ class _StubApp:
 
     def _splash_screen(self):
         return None
-
-    def query_one(self, selector, widget_type=None):
-        return _StubLogPanel()
 
     def _dismiss_splash(self):
         self.splash_dismissals += 1
@@ -222,6 +228,13 @@ def test_connected_fetches_registries():
     assert len(app.spawned) == 3
 
 
+def test_connected_asks_log_ctl_to_resubscribe():
+    app = _StubApp()
+    ctl = _ctl(app)
+    ctl.handle_ha_message({"type": "ha_connected", "attempt": 1})
+    assert app.log_ctl.reconnect_resubscribes == 1
+
+
 def test_cleartext_http_warning_fires_once():
     app = _StubApp(ha_url="http://homeassistant.local:8123")
     ctl = _ctl(app)
@@ -287,6 +300,15 @@ def test_event_upserts_entity_and_clears_pending():
     assert app.cleared_pending == ["switch.fan"]
     assert app.graph_ctl.recorded == [new_state]
     assert app.refreshed_tree_entities == ["switch.fan"]
+    assert app.log_ctl.state_changes == [("switch.fan", new_state)]
+
+
+def test_logbook_stream_event_routes_to_log_ctl():
+    app = _StubApp()
+    ctl = _ctl(app)
+    entries = [{"when": "2024-01-15T10:30:00+00:00", "state": "on", "entity_id": "light.kitchen"}]
+    ctl.handle_ha_message({"type": "event", "event": {"events": entries}})
+    assert app.log_ctl.stream_frames == [entries]
 
 
 def test_event_without_new_state_is_ignored():

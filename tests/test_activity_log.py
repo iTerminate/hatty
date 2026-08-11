@@ -8,7 +8,18 @@ from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
 from hatty.ui.graph.entity_detail import EntityDetailPanel
-from tests.conftest import NO_LIST_CONFIG
+from tests.conftest import NO_LIST_CONFIG, make_config
+
+
+async def test_a_with_an_empty_active_list_notifies_and_stays_hidden(make_app, sample_entities):
+    config = {**make_config(), "lists": {"my_list": []}, "default_list": "my_list"}
+    app = make_app(entities=sample_entities, config_data=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        assert not panel.has_class("-visible")
 
 
 async def test_a_opens_activity_log_panel_and_a_again_closes_it(make_app):
@@ -218,7 +229,7 @@ async def test_a_scopes_to_graphed_entity_over_list_scope(make_app, sample_entit
 
         await pilot.press("a")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
         assert "Temperature Sensor" in title
         assert "my_list" not in title
@@ -239,7 +250,7 @@ async def test_a_includes_comparison_entities_when_graphed(make_app):
 
         await pilot.press("a")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature", "sensor.humidity"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature", "sensor.humidity"}
         assert app.client.logbook_calls[-1][0] == ["sensor.temperature", "sensor.humidity"]
         title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
         assert "Temperature Sensor" in title
@@ -258,7 +269,7 @@ async def test_i_scopes_to_graphed_entity_when_graph_panel_open(make_app, sample
 
         await pilot.press("i")
         await pilot.pause()
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
         assert "my_list" not in title
 
@@ -274,7 +285,7 @@ async def test_i_opens_single_entity_activity_log_and_i_again_closes_it(make_app
         await pilot.pause()
         panel = app.query_one("#activity_log_panel", ActivityLogPanel)
         assert panel.has_class("-visible")
-        assert app._log_entity_ids == {"sensor.temperature"}
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
         title = str(panel.query_one("#log_title", Label).content)
         assert "Temperature Sensor" in title
 
@@ -310,15 +321,15 @@ async def test_left_arrow_pages_log_older_when_open(make_app):
         await pilot.pause()
         await pilot.press("a")
         await pilot.pause()
-        assert app._log_end is None
+        assert app.log_ctl.session_for(app).end is None
 
         await pilot.press("left")
         await pilot.pause()
 
-        assert app._log_end is not None
+        assert app.log_ctl.session_for(app).end is not None
         last_call = app.client.logbook_calls[-1]
         assert last_call[1] == app.log_hours  # hours
-        assert last_call[2] == app._log_end  # end
+        assert last_call[2] == app.log_ctl.session_for(app).end  # end
 
 
 async def test_left_arrow_is_inert_while_log_closed(make_app):
@@ -327,7 +338,7 @@ async def test_left_arrow_is_inert_while_log_closed(make_app):
         await pilot.pause()
         await pilot.press("left")
         await pilot.pause()
-        assert app._log_end is None
+        assert app.log_ctl.session_for(app) is None
         assert not app.query_one("#activity_log_panel", ActivityLogPanel).has_class("-visible")
 
 
@@ -340,14 +351,14 @@ async def test_right_arrow_pages_log_newer(make_app):
         await pilot.press("left")
         await pilot.press("left")
         await pilot.pause()
-        paged_back_end = app._log_end
+        paged_back_end = app.log_ctl.session_for(app).end
         assert paged_back_end is not None
 
         await pilot.press("right")
         await pilot.pause()
 
-        assert app._log_end is not None
-        assert app._log_end > paged_back_end
+        assert app.log_ctl.session_for(app).end is not None
+        assert app.log_ctl.session_for(app).end > paged_back_end
 
 
 async def test_right_arrow_snaps_back_to_live(make_app):
@@ -358,12 +369,12 @@ async def test_right_arrow_snaps_back_to_live(make_app):
         await pilot.pause()
         # Far enough in the past that one log_hours step forward can't reach it
         # by accident, but close enough that the next step clears "now".
-        app._log_end = datetime.now(timezone.utc) - timedelta(hours=1)
+        app.log_ctl.session_for(app).end = datetime.now(timezone.utc) - timedelta(hours=1)
 
         await pilot.press("right")
         await pilot.pause()
 
-        assert app._log_end is None
+        assert app.log_ctl.session_for(app).end is None
 
 
 async def test_paging_older_unsubscribes_the_stream(make_app):
@@ -385,14 +396,132 @@ async def test_snapping_back_to_live_resubscribes_the_stream(make_app):
         await pilot.pause()
         await pilot.press("a")
         await pilot.pause()
-        app._log_end = datetime.now(timezone.utc) - timedelta(hours=1)
+        app.log_ctl.session_for(app).end = datetime.now(timezone.utc) - timedelta(hours=1)
         app.client.logbook_subscription_id = None
 
         await pilot.press("right")
         await pilot.pause()
 
-        assert app._log_end is None
+        assert app.log_ctl.session_for(app).end is None
         assert app.client.logbook_subscription_id is not None
+
+
+# Cursor-scoped log follows the table cursor: moving the highlighted row
+# re-resolves the "cursor"/"cursor_device" options in place, without the
+# user having to re-press `v` (issue #38 follow-up).
+#
+# With NO_LIST_CONFIG + sample_entities, alphabetical sort by friendly name:
+# Row 0: switch.fan            (Fan Switch, no device)
+# Row 1: light.kitchen_light   (Kitchen Light, dev_abc)
+# Row 2: light.living_room_lamp (Living Room Lamp, dev_abc)
+# Row 3: sensor.temperature    (Temperature Sensor, dev_xyz)
+
+
+async def test_cursor_scoped_log_follows_the_table_cursor(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.log_ctl.apply_option(app, "cursor")
+        await pilot.pause()
+
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
+        await pilot.pause(app._LOG_CURSOR_DEBOUNCE + 0.1)
+
+        assert app.log_ctl.session_for(app).entity_ids == {"sensor.temperature"}
+        title = str(app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content)
+        assert "Temperature Sensor" in title
+        assert app.client.logbook_calls[-1][0] == ["sensor.temperature"]
+
+
+async def test_cursor_scoped_log_resubscribes_when_live(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.log_ctl.apply_option(app, "cursor")
+        await pilot.pause()
+
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
+        await pilot.pause(app._LOG_CURSOR_DEBOUNCE + 0.1)
+
+        assert app.client.subscribe_logbook_calls[-1][0] == ["sensor.temperature"]
+
+
+async def test_cursor_scope_skips_reload_when_row_is_unchanged(make_app, sample_entities, sample_registry):
+    """Moving the cursor across columns within the same row re-highlights the
+    same entity_id — the resolved scope is identical, so follow_cursor's
+    dedupe skips the otherwise-redundant clear+refetch+resubscribe."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.log_ctl.apply_option(app, "cursor_device")
+        await pilot.pause()
+        calls_before = len(app.client.logbook_calls)
+
+        table.cursor_coordinate = Coordinate(1, 1)  # same row, next column
+        await pilot.pause(app._LOG_CURSOR_DEBOUNCE + 0.1)
+
+        assert len(app.client.logbook_calls) == calls_before
+
+
+async def test_base_scoped_log_ignores_cursor_movement(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(1, 0)
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        title_before = str(
+            app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content
+        )
+        calls_before = len(app.client.logbook_calls)
+
+        table.cursor_coordinate = Coordinate(3, 0)
+        await pilot.pause(app._LOG_CURSOR_DEBOUNCE + 0.1)
+
+        title_after = str(
+            app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_title", Label).content
+        )
+        assert title_after == title_before
+        assert len(app.client.logbook_calls) == calls_before
+
+
+async def test_maximized_cursor_scoped_log_ignores_cursor_movement(make_app, sample_entities, sample_registry):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.cursor_coordinate = Coordinate(1, 0)  # light.kitchen_light
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.log_ctl.apply_option(app, "cursor")
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        calls_before = len(app.client.logbook_calls)
+
+        table.cursor_coordinate = Coordinate(3, 0)  # sensor.temperature
+        await pilot.pause(app._LOG_CURSOR_DEBOUNCE + 0.1)
+
+        assert len(app.client.logbook_calls) == calls_before
+        assert app.log_ctl.session_for(app).entity_ids == {"light.kitchen_light"}
 
 
 async def test_reconnect_resubscribes_the_open_live_log(make_app):

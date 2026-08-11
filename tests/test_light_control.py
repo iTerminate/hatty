@@ -2,9 +2,11 @@
 from textual.color import Color
 from textual.widgets import Button, Input, Static, TabbedContent, Tabs
 
+from hatty.ui.controls import light_screen
 from hatty.ui.controls.kelvin_slider import KelvinSlider
 from hatty.ui.controls.light_screen import LightControlScreen, hsv_to_rgb
 from hatty.ui.controls.percentage_slider import PercentageSlider
+from hatty.ui.focus_nav import enclosing_row
 from hatty.ui.help_popup import HelpPopup
 from tests.conftest import make_config
 
@@ -430,7 +432,7 @@ async def test_up_down_leave_the_color_swatch_row(make_app):
         await pilot.pause()
         await pilot.press("up")
         await pilot.pause()
-        assert screen._enclosing_row(app.focused) is None
+        assert enclosing_row(app.focused, light_screen._BUTTON_ROW_IDS) is None
         assert isinstance(app.focused, Tabs)
 
         screen.query_one("#btn_swatch_green", Button).focus()

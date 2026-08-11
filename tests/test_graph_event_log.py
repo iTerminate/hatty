@@ -3,9 +3,12 @@
 window follows the graph's own paging so opening the log shows events for
 whatever's currently plotted, and closing/escaping tears it back down.
 
-Also `v`'s log-view cycle (issue #21): entity-only, then entity + the
-plotted entities' devices' events (issue #18) — with device events drawn in
-a distinct color."""
+`v`'s scope popup (issue #38, replacing the old blind cycle from #21) is
+covered in test_log_scope_popup.py; this file keeps only the plot-mark
+color assertions, which depend on the device-widened scope but aren't
+really about the popup itself — entity-only vs. entity + the plotted
+entities' devices' events (issue #18), with device events drawn in a
+distinct color."""
 
 from textual.coordinate import Coordinate
 from textual.widgets import Label, Log
@@ -108,55 +111,13 @@ async def test_a_sends_no_device_ids(make_app, sample_entities, sample_registry)
         assert app.client.logbook_calls[-1][3] == []
 
 
-async def test_v_advances_to_device_view_and_sends_the_entitys_device_id(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        await _open_preview_on_temperature(pilot, app)
-
-        await pilot.press("a", "v")
-        await pilot.pause()
-        assert app.client.logbook_calls[-1][3] == ["dev_xyz"]
-
-
-async def test_device_view_title_says_device_log(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        preview = await _open_preview_on_temperature(pilot, app)
-
-        await pilot.press("a", "v")
-        await pilot.pause()
-        log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
-        title = str(log_panel.query_one("#log_title", Label).content)
-        assert "Device Log" in title
-        assert "Temperature Sensor" in title
-
-
-async def test_v_wraps_back_to_entity_view(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        preview = await _open_preview_on_temperature(pilot, app)
-
-        await pilot.press("a", "v", "v")
-        await pilot.pause()
-        assert app.client.logbook_calls[-1][3] == []
-        log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
-        title = str(log_panel.query_one("#log_title", Label).content)
-        assert "Activity Log" in title
-
-
 async def test_v_is_a_noop_when_log_closed(make_app, sample_entities):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
         await pilot.pause()
         app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
         preview = await _open_preview_on_temperature(pilot, app)
-        assert preview.check_action("cycle_log_view", ()) is False
+        assert preview.check_action("show_log_scope", ()) is False
 
         await pilot.press("v")
         await pilot.pause()
@@ -176,20 +137,6 @@ async def test_capital_a_does_nothing_on_the_graph_screen(make_app, sample_entit
 
         await pilot.press("A")
         await pilot.pause()
-        log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
-        assert not log_panel.has_class("-visible")
-
-
-async def test_a_closes_from_any_view(make_app, sample_entities, sample_registry):
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        preview = await _open_preview_on_temperature(pilot, app)
-
-        await pilot.press("a", "v", "a")
-        await pilot.pause()
-
         log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
         assert not log_panel.has_class("-visible")
 
@@ -219,6 +166,8 @@ async def test_device_scoped_event_renders_and_marks_the_plot_in_cyan(
         )
 
         await pilot.press("a", "v")
+        await pilot.pause()
+        await pilot.press("down", "enter")
         await pilot.pause()
 
         assert any(e["kind"] == "event" for e in preview._events)
@@ -260,7 +209,9 @@ async def test_neither_view_ever_marks_orange(make_app, sample_entities, sample_
         assert colors_with_marks == {"magenta"}
 
         calls.clear()
-        await pilot.press("v")  # device view
+        await pilot.press("v")  # opens the scope popup
+        await pilot.pause()
+        await pilot.press("down", "enter")  # picks the device-widened option
         await pilot.pause()
         colors_with_marks = {color for color, count in calls if count > 0}
         assert "orange" not in colors_with_marks
