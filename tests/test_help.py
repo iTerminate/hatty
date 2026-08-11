@@ -225,9 +225,10 @@ async def test_dashboard_help_page_sectioned_by_mode(make_app):
         await pilot.pause()
         rows = _rows_for(app, "Dashboard")
         headers = [desc for key, desc in rows if not key]
-        assert headers == ["Use mode", "Edit mode", "Both modes"]
+        assert headers == ["Use mode", "Edit mode", "Both modes", "Activity log"]
 
         descriptions = [desc for key, desc in rows if key]
         assert "Toggle" in descriptions  # use mode
         assert "Assign" in descriptions  # edit mode
         assert "Dashboards" in descriptions  # both modes
+        assert "Activity Log" in descriptions  # activity log
