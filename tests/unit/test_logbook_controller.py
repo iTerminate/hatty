@@ -96,6 +96,30 @@ class _StubHost:
         return ""
 
 
+class _TornDownHost(_StubHost):
+    """Mirrors a screen mid-teardown: its children (including the panel) are
+    already gone by the time on_unmount calls close() (issue: a screen's own
+    on_unmount must close its session so it can't linger, but Textual tears
+    children down before the screen's own on_unmount handler runs). Behaves
+    like a normal host — query_one() resolves — until `tear_down()` flips it
+    to raise, mirroring the panel disappearing partway through the host's
+    life."""
+
+    def __init__(self):
+        super().__init__()
+        self._torn_down = False
+
+    def tear_down(self) -> None:
+        self._torn_down = True
+
+    def query_one(self, selector, widget_type=None):
+        if self._torn_down:
+            from textual.css.query import NoMatches
+
+            raise NoMatches(f"No nodes match {selector!r}")
+        return super().query_one(selector, widget_type)
+
+
 class _StubFetchOnlyHost(_StubHost):
     """Mirrors GraphPreviewScreen: no live subscription."""
 
@@ -113,6 +137,12 @@ class _StubApp:
         self.notifications: list = []
         self.bindings_refreshes = 0
         self.spawned: list = []
+        # Which screen is "on top" — live_session() consults this to pick among
+        # several live-capable, visible sessions. Defaults model a bare HACLI
+        # with no pushed screen; tests that need two live hosts (e.g. a pushed
+        # DashboardScreen) override these directly.
+        self.screen = None
+        self.screen_stack = [None]
 
     def find_entity(self, entity_id):
         return next((e for e in self.all_entities if e["entity_id"] == entity_id), None)
@@ -139,6 +169,28 @@ class _StubApp:
 def _controller() -> tuple[LogbookController, _StubApp]:
     app = _StubApp()
     return LogbookController(app), app
+
+
+# ── close (torn-down host) ──────────────────────────────────────────────────
+
+
+async def test_close_survives_a_torn_down_host():
+    """A screen's own on_unmount closes its session so it can't linger (a
+    dead host's id() could otherwise be reused and alias a later one) — but
+    Textual tears a screen's children down before its on_unmount handler
+    runs, so close() must not blow up trying to reach the (gone) panel."""
+    ctl, app = _controller()
+    host = _TornDownHost()
+    options = [ctl.base_option("a", "a", ["light.a"], with_devices=False)]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+
+    host.tear_down()
+    ctl.close(host)
+    await app.run_spawned()
+
+    assert ctl.is_open(host) is False
+    assert app.client.unsubscribe_calls >= 1
 
 
 # ── base_option ──────────────────────────────────────────────────────────────
@@ -552,6 +604,53 @@ async def test_live_session_requires_live_capable_and_visible_and_not_paged():
     ctl.session_for(live_host).end = None
     live_host.panel_widget.remove_class("-visible")
     assert ctl.live_session() is None  # closed
+
+
+async def test_live_session_prefers_the_active_screen_when_two_qualify():
+    """Both the main screen and a pushed DashboardScreen can be live-capable
+    and `-visible` at once (the main panel isn't closed by pushing `d`) — the
+    singleton subscription should follow whichever is actually on top."""
+    ctl, app = _controller()
+    main_host = _StubHost()
+    dashboard_host = _StubHost()
+    app.screen = main_host
+    app.screen_stack = [main_host]
+    options = [ctl.base_option("a", "a", ["light.a"], with_devices=False)]
+
+    ctl.open(main_host, options=list(options), option_id="a", hint="")
+    await app.run_spawned()
+    assert ctl.live_session() is ctl.session_for(main_host)
+
+    app.screen = dashboard_host
+    ctl.open(dashboard_host, options=list(options), option_id="a", hint="")
+    await app.run_spawned()
+    assert ctl.live_session() is ctl.session_for(dashboard_host)
+
+    app.screen = main_host  # dashboard dismissed, main screen back on top
+    assert ctl.live_session() is ctl.session_for(main_host)
+
+
+async def test_close_resyncs_subscription_to_the_remaining_live_session():
+    ctl, app = _controller()
+    main_host = _StubHost()
+    dashboard_host = _StubHost()
+    app.screen = main_host
+    app.screen_stack = [main_host]
+    main_options = [ctl.base_option("a", "a", ["light.a"], with_devices=False)]
+    dash_options = [ctl.base_option("b", "b", ["light.b"], with_devices=False)]
+
+    ctl.open(main_host, options=main_options, option_id="a", hint="")
+    await app.run_spawned()
+    app.screen = dashboard_host
+    ctl.open(dashboard_host, options=dash_options, option_id="b", hint="")
+    await app.run_spawned()
+    assert app.client.subscribe_calls[-1] == (["light.b"], [])
+
+    ctl.close(dashboard_host)
+    await app.run_spawned()
+    assert app.client.unsubscribe_calls >= 1
+    assert app.client.subscribe_calls[-1] == (["light.a"], [])
+    assert ctl.live_session() is ctl.session_for(main_host)
 
 
 # ── resync_subscription / resubscribe_after_reconnect ───────────────────────
