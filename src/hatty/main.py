@@ -44,7 +44,6 @@ from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F40
 from hatty.controllers.lists import ListController
 from hatty.controllers.logbook import LogbookController
 from hatty.controllers.notifications import NotificationController
-from hatty.logbook import LogEntry
 from hatty.service_calls import _CONTROL_SERVICE_BUILDERS
 from hatty.types import Entity
 from hatty.ui.activity_log_panel import ActivityLogPanel
@@ -201,9 +200,6 @@ class HACLI(App):
 
     def log_title_suffix(self, session) -> str:
         return self.log_ctl.range_suffix(session)
-
-    def on_log_entries(self, entries: list[LogEntry]) -> None:
-        pass
 
     # ── Domain state lives on the controllers; these proxies preserve the app's
     #    historical surface — screens and tests read *and assign* these directly.

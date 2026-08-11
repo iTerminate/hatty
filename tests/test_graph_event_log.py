@@ -4,16 +4,13 @@ window follows the graph's own paging so opening the log shows events for
 whatever's currently plotted, and closing/escaping tears it back down.
 
 `v`'s scope popup (issue #38, replacing the old blind cycle from #21) is
-covered in test_log_scope_popup.py; this file keeps only the plot-mark
-color assertions, which depend on the device-widened scope but aren't
-really about the popup itself — entity-only vs. entity + the plotted
-entities' devices' events (issue #18), with device events drawn in a
-distinct color."""
+covered in test_log_scope_popup.py; this file covers opening/closing/paging
+the panel and the device-widened scope (issue #18, e.g. a zha_event button
+press) rendering in the log list."""
 
 from textual.coordinate import Coordinate
 from textual.widgets import Label, Log
 
-import hatty.ui.graph.preview_screen as preview_screen_module
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
@@ -141,9 +138,7 @@ async def test_capital_a_does_nothing_on_the_graph_screen(make_app, sample_entit
         assert not log_panel.has_class("-visible")
 
 
-async def test_device_scoped_event_renders_and_marks_the_plot_in_cyan(
-    make_app, sample_entities, sample_registry, monkeypatch
-):
+async def test_device_scoped_event_renders_in_the_log(make_app, sample_entities, sample_registry):
     app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -158,63 +153,13 @@ async def test_device_scoped_event_renders_and_marks_the_plot_in_cyan(
         ]
         preview = await _open_preview_on_temperature(pilot, app)
 
-        mark_colors = []
-        monkeypatch.setattr(
-            preview_screen_module,
-            "render_event_marks",
-            lambda plt, t0, ts, **kw: mark_colors.append(kw.get("color", "magenta")),
-        )
-
         await pilot.press("a", "v")
         await pilot.pause()
         await pilot.press("down", "enter")
         await pilot.pause()
 
-        assert any(e["kind"] == "event" for e in preview._events)
         log_panel = preview.query_one("#preview_log_panel", ActivityLogPanel)
         assert any("⚡" in line for line in log_panel.query_one("#log_widget", Log).lines)
-        assert "cyan" in mark_colors
-        assert "magenta" in mark_colors
-
-
-async def test_neither_view_ever_marks_orange(make_app, sample_entities, sample_registry, monkeypatch):
-    """Orange marked a non-plotted sibling entity's state change in the old
-    "device_entities" view (issue #21); that view is gone, so no scope should
-    ever produce an orange mark — every state event returned now belongs to
-    a plotted entity."""
-    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG, registry=sample_registry)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app.client._history_data = {"sensor.temperature": [("2024-01-01T12:00:00+00:00", 20.0)]}
-        app.client._logbook_data = [
-            {
-                "when": "2024-01-01T11:00:00+00:00",
-                "name": "Temperature Sensor",
-                "state": "21",
-                "entity_id": "sensor.temperature",
-            },
-        ]
-        await _open_preview_on_temperature(pilot, app)
-
-        calls = []
-        monkeypatch.setattr(
-            preview_screen_module,
-            "render_event_marks",
-            lambda plt, t0, ts, **kw: calls.append((kw.get("color", "magenta"), len(ts))),
-        )
-
-        await pilot.press("a")
-        await pilot.pause()
-        colors_with_marks = {color for color, count in calls if count > 0}
-        assert colors_with_marks == {"magenta"}
-
-        calls.clear()
-        await pilot.press("v")  # opens the scope popup
-        await pilot.pause()
-        await pilot.press("down", "enter")  # picks the device-widened option
-        await pilot.pause()
-        colors_with_marks = {color for color, count in calls if count > 0}
-        assert "orange" not in colors_with_marks
 
 
 async def test_escape_closes_event_log_before_leaving_graph(make_app, sample_entities):
