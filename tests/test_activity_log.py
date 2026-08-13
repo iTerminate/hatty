@@ -8,7 +8,7 @@ from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.duration_popup import GraphDurationPopup
 from hatty.ui.graph.entity_detail import EntityDetailPanel
-from tests.conftest import NO_LIST_CONFIG, make_config
+from tests.conftest import NO_LIST_CONFIG, make_config, notified
 
 
 async def test_a_with_an_empty_active_list_notifies_and_stays_hidden(make_app, sample_entities):
@@ -729,4 +729,174 @@ async def test_logbook_stream_unsubscribes_on_close(make_app):
         await pilot.press("a")  # close
         await pilot.pause()
         assert app.client.logbook_subscription_id is None
+
+
+# ── list switch re-scopes an open list-scoped log (issue #48) ───────────────
+
+
+def _two_list_config(**overrides):
+    return {
+        **make_config(),
+        "default_list": "list_a",
+        "lists": {"list_a": ["light.living_room_lamp"], "list_b": ["switch.fan"]},
+        **overrides,
+    }
+
+
+async def _switch_to_list_b(pilot) -> None:
+    """'l' opens the list popup with rows [View All, list_a, list_b] (issue
+    #48 fixtures use exactly two lists) — the first `down` merely engages
+    highlighting (no row starts highlighted), so 3 downs lands on list_b,
+    the same overshoot-clamped convention test_list_management.py uses."""
+    await pilot.press("l")
+    await pilot.pause()
+    await pilot.press("down", "down", "down")
+    await pilot.press("enter")
+    await pilot.pause()
+
+
+async def test_switching_list_rescopes_an_open_list_scoped_log(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=_two_list_config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        title = str(panel.query_one("#log_title", Label).content)
+        assert "list_a" in title
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}
+
+        await _switch_to_list_b(pilot)
+
+        assert app.current_list_name == "list_b"
+        session = app.log_ctl.session_for(app)
+        assert session is not None
+        assert session.entity_ids == {"switch.fan"}
+        title = str(panel.query_one("#log_title", Label).content)
+        assert "list_b" in title and "list_a" not in title
+        assert app.client.logbook_calls[-1][0] == ["switch.fan"]
+        assert app.client.subscribe_logbook_calls[-1] == (["switch.fan"], [])
+
+
+async def test_switching_list_rederives_the_list_devices_scope(make_app, sample_entities):
+    registry = [
+        {"entity_id": "light.living_room_lamp", "device_id": "dev_lamp"},
+        {"entity_id": "switch.fan", "device_id": "dev_fan"},
+    ]
+    app = make_app(entities=sample_entities, config_data=_two_list_config(), registry=registry)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        app.log_ctl.apply_option(app, "list_devices")
+        await pilot.pause()
+        assert app.log_ctl.session_for(app).device_ids == ["dev_lamp"]
+
+        await _switch_to_list_b(pilot)
+
+        session = app.log_ctl.session_for(app)
+        assert session.option_id == "list_devices"
+        assert session.device_ids == ["dev_fan"]
+        assert app.client.subscribe_logbook_calls[-1] == (["switch.fan"], ["dev_fan"])
+
+
+async def test_switching_to_view_all_retitles_the_open_log(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=_two_list_config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("down")  # highlight "View All" at index 0
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert app.current_list_name is None
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        title = str(panel.query_one("#log_title", Label).content)
+        assert "All Entities" in title
+
+
+async def test_leaving_the_list_via_escape_retitles_the_open_log(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=_two_list_config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("y")  # confirm "Leave list"
+        await pilot.pause()
+
+        assert app.current_list_name is None
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        title = str(panel.query_one("#log_title", Label).content)
+        assert "All Entities" in title
+
+
+async def test_switching_into_an_empty_list_closes_the_open_log(make_app, sample_entities):
+    config = _two_list_config(lists={"list_a": ["light.living_room_lamp"], "list_b": []})
+    app = make_app(entities=sample_entities, config_data=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        assert panel.has_class("-visible")
+
+        await _switch_to_list_b(pilot)
+
+        assert not panel.has_class("-visible")
+        assert app.log_ctl.session_for(app) is None
+        assert notified(app, message_contains="No entities to log")
+
+
+async def test_i_scoped_log_is_unaffected_by_a_list_switch(make_app, sample_entities):
+    """The `i` single-entity log is a deliberate snapshot (base_option's
+    docstring) — a list switch must not touch it."""
+    app = make_app(entities=sample_entities, config_data=_two_list_config())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("light.living_room_lamp")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        session_before = app.log_ctl.session_for(app)
+        assert session_before.entity_ids == {"light.living_room_lamp"}
+
+        await _switch_to_list_b(pilot)
+
+        session = app.log_ctl.session_for(app)
+        assert session is not None
+        assert session.entity_ids == {"light.living_room_lamp"}
+        assert session.option_id == "entities"
+
+
+async def test_toggling_membership_of_the_active_list_refreshes_the_open_log(make_app, sample_entities):
+    config = _two_list_config(lists={"list_a": ["light.living_room_lamp"], "list_b": ["switch.fan"]})
+    app = make_app(entities=sample_entities, config_data=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.log_ctl.session_for(app).entity_ids == {"light.living_room_lamp"}
+
+        # A list's own view hides non-members; search overrides that so the
+        # target row is on screen without leaving list_a (issue #211's rule).
+        app.search_term = "temperature"
+        app._update_entities_display()
+        await pilot.pause()
+        table = app.query_one(EntitiesTable)
+        table.jump_cursor_to_row_key("sensor.temperature")
+        await pilot.pause()
+        await pilot.press("space")  # add sensor.temperature to list_a
+        await pilot.pause()
+
+        session = app.log_ctl.session_for(app)
+        assert session.entity_ids == {"light.living_room_lamp", "sensor.temperature"}
+        assert set(app.client.logbook_calls[-1][0]) == session.entity_ids
         assert app.client.unsubscribe_logbook_calls == 1

@@ -42,7 +42,7 @@ from hatty.controllers.connection import ConnectionController
 from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
 from hatty.controllers.lists import ListController
-from hatty.controllers.logbook import LogbookController
+from hatty.controllers.logbook import LogbookController, LogScopeOption
 from hatty.controllers.notifications import NotificationController
 from hatty.service_calls import _CONTROL_SERVICE_BUILDERS
 from hatty.types import Entity
@@ -882,6 +882,19 @@ class HACLI(App):
             self.log_ctl.open(self, options=options, option_id="entities", hint=self._LOG_HINT)
             return
 
+        options = self._table_log_options()
+        if options is None:
+            self.notify("No entities to log. Select a list or add entities.", severity="warning")
+            return
+        self.log_ctl.open(self, options=options, option_id="list", hint=self._LOG_HINT)
+
+    def _table_log_options(self) -> "list[LogScopeOption] | None":
+        """The `list`/`list_devices`/`cursor`/`cursor_device` scope rows for
+        whatever the table currently shows — the active list, or all
+        entities. None when there's nothing to log. Shared by
+        action_toggle_activity_log (fresh open) and refresh_table_log_scope
+        (issue #48 — re-derived when the active list changes under an
+        already-open log)."""
         if self.current_list_name:
             entity_ids = list(self.entity_lists.get(self.current_list_name, []))
             base_label = self.current_list_name
@@ -896,16 +909,31 @@ class HACLI(App):
             base_label = "All Entities"
 
         if not entity_ids:
-            self.notify("No entities to log. Select a list or add entities.", severity="warning")
-            return
+            return None
 
-        options = [
+        return [
             self.log_ctl.base_option("list", base_label, entity_ids, with_devices=False),
             self.log_ctl.base_option("list_devices", base_label, entity_ids, with_devices=True),
             self.log_ctl.cursor_option("cursor", self._selected_entity_id, with_device=False),
             self.log_ctl.cursor_option("cursor_device", self._selected_entity_id, with_device=True),
         ]
-        self.log_ctl.open(self, options=options, option_id="list", hint=self._LOG_HINT)
+
+    _TABLE_LOG_OPTION_IDS = frozenset({"list", "list_devices", "cursor", "cursor_device"})
+
+    def refresh_table_log_scope(self) -> None:
+        """Re-point an open list-scoped activity log at whatever the table
+        now shows (issue #48) — called wherever the active list changes out
+        from under an already-open log. No-op for a graph/`i`-scoped
+        session, whose entity set is a deliberate snapshot."""
+        session = self.log_ctl.session_for(self)
+        if session is None or not any(o.id in self._TABLE_LOG_OPTION_IDS for o in session.options):
+            return
+        options = self._table_log_options()
+        if options is None:
+            self.log_ctl.close(self)
+            self.notify("No entities to log. Select a list or add entities.", severity="warning")
+            return
+        self.log_ctl.rebuild_options(self, options)
 
     def action_toggle_entity_log(self) -> None:
         if self.log_ctl.is_open(self):
@@ -1203,6 +1231,7 @@ class HACLI(App):
                 self.current_list_name = None
                 self._update_entities_display()
                 self.set_title_based_on_focused_ui()
+                self.refresh_table_log_scope()
 
             self.push_screen(ConfirmPopup(f"Leave list '{self.current_list_name}'?"), _do_leave_list)
 

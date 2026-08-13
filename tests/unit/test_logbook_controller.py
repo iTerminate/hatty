@@ -378,6 +378,81 @@ async def test_apply_option_resubscribes_with_the_new_scope():
     assert app.client.subscribe_calls[-1] == (["light.b"], [])
 
 
+# ── rebuild_options ──────────────────────────────────────────────────────────
+
+
+async def test_rebuild_options_reapplies_the_active_base_option_against_the_new_set():
+    """Issue #48: the table switched lists, so the host hands the session a
+    fresh options list built from the new list — the still-active option id
+    should be re-resolved against the new entity set, not the stale one."""
+    ctl, app = _controller()
+    host = _StubHost()
+    old_options = [ctl.base_option("list", "list_a", ["light.a"], with_devices=False)]
+    ctl.open(host, options=old_options, option_id="list", hint="")
+    await app.run_spawned()
+    assert app.client.subscribe_calls[-1] == (["light.a"], [])
+
+    new_options = [ctl.base_option("list", "list_b", ["light.b"], with_devices=False)]
+    ctl.rebuild_options(host, new_options)
+    await app.run_spawned()
+
+    session = ctl.session_for(host)
+    assert session.entity_ids == {"light.b"}
+    assert session.title_base == "Activity Log — list_b"
+    assert app.client.logbook_calls[-1][0] == ["light.b"]
+    assert app.client.subscribe_calls[-1] == (["light.b"], [])
+    assert session.options is new_options
+
+
+async def test_rebuild_options_keeps_the_paged_window_and_maximized_state():
+    ctl, app = _controller()
+    host = _StubHost()
+    old_options = [ctl.base_option("list", "list_a", ["light.a"], with_devices=False)]
+    ctl.open(host, options=old_options, option_id="list", hint="")
+    await app.run_spawned()
+    ctl.page(host, -1)
+    await app.run_spawned()
+    session = ctl.session_for(host)
+    paged_end = session.end
+    assert paged_end is not None
+    host.panel_widget.add_class("-maximized")
+
+    new_options = [ctl.base_option("list", "list_b", ["light.b"], with_devices=False)]
+    ctl.rebuild_options(host, new_options)
+    await app.run_spawned()
+
+    assert session.end == paged_end
+    assert host.panel_widget.has_class("-maximized")
+
+
+async def test_rebuild_options_does_not_reapply_a_follows_cursor_option():
+    """A cursor-scoped session already re-resolves via follow_cursor as the
+    table's selection moves — rebuild_options should just swap the options
+    list in without an extra fetch."""
+    ctl, app = _controller()
+    host = _StubHost()
+    app.all_entities = [{"entity_id": "light.a", "attributes": {}}]
+    old_options = [ctl.cursor_option("cursor", lambda: "light.a", with_device=False)]
+    ctl.open(host, options=old_options, option_id="cursor", hint="")
+    await app.run_spawned()
+    calls_before = len(app.client.logbook_calls)
+
+    new_options = [ctl.cursor_option("cursor", lambda: "light.a", with_device=False)]
+    ctl.rebuild_options(host, new_options)
+    await app.run_spawned()
+
+    assert len(app.client.logbook_calls) == calls_before
+    assert ctl.session_for(host).options is new_options
+
+
+def test_rebuild_options_noop_without_an_open_session():
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [ctl.base_option("list", "list_b", ["light.b"], with_devices=False)]
+    ctl.rebuild_options(host, options)  # must not raise
+    assert ctl.session_for(host) is None
+
+
 # ── follow_cursor ────────────────────────────────────────────────────────────
 
 

@@ -33,6 +33,12 @@ A cursor_option-backed session tracks the table cursor live: HACLI debounces
 DataTable.CellHighlighted into follow_cursor, which quietly re-applies the
 active option when the resolved scope actually changed. A maximized panel
 opts out — the table isn't what's focused there.
+
+A base_option's entity set is fixed only for as long as the session's
+current `options` list says so — when what it closed over changes (the
+table switching lists, issue #48), the host rebuilds fresh options and
+hands them to rebuild_options, which swaps them in and re-applies the
+still-active option id.
 """
 
 import asyncio
@@ -194,8 +200,10 @@ class LogbookController:
     ) -> LogScopeOption:
         """A fixed base entity set — the table's active list/all-entities
         snapshot, or an i/graph-opened entity set. Captured by closure at
-        build time since the base doesn't change while the panel stays open
-        (only cursor_option below re-derives on every call)."""
+        build time since the base doesn't change while these options stay
+        current (only cursor_option below re-derives on every call); a host
+        whose base can change from under it (the table switching lists)
+        rebuilds fresh options and swaps them in via rebuild_options."""
 
         def _resolve() -> "LogScope | None":
             if not entity_ids:
@@ -277,6 +285,22 @@ class LogbookController:
         session.title_base = scope.title
         session.panel().clear()
         self.reload(host)
+
+    def rebuild_options(self, host: LogHost, options: list[LogScopeOption]) -> None:
+        """Swap an open session's scope options for freshly-built ones and
+        re-apply the active one — for when what a base_option closed over
+        changed underneath it (the table switching lists, issue #48). Keeps
+        the paged window and maximized state: a scope change in place, not a
+        reopen. A follows_cursor option needs no re-apply — follow_cursor
+        already re-resolves it as the table's new selection lands."""
+        session = self.session_for(host)
+        if session is None:
+            return
+        session.options = options
+        option = next((o for o in options if o.id == session.option_id), None)
+        if option is None or option.follows_cursor:
+            return
+        self.apply_option(host, session.option_id)
 
     def handle_scope_popup_result(self, host: LogHost, result: "str | None") -> None:
         if result is not None:
