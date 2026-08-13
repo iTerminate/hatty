@@ -25,10 +25,12 @@ widget, so it never has to know which one an entry came from.
 logbook/event_stream) — it dedupes against the last few entries rendered, since
 a live push can legitimately overlap the last entry `load_history` already
 drew (the window fetch and the stream subscription have no shared cursor).
-Appending to the selectable list never moves the current selection, so a live
-push while maximized doesn't yank the highlight away from what's being read.
+Appending to the selectable list moves the current selection to the new
+newest entry only if it was already there — parked on an older entry, a live
+push leaves the highlight alone so it doesn't yank away what's being read
+(issue #44).
 
-The docked ticker is meant to follow the same rule: it should always show the
+The docked ticker follows the same rule: it should always show the
 newest entry unless the reader has scrolled up away from it. Textual's `Log`
 has an `auto_scroll` flag for exactly this, but it only fires when the
 *previous* write already ended at the bottom — and `Log.clear()` zeroes
@@ -49,9 +51,9 @@ The two bodies track their rendered width independently (`_rendered_width` /
 `_options_rendered_width`) so toggling `-maximized` back and forth never
 skips a needed re-render. A reflow preserves the ticker's scroll position
 (pinned-to-tail readers stay pinned, scrolled-up readers stay where they
-were). Loading a fresh history (a scope/page change) always resets the
-selectable list's highlight to the newest entry; a live append leaves it
-where it is."""
+were) the same way it preserves the selectable list's highlight. Loading a
+fresh history (a scope/page change) always resets the selectable list's
+highlight to the newest entry, same as the ticker."""
 
 from collections import deque
 
@@ -266,8 +268,9 @@ class ActivityLogPanel(Widget):
         — reuses format_log_line so a device event gets the same ⚡ form and
         width truncation as the initial load. Skips an entry already rendered
         in the last _DEDUPE_WINDOW (the fetch/stream boundary can overlap).
-        Appending to the selectable list never moves its highlighted index,
-        so a live push while maximized can't yank the selection away."""
+        Appending to the selectable list moves the highlighted index to the
+        new entry only when it was already on the newest one — parked on an
+        older entry, a live push leaves the selection alone (issue #44)."""
         key = self._dedupe_key(entry)
         if key in self._recent_keys:
             return
@@ -280,9 +283,12 @@ class ActivityLogPanel(Widget):
         self._rendered_width = width
         if self.has_class("-maximized"):
             options = self.query_one("#log_options", OptionList)
+            at_newest = options.highlighted is None or options.highlighted == options.option_count - 1
             options_width = self._options_width()
             options.add_option(format_log_line(entry, options_width))
             self._options_rendered_width = options_width
+            if at_newest:
+                options.highlighted = options.option_count - 1
 
     def _reflow_lines(self) -> None:
         """Re-truncate every retained entry to the current width — the

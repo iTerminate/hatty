@@ -213,6 +213,33 @@ async def test_live_append_while_maximized_preserves_the_selection(make_app, sam
         assert "Living Room Lamp" in str(detail.content)
 
 
+async def test_live_append_while_maximized_follows_the_newest_selection(make_app, sample_entities):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.client._logbook_data = [
+            {"when": "2024-01-15T10:30:00+00:00", "name": "Living Room Lamp", "state": "on"},
+            {"when": "2024-01-15T10:31:00+00:00", "name": "Kitchen Light", "state": "off"},
+        ]
+        await pilot.press("a")
+        await pilot.press("f")  # lands the highlight on the newest entry
+        await pilot.pause()
+
+        panel = app.query_one("#activity_log_panel", ActivityLogPanel)
+        options = panel.query_one("#log_options", OptionList)
+        assert options.highlighted == 1
+
+        app.client.inject_logbook_event(
+            [{"when": "2024-01-15T10:32:00+00:00", "name": "Fan Switch", "state": "on"}]
+        )
+        await pilot.pause()
+
+        assert options.option_count == 3
+        assert options.highlighted == 2  # followed to the new newest entry
+        detail = panel.query_one("#log_detail", Static)
+        assert "Fan Switch" in str(detail.content)
+
+
 async def test_reopening_log_is_not_maximized(make_app):
     app = make_app(config_data=NO_LIST_CONFIG)
     async with app.run_test() as pilot:
