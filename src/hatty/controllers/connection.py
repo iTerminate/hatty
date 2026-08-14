@@ -218,9 +218,10 @@ class ConnectionController:
         app.graph_ctl.record_state(new_state)
         app.notify_ctl.handle_state_change(entity_id, old_state, new_state)
         # While a logbook/event_stream subscription is active, it already
-        # carries this same state change (plus device events state_changed
-        # can never see) — appending here too would double the line (issue #19).
-        app.log_ctl.handle_state_change(entity_id, new_state)
+        # carries this same state change for most entities (issue #19) —
+        # except continuous sensors, which HA's stream excludes just like
+        # its logbook fetch does (issue #50); log_ctl decides who needs this.
+        app.log_ctl.handle_state_change(entity_id, new_state, old_state)
         app._clear_pending_call(entity_id)
         if app._detail_entity_id == entity_id:
             app.call_later(app.graph_ctl.refresh_detail_panel)

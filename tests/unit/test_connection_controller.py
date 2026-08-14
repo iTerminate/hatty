@@ -60,8 +60,8 @@ class _StubLogCtl:
     def resubscribe_after_reconnect(self):
         self.reconnect_resubscribes += 1
 
-    def handle_state_change(self, entity_id, new_state):
-        self.state_changes.append((entity_id, new_state))
+    def handle_state_change(self, entity_id, new_state, old_state=None):
+        self.state_changes.append((entity_id, new_state, old_state))
 
     def handle_stream_frame(self, raw_entries):
         self.stream_frames.append(raw_entries)
@@ -300,7 +300,7 @@ def test_event_upserts_entity_and_clears_pending():
     assert app.cleared_pending == ["switch.fan"]
     assert app.graph_ctl.recorded == [new_state]
     assert app.refreshed_tree_entities == ["switch.fan"]
-    assert app.log_ctl.state_changes == [("switch.fan", new_state)]
+    assert app.log_ctl.state_changes == [("switch.fan", new_state, None)]
 
 
 def test_logbook_stream_event_routes_to_log_ctl():

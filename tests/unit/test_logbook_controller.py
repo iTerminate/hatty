@@ -791,3 +791,59 @@ async def test_handle_state_change_appends_only_when_in_scope_and_unsubscribed()
     # Out-of-scope entity: still filtered even with the stream down.
     ctl.handle_state_change("light.b", {"state": "on", "attributes": {}})
     assert len(host.panel_widget.entries_added) == 1
+
+
+async def test_handle_state_change_appends_continuous_sensor_even_while_subscribed():
+    """Issue #50: HA's logbook stream excludes continuous sensors, so the
+    state_changed fallback must still fire for them even while a stream
+    subscription is live — unlike a plain light, which the stream covers."""
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [ctl.base_option("a", "a", ["sensor.temp", "light.a"], with_devices=False)]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+    assert app.client.logbook_subscription_id is not None
+
+    ctl.handle_state_change(
+        "sensor.temp", {"state": "21.5", "attributes": {"unit_of_measurement": "°C"}}
+    )
+    assert len(host.panel_widget.entries_added) == 1
+    assert host.panel_widget.entries_added[0]["detail"] == "21.5 °C"
+
+    # A plain light in the same session is still suppressed while subscribed.
+    ctl.handle_state_change("light.a", {"state": "on", "attributes": {}})
+    assert len(host.panel_widget.entries_added) == 1
+
+
+async def test_handle_state_change_suppresses_unit_less_sensor_while_subscribed():
+    """A sensor with no unit/state_class isn't "continuous" (issue #29's
+    predicate), so it stays covered by the stream like any other domain."""
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [ctl.base_option("a", "a", ["sensor.plain"], with_devices=False)]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+    assert app.client.logbook_subscription_id is not None
+
+    ctl.handle_state_change("sensor.plain", {"state": "ready", "attributes": {}})
+    assert host.panel_widget.entries_added == []
+
+
+async def test_handle_state_change_drops_no_op_change_when_old_state_known():
+    """Continuous sensors fire state_changed on attribute-only updates too;
+    when the caller supplies old_state, an unchanged state must not append,
+    but a genuine change still does."""
+    ctl, app = _controller()
+    host = _StubHost()
+    options = [ctl.base_option("a", "a", ["sensor.temp"], with_devices=False)]
+    ctl.open(host, options=options, option_id="a", hint="")
+    await app.run_spawned()
+
+    old = {"state": "21.5", "attributes": {"unit_of_measurement": "°C"}}
+    same = {"state": "21.5", "attributes": {"unit_of_measurement": "°C", "extra": True}}
+    ctl.handle_state_change("sensor.temp", same, old)
+    assert host.panel_widget.entries_added == []
+
+    changed = {"state": "21.6", "attributes": {"unit_of_measurement": "°C"}}
+    ctl.handle_state_change("sensor.temp", changed, old)
+    assert len(host.panel_widget.entries_added) == 1
