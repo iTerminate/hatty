@@ -24,6 +24,7 @@ class _StubApp:
         self.pushed = []
         self.search_term = ""
         self.notify_ctl = _StubNotifyCtl()
+        self.log_scope_refreshes = 0
 
     def persist(self, *keys):
         self.persist_calls.append(keys)
@@ -36,6 +37,9 @@ class _StubApp:
 
     def set_title_based_on_focused_ui(self):
         self.title_updates += 1
+
+    def refresh_table_log_scope(self):
+        self.log_scope_refreshes += 1
 
     def push_screen(self, screen, callback=None):
         self.pushed.append(screen)

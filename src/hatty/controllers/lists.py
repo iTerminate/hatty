@@ -72,6 +72,7 @@ class ListController:
                 app.persist("lists", "manual_lists", "notify_lists", "default_list")
                 app.notify(f"List '{_name}' deleted.", title="List Deleted")
                 app._update_entities_display()
+                app.refresh_table_log_scope()
 
             app.push_screen(ConfirmPopup(f"Delete list '{list_name}'?"), _do_delete)
         elif action == "set_default":
@@ -82,6 +83,7 @@ class ListController:
             app.notify(f"'{list_name}' set as default list.", title="Default List Set")
             app.set_title_based_on_focused_ui()
             app._update_entities_display()
+            app.refresh_table_log_scope()
         elif action == "view_as_dashboard":
             if app.dash_ctl.preview_list_as_dashboard(list_name):
                 app.push_screen(DashboardScreen(), lambda _: app.dash_ctl.cleanup_temp_dashboards())
@@ -120,6 +122,7 @@ class ListController:
         app.persist("lists", "manual_lists", "notify_lists", "default_list")
         app.set_title_based_on_focused_ui()
         app._update_entities_display()
+        app.refresh_table_log_scope()
         app.notify(f"Renamed list '{old_name}' to '{new_name}'.", title="List Renamed")
 
     def select_or_create(self, list_name: str) -> None:
@@ -141,6 +144,7 @@ class ListController:
         self.unlocked_list = None
         self._app.set_title_based_on_focused_ui()
         self._app._update_entities_display()
+        self._app.refresh_table_log_scope()
 
     def is_locked(self, list_name: str) -> bool:
         """Whether removals from `list_name` currently require an unlock
@@ -164,6 +168,8 @@ class ListController:
             current_list.remove(entity_id)
         self._app.persist("lists")
         self._app._update_entities_display()
+        if list_name == self.current_list_name:
+            self._app.refresh_table_log_scope()
 
     def _freeze_visual_order(self, list_name: str, ordered_ids: list[str]) -> None:
         """Overwrite the stored list order with `ordered_ids` (the order currently
