@@ -699,6 +699,39 @@ async def test_live_logbook_stream_event_appends_to_activity_log(make_app):
         assert log_widget.line_count == count_before + 1
 
 
+async def test_live_continuous_sensor_state_change_appends_while_stream_is_active(make_app, sample_entities):
+    """Issue #50: HA's logbook stream never carries continuous sensors (same
+    exclusion issue #29 works around for the fetched log), so the
+    state_changed fallback must still append for one even while a
+    logbook/event_stream subscription is live — unlike a plain entity, which
+    the stream already covers (see the two tests above)."""
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert app.client.logbook_subscription_id is not None
+        log_widget = app.query_one("#activity_log_panel", ActivityLogPanel).query_one("#log_widget", Log)
+        count_before = log_widget.line_count
+
+        app.client.inject_state_change(
+            {
+                "entity_id": "sensor.temperature",
+                "state": "22.0",
+                "attributes": {"friendly_name": "Temperature Sensor", "unit_of_measurement": "°C"},
+                "last_changed": "2024-01-15T10:31:00.000000+00:00",
+            },
+            old_state={
+                "entity_id": "sensor.temperature",
+                "state": "21.5",
+                "attributes": {"friendly_name": "Temperature Sensor", "unit_of_measurement": "°C"},
+            },
+        )
+        await pilot.pause()
+        assert log_widget.line_count == count_before + 1
+        assert any("Temperature Sensor → 22.0 °C" in line for line in log_widget.lines)
+
+
 async def test_logbook_stream_dedupes_a_reinjected_entry(make_app):
     """Guards the fetch/stream boundary overlap (issue #19): the same entry
     arriving twice (once via load_history, once via the live stream) renders

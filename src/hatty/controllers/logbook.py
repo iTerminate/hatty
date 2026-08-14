@@ -585,19 +585,28 @@ class LogbookController:
         for entry in self.normalize(raw_entries):
             self._app.call_later(panel.add_log_entry, entry)
 
-    def handle_state_change(self, entity_id: str, new_state: Entity) -> None:
+    def handle_state_change(self, entity_id: str, new_state: Entity, old_state: "Entity | None" = None) -> None:
         """The state_changed fallback (issue #19) — while a logbook/
         event_stream subscription is active, it already carries this same
         state change (plus device events state_changed can never see), so
-        appending here too would double the line; only fires when no
-        subscription is live for the session that would want this entity."""
+        appending here too would double the line for most entities. Continuous
+        sensors are the exception (issue #50): HA's logbook stream excludes
+        them just like logbook/get_events does, so they need this fallback
+        even while a subscription is live. old_state (when known) drops a
+        no-op change — the stream never sends one, and continuous sensors
+        fire state_changed on attribute-only updates constantly."""
         session = self.live_session()
         if session is None or entity_id not in session.entity_ids:
             return
-        if self._app.client.logbook_subscription_id is not None:
+        attributes = new_state.get("attributes", {})
+        continuous = is_continuous_sensor(entity_id, attributes)
+        if self._app.client.logbook_subscription_id is not None and not continuous:
+            return
+        if old_state is not None and old_state.get("state") == new_state.get("state"):
             return
         panel = session.panel()
-        device_class = new_state.get("attributes", {}).get("device_class") or ""
+        device_class = attributes.get("device_class") or ""
+        unit = attributes.get("unit_of_measurement") or ""
         raw = {
             "when": datetime.now(timezone.utc).isoformat(),
             "state": new_state.get("state", ""),
@@ -608,5 +617,5 @@ class LogbookController:
         # empty — resolve_name short-circuits on it (issue #25's transport
         # consistency: this shares format_log_line/state_detail with the
         # fetched path instead of writing a raw, unlabeled string).
-        entry = normalize_entry(raw, {}, {}, {entity_id: device_class})
+        entry = normalize_entry(raw, {}, {}, {entity_id: device_class}, {entity_id: unit})
         self._app.call_later(panel.add_log_entry, entry)
