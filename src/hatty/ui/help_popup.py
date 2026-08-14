@@ -14,14 +14,19 @@ regardless of which mode happens to be active (issue #7).
 """
 
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 from rich.table import Table
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Footer, Input, Label, Static
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import PopupScreen
+
+if TYPE_CHECKING:
+    from hatty.main import HACLI
 
 # Textual key name -> friendly display, for the few that don't read well raw.
 KEY_DISPLAY = {
@@ -37,9 +42,9 @@ KEY_DISPLAY = {
     "minus": "-",
     "space": "Space",
     "tab": "Tab",
+    "left_square_bracket": "[",
+    "right_square_bracket": "]",
 }
-
-HINT_TEXT = "←/→ pages · / search all · a show all · Esc close"
 
 
 def display_key(key: str) -> str:
@@ -65,36 +70,32 @@ def action_name(action: str) -> str:
     return action.split("(", 1)[0]
 
 
-def binding_entries(bindings: Iterable[Binding | tuple]) -> list[tuple[str, str, str]]:
-    """Convert a screen's BINDINGS (Binding objects, or the odd plain tuple) into
-    deduped (key, description, action_name) triples — the static-page counterpart
-    to the (key, description) pairs `active_bindings` already yields for the live
-    page, with the action name kept alongside so `sectioned_rows` can group them."""
-
-    def _entry(entry: Binding | tuple) -> tuple[str, str, str]:
-        if isinstance(entry, Binding):
-            return entry.key, entry.description, action_name(entry.action)
-        return (
-            entry[0],
-            entry[2] if len(entry) > 2 else "",
-            action_name(entry[1] if len(entry) > 1 else ""),
-        )
-
+def binding_entries(bindings: Iterable[BindingType]) -> list[tuple[str, str, str]]:
+    """Convert a screen's BINDINGS into deduped (key, description, action_name)
+    triples — the static-page counterpart to the (key, description) pairs
+    `active_bindings` already yields for the live page, with the action name
+    kept alongside so `sectioned_rows` can group them. Parameter is typed
+    `Iterable[BindingType]` only because that's `DOMNode.BINDINGS`'s own
+    declared type; every BINDINGS list is actually a plain `Binding` list since
+    the keybinding-registry migration (no more bare tuples anywhere), so
+    non-Binding entries are skipped defensively rather than parsed."""
     seen: set[tuple[str, str]] = set()
     result: list[tuple[str, str, str]] = []
     for entry in bindings:
-        key, description, action = _entry(entry)
+        if not isinstance(entry, Binding):
+            continue
+        key, description = entry.key, entry.description
         if not description or (key, description) in seen:
             continue
         seen.add((key, description))
-        result.append((key, description, action))
+        result.append((key, description, action_name(entry.action)))
     return result
 
 
-def binding_rows(bindings: Iterable[Binding | tuple]) -> list[tuple[str, str]]:
-    """Convert a screen's BINDINGS (Binding objects, or the odd plain tuple) into
-    deduped (key, description) rows — the static-page counterpart to the
-    (key, description) pairs `active_bindings` already yields for the live page."""
+def binding_rows(bindings: Iterable[BindingType]) -> list[tuple[str, str]]:
+    """Convert a screen's BINDINGS into deduped (key, description) rows — the
+    static-page counterpart to the (key, description) pairs `active_bindings`
+    already yields for the live page."""
     return [(key, description) for key, description, _ in binding_entries(bindings)]
 
 
@@ -147,15 +148,9 @@ def filter_pages(
 
 
 class HelpPopup(PopupScreen):
-    BINDINGS = [
-        Binding("left", "prev_page", "Prev Page"),
-        Binding("right", "next_page", "Next Page"),
-        Binding("/", "focus_filter", "Search"),
-        Binding("a", "toggle_all", "Show All"),
-        Binding("escape", "dismiss", "Close"),
-        Binding("question_mark", "dismiss", "Close", show=False),
-        Binding("q", "dismiss", "Close", show=False),
-    ]
+    app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
+
+    BINDINGS = bindings_for("help_popup")
 
     DEFAULT_CSS = """
     #help_container {
@@ -188,10 +183,16 @@ class HelpPopup(PopupScreen):
         # that inspect `app.screen._binding_rows` keep working unchanged.
         self._binding_rows = pages[active_index][1] if pages else []
 
+    def _hint_text(self) -> str:
+        # left/right/"/"/a are HelpPopup's own fixed (non-rebindable) keys;
+        # only Esc close tracks the live nav.back key, since HelpPopup's escape
+        # binding shares that id with every other screen's back/cancel key.
+        return f"←/→ pages · / search all · a show all · {self.app.keys_ctl.display('nav.back')} close"
+
     def compose(self) -> ComposeResult:
         with Container(id="help_container", classes="popup-container"):
             yield Label(id="help_title")
-            yield Label(HINT_TEXT, id="help_hint")
+            yield Label(self._hint_text(), id="help_hint")
             filter_input = Input(placeholder="Search all pages...", id="help_filter")
             filter_input.display = False
             # Screen auto-focus scans descendants regardless of `display`, so an

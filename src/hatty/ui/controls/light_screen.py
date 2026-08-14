@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 
 from textual import events
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.color import Color
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
@@ -35,6 +34,7 @@ from textual.widgets import Button, Footer, Input, Label, OptionList, Static, Ta
 from textual.widgets.option_list import Option
 from textual_colorpicker import ColorPicker
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.controls.kelvin_slider import KelvinSlider
 from hatty.ui.controls.percentage_slider import PercentageSlider
 from hatty.ui.entity_table import get_display_name
@@ -89,10 +89,7 @@ def hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
 
 
 class ColorPickerModal(PopupScreen):
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("color_picker")
 
     # Centering + the panel box come from PopupScreen's `.popup-container`; only the
     # auto width (to fit the ColorPicker) and the button row differ.
@@ -135,27 +132,14 @@ class LightControlScreen(ModalScreen):
 
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    BINDINGS = [
-        Binding("escape", "close", "Close"),
-        Binding("q", "close", "Close", show=False),
-        # priority so a focused Button doesn't swallow space (buttons still work via enter);
-        # check_action releases it while the effect filter Input is focused.
-        Binding("space", "toggle_power", "On/Off", priority=True),
-        Binding("1", "white_preset(0)", "Warm", show=False),
-        Binding("2", "white_preset(1)", "Neutral", show=False),
-        Binding("3", "white_preset(2)", "Cool", show=False),
-        Binding("p", "open_color_picker", "Pick Color", show=False),
-        # One key cycles White/Color/Effects; check_action releases it while
-        # typing in the effect filter (issue #88).
-        Binding("t", "cycle_tab", "Next Tab"),
-        # Priority so up/down always move focus instead of being swallowed by a focused
-        # slider's own value-adjust handling (issue #286) — left/right still adjust the
-        # slider in place. check_action releases it while the effects OptionList is
-        # focused, so its own up/down cursor movement keeps working.
-        Binding("up", "nav_focus(-1)", "Focus Up", show=False, priority=True),
-        Binding("down", "nav_focus(1)", "Focus Down", show=False, priority=True),
-        Binding("question_mark", "show_help", "Help"),
-    ]
+    # space is priority so a focused Button doesn't swallow it (buttons still work
+    # via enter); check_action releases it while the effect filter Input is
+    # focused. up/down are priority so they always move focus instead of being
+    # swallowed by a focused slider's own value-adjust handling (issue #286) —
+    # left/right still adjust the slider in place. check_action releases it
+    # while the effects OptionList is focused, so its own up/down cursor
+    # movement keeps working.
+    BINDINGS = bindings_for("light")
 
     DEFAULT_CSS = """
     LightControlScreen {

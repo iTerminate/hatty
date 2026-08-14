@@ -2,10 +2,10 @@
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Input, Label, ListView
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import ListPopup, PopupScreen
 
 if TYPE_CHECKING:
@@ -13,10 +13,7 @@ if TYPE_CHECKING:
 
 
 class SaveGraphNamePopup(PopupScreen):
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("save_graph_name")
 
     def __init__(self, initial_name: str | None = None):
         super().__init__(id="save_graph_name_popup")
@@ -42,12 +39,7 @@ class SaveGraphNamePopup(PopupScreen):
 class SavedGraphsPopup(ListPopup):
     parent: "HACLI"  # this popup's parent is always the app (annotation only, no runtime effect)
 
-    BINDINGS = [
-        ("r", "rename_graph", "Rename"),
-        ("delete", "delete_graph", "Delete"),
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("saved_graphs_popup")
 
     DEFAULT_CSS = """
     #saved_graphs_list {

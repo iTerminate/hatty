@@ -2,10 +2,10 @@
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Input, Label, ListView
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import ListPopup
 
 if TYPE_CHECKING:
@@ -15,17 +15,7 @@ if TYPE_CHECKING:
 class DashboardSelectionPopup(ListPopup):
     parent: "HACLI"  # this popup's parent is always the app (annotation only, no runtime effect)
 
-    BINDINGS = [
-        ("delete", "delete_dashboard", "Delete"),
-        ("e", "edit_dashboard", "Edit"),
-        ("d", "set_default", "Set as Default"),
-        ("x", "export_dashboard", "Export"),
-        ("i", "import_dashboard", "Import"),
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-        Binding("shift+up", "move_up", "Move Up", priority=True),
-        Binding("shift+down", "move_down", "Move Down", priority=True),
-    ]
+    BINDINGS = bindings_for("dashboard_select")
 
     DEFAULT_CSS = """
     #dashboard_selection_container Input {

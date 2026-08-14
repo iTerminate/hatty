@@ -1,9 +1,9 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import DataTable, Footer, Label
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.entity_table import EntitiesTable, entity_matches
 from hatty.ui.popup_base import PopupScreen
 from hatty.ui.search_input import SearchInput
@@ -16,10 +16,7 @@ class EntityPickerModal(PopupScreen):
     EntitiesTable (same widget as the main list) is reused for its row rendering.
     """
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("entity_picker")
 
     DEFAULT_CSS = """
     #entity_picker_container {

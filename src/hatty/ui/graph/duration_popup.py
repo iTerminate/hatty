@@ -1,9 +1,9 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Input, Label, RadioButton, RadioSet
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import PopupScreen
 
 _DURATION_OPTIONS = [
@@ -28,11 +28,7 @@ def _split_hours(hours: float) -> tuple[str, str]:
 class GraphDurationPopup(PopupScreen):
     AUTO_FOCUS = "RadioSet"
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-        Binding("enter", "confirm", "Select", priority=True),
-    ]
+    BINDINGS = bindings_for("graph_duration")
 
     DEFAULT_CSS = """
     #duration_container {

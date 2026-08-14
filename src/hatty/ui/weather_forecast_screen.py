@@ -22,12 +22,12 @@ keep working."""
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Label, Static, Tab, Tabs
 
 from hatty.const import supported_forecast_types
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.dashboard.widgets.visuals import build_forecast_columns
 from hatty.ui.entity_table import get_display_name
 
@@ -96,11 +96,7 @@ class WeatherForecastScreen(Screen):
     }
     """
 
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-        Binding("t", "cycle_type", "Switch type"),
-        Binding("question_mark", "show_help", "Help"),
-    ]
+    BINDINGS = bindings_for("weather")
 
     HELP_TITLE = "Weather Forecast"
 

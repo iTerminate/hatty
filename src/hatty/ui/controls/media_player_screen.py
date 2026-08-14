@@ -25,13 +25,13 @@ from typing import TYPE_CHECKING
 
 from textual import events
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.timer import Timer
 from textual.widgets import Button, Footer, Label, OptionList, Select, Static
 
 from hatty.const import media_supports
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.controls.light_screen import DEBOUNCE_SECONDS
 from hatty.ui.controls.percentage_slider import PercentageSlider
 from hatty.ui.entity_table import get_display_name
@@ -62,20 +62,13 @@ class MediaPlayerControlScreen(ModalScreen):
 
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    BINDINGS = [
-        Binding("escape", "close", "Close"),
-        Binding("q", "close", "Close", show=False),
-        # priority so a focused Button doesn't swallow space (buttons still work via enter).
-        Binding("space", "toggle_play_pause", "Play/Pause", priority=True),
-        Binding("s", "stop_playback", "Stop", show=False),
-        # Priority so up/down always move focus instead of being swallowed by a focused
-        # volume slider's own value-adjust handling (issue #291, mirrors light_screen's
-        # #286 fix) — left/right still adjust the slider in place. check_action releases
-        # it while a Select's overlay is focused, so its own up/down keeps working.
-        Binding("up", "nav_focus(-1)", "Focus Up", show=False, priority=True),
-        Binding("down", "nav_focus(1)", "Focus Down", show=False, priority=True),
-        Binding("question_mark", "show_help", "Help"),
-    ]
+    # space is priority so a focused Button doesn't swallow it (buttons still work
+    # via enter). up/down are priority so they always move focus instead of being
+    # swallowed by a focused volume slider's own value-adjust handling (issue
+    # #291, mirrors light_screen's #286 fix) — left/right still adjust the slider
+    # in place. check_action releases it while a Select's overlay is focused, so
+    # its own up/down keeps working.
+    BINDINGS = bindings_for("media_player")
 
     DEFAULT_CSS = """
     MediaPlayerControlScreen {

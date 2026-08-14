@@ -5,6 +5,7 @@ from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.coordinate import Coordinate
+from textual.dom import DOMNode
 from textual.timer import Timer
 from textual.widgets import DataTable, Footer, Header
 
@@ -41,6 +42,7 @@ from hatty.const import (
 from hatty.controllers.connection import ConnectionController
 from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
+from hatty.controllers.keybindings import KeybindingController, bindings_for
 from hatty.controllers.lists import ListController
 from hatty.controllers.logbook import LogbookController, LogScopeOption
 from hatty.controllers.notifications import NotificationController
@@ -88,39 +90,7 @@ class HACLI(App):
 
     PENDING_TIMEOUT_SECONDS = 10  # class attribute so tests can override it per-instance
 
-    BINDINGS = [
-        Binding("/", "toggle_search", "Search"),
-        Binding("e", "expand_entity", "Controls"),
-        Binding("space", "toggle_list_membership", "In List"),
-        Binding("shift+up", "move_entity_in_list(-1)", "Move Up", show=False),
-        Binding("shift+down", "move_entity_in_list(1)", "Move Down", show=False),
-        Binding("o", "toggle_list_sort", "Sort Order", show=False),
-        Binding("L", "toggle_list_lock", "Lock List", show=False),
-        Binding("r", "rename_entity", "Rename", show=False),
-        Binding("u", "undo", "Undo", show=False),
-        Binding("ctrl+r", "redo", "Redo", show=False),
-        Binding("l", "show_list_selection_popup", "Lists", show=False),
-        Binding("c", "show_column_config", "Columns", show=False),
-        Binding("a", "toggle_activity_log", "Activity Log", show=False),
-        Binding("i", "toggle_entity_log", "Entity Log", show=False),
-        Binding("v", "show_log_scope", "Log Scope", show=False),
-        Binding("f", "maximize_log", "Maximize Log", show=False),
-        Binding("left", "log_older", "Older Events", show=False, priority=True),
-        Binding("right", "log_newer", "Newer Events", show=False, priority=True),
-        Binding("g", "toggle_graph", "Graph", show=False),
-        Binding("G", "graph_fullscreen", "Full Graph", show=False),
-        Binding("+", "add_to_graph", "Compare", show=False),
-        Binding("d", "show_dashboard", "Dashboard", show=False),
-        Binding("D", "show_device_tree", "Device Tree", show=False),
-        Binding("s", "show_saved_graphs_popup", "Saved Graphs", show=False),
-        Binding("t", "cycle_graph_type", "Graph Type"),
-        Binding("T", "show_graph_duration", "Duration", show=False),
-        Binding("n", "search_next", "Next Match", show=False),
-        Binding("N", "search_prev", "Prev Match", show=False),
-        Binding("question_mark", "show_help", "Help"),
-        Binding("escape", "go_back", "Back/Clear"),
-        Binding("ctrl+q", "quit", "Quit", show=False),
-    ]
+    BINDINGS = bindings_for("app")
 
     def __init__(self, config_path: str | None = None, demo: bool = False):
         super().__init__()
@@ -143,6 +113,7 @@ class HACLI(App):
         self.conn_ctl = ConnectionController(self)
         self.notify_ctl = NotificationController(self)
         self.log_ctl = LogbookController(self)
+        self.keys_ctl = KeybindingController(self)
 
         self.all_entities: list = []
         self.entity_registry: list = []
@@ -344,6 +315,7 @@ class HACLI(App):
             self.theme = saved_theme
 
         self._apply_terminal_title(cfg)
+        self.keys_ctl.apply(cfg)
 
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(cfg.get(CONFIG_KEY_GRAPH_TYPE))
 
@@ -627,6 +599,18 @@ class HACLI(App):
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
         from hatty.ui.help_popup import action_name, binding_entries, sectioned_rows
 
+        # screen_cls -> its controllers/keybindings.py registry scope, so an
+        # inactive page's static rows go through keys_ctl.static_bindings and
+        # reflect the live keymap rather than the class's hard-coded defaults.
+        scope_of = {
+            None: "app",
+            DashboardScreen: "dashboard",
+            DeviceTreeScreen: "tree",
+            GraphPreviewScreen: "graph",
+            LightControlScreen: "light",
+            MediaPlayerControlScreen: "media_player",
+        }
+
         def active_entries() -> list[tuple[str, str, str]]:
             return [
                 (active.binding.key, active.binding.description, action_name(active.binding.action))
@@ -640,9 +624,15 @@ class HACLI(App):
             # regardless of which mode is active — its help page groups both modes'
             # bindings side by side instead of only showing whichever is live (#7).
             if screen_cls is not None and getattr(screen_cls, "HELP_ALL_MODES", False):
-                rows = sectioned_rows(binding_entries(screen_cls.BINDINGS), screen_cls.HELP_SECTIONS)
+                rows = sectioned_rows(
+                    binding_entries(self.keys_ctl.static_bindings(scope_of[screen_cls])), screen_cls.HELP_SECTIONS
+                )
                 allowed = screen_cls.ALLOWED_APP_ACTIONS
-                app_rows = [(key, desc) for key, desc, action in binding_entries(self.BINDINGS) if action in allowed]
+                app_rows = [
+                    (key, desc)
+                    for key, desc, action in binding_entries(self.keys_ctl.static_bindings("app"))
+                    if action in allowed
+                ]
                 if app_rows:
                     rows = [*rows, ("", "From anywhere"), *app_rows]
                 return rows
@@ -650,7 +640,7 @@ class HACLI(App):
             if is_active:
                 entries = active_entries()
             else:
-                entries = binding_entries(self.BINDINGS if screen_cls is None else screen_cls.BINDINGS)
+                entries = binding_entries(self.keys_ctl.static_bindings(scope_of[screen_cls]))
 
             sections = getattr(screen_cls, "HELP_SECTIONS", None) if screen_cls is not None else None
             if sections:
@@ -816,8 +806,23 @@ class HACLI(App):
         if not maximizing:
             self.query_one("#entities_table", EntitiesTable).focus()
 
-    _LOG_HINT = "v scope · f maximize · ←/→ older/newer · T timeframe · a/i close"
-    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · T timeframe"
+    @property
+    def _LOG_HINT(self) -> str:
+        d = self.keys_ctl.display
+        return (
+            f"{d('log.scope')} scope · {d('log.maximize')} maximize · "
+            f"{d('log.older')}/{d('log.newer')} older/newer · {d('graph.duration')} timeframe · "
+            f"{d('log.toggle')}/{d('log.entity')} close"
+        )
+
+    @property
+    def _LOG_HINT_MAXIMIZED(self) -> str:
+        d = self.keys_ctl.display
+        return (
+            f"↑/↓ select · {d('log.maximize')} exit · "
+            f"{d('log.older')}/{d('log.newer')} older/newer · {d('graph.duration')} timeframe"
+        )
+
     # Coalesces held arrow-key repeats before a cursor-scoped log refetches + resubscribes.
     _LOG_CURSOR_DEBOUNCE = 0.3
 
@@ -1113,6 +1118,16 @@ class HACLI(App):
             except Exception as e:
                 self.log.error(f"Error saving collections to storage: {e}")
                 self.notify(f"Error saving data: {e}", title="Save Error", severity="error")
+
+    def handle_bindings_clash(self, clashed_bindings: set[Binding], node: DOMNode) -> None:
+        """No-op override. Several ids in controllers/keybindings.py's REGISTRY
+        deliberately share one binding id across multiple rows on the same
+        screen (e.g. `nav.back`'s three GraphPreviewScreen `escape` rows) so
+        they move together on rebind — Textual's `apply_keymap` reports that
+        as a `clashed_bindings` false positive even when nothing is actually
+        conflicting (see keybindings.py's module docstring, gotcha #2). Real
+        conflicts are caught earlier, in `keybindings.validate()`, when the
+        config screen's Keybindings category takes the new key."""
 
     # ── Navigation / back ────────────────────────────────────────────────────
 
@@ -1561,6 +1576,7 @@ class HACLI(App):
         self.app_config = result
         self.columns = result.get(CONFIG_KEY_COLUMNS, list(DEFAULT_COLUMNS))
         self.entity_names = result.get(CONFIG_KEY_ENTITY_NAMES, {})
+        self.keys_ctl.apply(result)
         self.set_title_based_on_focused_ui()
         new_graph_type = result.get(CONFIG_KEY_GRAPH_TYPE)
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(new_graph_type)

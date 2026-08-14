@@ -2,10 +2,10 @@
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Input, Label, ListView
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import ListPopup
 from hatty.ui.search_input import SearchInput
 
@@ -17,18 +17,7 @@ class ListSelectionPopup(ListPopup):
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
     parent: "HACLI"  # this popup's parent is always the app
 
-    BINDINGS = [
-        ("delete", "delete_list", "Delete List"),
-        ("r", "rename_list", "Rename"),
-        ("d", "set_default", "Set as Default"),
-        ("n", "toggle_notify", "Notify"),
-        ("v", "view_as_dashboard", "View as Dashboard"),
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-        ("/", "toggle_search", "Search"),
-        Binding("shift+up", "move_up", "Move Up", priority=True),
-        Binding("shift+down", "move_down", "Move Down", priority=True),
-    ]
+    BINDINGS = bindings_for("list_popup")
 
     DEFAULT_CSS = """
     ListSelectionPopup #list_selection_container {

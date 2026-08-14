@@ -2,11 +2,11 @@
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Label, OptionList
 from textual.widgets.option_list import Option
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.controls.entity_picker_modal import EntityPickerModal
 from hatty.ui.entity_table import get_display_name
 from hatty.ui.popup_base import PopupScreen
@@ -23,15 +23,7 @@ class PanelManagePopup(PopupScreen):
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
     parent: "HACLI"  # this popup's parent is always the app
 
-    BINDINGS = [
-        Binding("escape", "done", "Done"),
-        Binding("q", "done", "Done", show=False),
-        Binding("shift+up", "move(-1)", "Move up"),
-        Binding("shift+down", "move(1)", "Move down"),
-        Binding("delete", "remove", "Remove"),
-        Binding("x", "remove", "Remove"),
-        Binding("a", "add", "Add"),
-    ]
+    BINDINGS = bindings_for("panel_manage")
 
     DEFAULT_CSS = """
     #panel_manage_container {

@@ -12,3 +12,8 @@ theme: null
 graph_type: line
 graph_hours: 4
 log_hours: 24
+# Custom keybindings, also editable from Configuration > Keybindings in the app.
+# Maps a keybinding id to a Textual key string; omitted ids keep their default.
+# keybindings:
+#   log.toggle: "A"
+#   nav.back: "backspace"

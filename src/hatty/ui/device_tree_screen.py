@@ -32,12 +32,12 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static, Tree
 
 from hatty.const import CONFIG_KEY_GRAPH_TYPE
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.entity_table import entity_matches, get_display_name, is_dead
 from hatty.ui.popup_base import PopupScreen
 from hatty.ui.search_input import SearchInput
@@ -290,10 +290,7 @@ class AreaNamePopup(PopupScreen):
     """Single-Input name prompt for creating or renaming an area (issue #146).
     Dismisses with the trimmed name, or `None` when empty/cancelled."""
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("area_name")
 
     DEFAULT_CSS = """
     AreaNamePopup #area_name_container {
@@ -327,10 +324,7 @@ class AreaPickerPopup(PopupScreen):
     """Pick a target area for a device. Dismisses with `{"area_id": <id|None>}`
     (None clears the assignment) or `None` when cancelled."""
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("area_picker")
 
     DEFAULT_CSS = """
     AreaPickerPopup #area_picker_container {
@@ -373,11 +367,7 @@ class DeviceInfoPopup(PopupScreen):
     """Read-only device (or entity) info panel (issue #151). Constructed from an
     already-resolved title + `(label, value)` rows so it stays pure/testable."""
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        ("i", "cancel", "Close"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("device_info")
 
     DEFAULT_CSS = """
     DeviceInfoPopup #device_info_container {
@@ -407,29 +397,11 @@ class DeviceInfoPopup(PopupScreen):
 class DeviceTreeScreen(Screen):
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    BINDINGS = [
-        Binding("/", "toggle_search", "Search"),
-        Binding("e", "expand_entity", "Controls"),
-        Binding("G", "graph_fullscreen", "Graph"),
-        Binding("v", "cycle_mode", "View"),
-        Binding("m", "move_device", "Move to Area"),
-        Binding("i", "device_info", "Info"),
-        Binding("a", "create_area", "New Area"),
-        Binding("r", "rename", "Rename"),
-        Binding("l", "jump_to_list", "Lists"),
-        Binding("d", "open_dashboard", "Dashboard"),
-        Binding("n", "area_to_dashboard", "New Dashboard"),
-        Binding("x", "collapse_all", "Collapse All"),
-        Binding("X", "expand_all", "Expand All"),
-        Binding("question_mark", "show_help", "Help"),
-        # Priority: the focused Tree binds space to toggle_node; the screen
-        # action forwards non-entity nodes there so containers still fold.
-        Binding("space", "toggle_list_membership", "List", priority=True),
-        # Priority so it fires while the search Input is focused (ctrl+s isn't
-        # consumed by Input; tab is already taken by SearchInput.toggle_mode).
-        Binding("ctrl+s", "cycle_scope", "Scope", priority=True),
-        Binding("escape", "go_back", "Back"),
-    ]
+    # Space is priority: the focused Tree binds space to toggle_node; the
+    # screen action forwards non-entity nodes there so containers still fold.
+    # ctrl+s is priority so it fires while the search Input is focused (ctrl+s
+    # isn't consumed by Input; tab is already taken by SearchInput.toggle_mode).
+    BINDINGS = bindings_for("tree")
 
     _MODES = ("device", "area", "integration")
     # Scopes offered per view (ctrl+s cycles only within the current view's
@@ -508,7 +480,8 @@ class DeviceTreeScreen(Screen):
         return text
 
     def _search_placeholder(self) -> str:
-        return f"Filter [{self._scope}]... (Enter to apply, ctrl+s: scope, Esc to clear)"
+        back = self.app.keys_ctl.display("nav.back")
+        return f"Filter [{self._scope}]... (Enter to apply, ctrl+s: scope, {back} to clear)"
 
     def _entity_matcher(self):
         term = self._filter
