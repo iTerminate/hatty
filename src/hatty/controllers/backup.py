@@ -7,6 +7,7 @@ mirroring KeybindingController."""
 
 import asyncio
 from collections.abc import Sequence
+from pathlib import Path
 
 from hatty import backup as backup_module
 from hatty import git_sync
@@ -63,16 +64,20 @@ class BackupController:
 
     # ── Export / import ──────────────────────────────────────────────────────
 
-    def export_now(self) -> tuple[bool, str]:
-        path = self.prefs.get("path")
+    def export_now(self, path: str | None = None, sections: Sequence[str] | None = None) -> tuple[bool, str]:
+        """`path`/`sections` default to the saved prefs; the config screen
+        passes the currently-entered (unsaved) widget values instead, the
+        same "act on unsaved fields" precedent as action_test_connection."""
+        path = path if path is not None else self.prefs.get("path")
         if not path:
             return False, "No backup directory set."
-        sections = self.prefs.get("sections") or []
+        sections = sections if sections is not None else (self.prefs.get("sections") or [])
+        sections = [s for s in backup_module.SECTIONS if s in sections]
         if not sections:
             return False, "No sections selected to export."
         try:
             files = backup_module.build_files(self._app, sections)
-            written, removed = backup_module.write_export(path, files, sections)
+            written, removed = backup_module.write_export(Path(path), files, sections)
         except (OSError, ValueError) as exc:
             return False, f"Export failed: {exc}"
         parts = []
@@ -83,15 +88,15 @@ class BackupController:
         detail = f" ({', '.join(parts)})" if parts else " (already up to date)"
         return True, f"Exported to {path}{detail}."
 
-    def import_now(self, sections: Sequence[str]) -> tuple[bool, str, list[str]]:
-        path = self.prefs.get("path")
+    def import_now(self, sections: Sequence[str], path: str | None = None) -> tuple[bool, str, list[str]]:
+        path = path if path is not None else self.prefs.get("path")
         if not path:
             return False, "No backup directory set.", []
         sections = [s for s in backup_module.SECTIONS if s in sections]
         if not sections:
             return False, "No sections selected to import.", []
         try:
-            payloads, found = backup_module.read_export(path, sections)
+            payloads, found = backup_module.read_export(Path(path), sections)
         except ValueError as exc:
             return False, str(exc), []
 
