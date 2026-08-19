@@ -461,11 +461,48 @@ class HACLI(App):
 
         def callback(result) -> None:
             if isinstance(result, dict):
-                self.list_ctl.handle_popup_action(result)
+                action = result.get("action")
+                if action == "export":
+                    self._export_list(result["list_name"])
+                elif action == "import":
+                    self._import_list()
+                else:
+                    self.list_ctl.handle_popup_action(result)
             elif isinstance(result, str):
                 self.select_or_create_list(result)
 
         self.push_screen(ListSelectionPopup(), callback)
+
+    def _export_list(self, name: str) -> None:
+        from hatty.ui.json_export import export_json, slugify
+
+        export_json(
+            self,
+            payload=self.list_ctl.to_export_payload(name),
+            default_filename=f"{slugify(name)}.list.json",
+            title="Export list",
+            save_button="Export",
+            filters_label="List JSON",
+            success=lambda path: f"Exported '{name}' to {path}.",
+            success_title="List Exported",
+        )
+
+    def _import_list(self) -> None:
+        from hatty.ui.json_export import import_json
+
+        def _apply(payload: dict) -> str:
+            final = self.list_ctl.import_from_payload(payload)
+            self.select_or_create_list(final)
+            return f"Imported list '{final}'."
+
+        import_json(
+            self,
+            title="Import list",
+            open_button="Import",
+            filters_label="List JSON",
+            apply=_apply,
+            success_title="List Imported",
+        )
 
     def select_or_create_list(self, list_name: str) -> None:
         self.list_ctl.select_or_create(list_name)
@@ -1064,9 +1101,45 @@ class HACLI(App):
 
         def callback(result) -> None:
             if isinstance(result, dict):
-                self.graph_ctl.handle_saved_graphs_popup_action(result)
+                action = result.get("action")
+                if action == "export":
+                    self._export_saved_graph(result["name"])
+                elif action == "import":
+                    self._import_saved_graph()
+                else:
+                    self.graph_ctl.handle_saved_graphs_popup_action(result)
 
         self.push_screen(SavedGraphsPopup(), callback)
+
+    def _export_saved_graph(self, name: str) -> None:
+        from hatty.ui.json_export import export_json, slugify
+
+        export_json(
+            self,
+            payload=self.graph_ctl.to_export_payload(name),
+            default_filename=f"{slugify(name)}.graph.json",
+            title="Export saved graph",
+            save_button="Export",
+            filters_label="Graph JSON",
+            success=lambda path: f"Exported '{name}' to {path}.",
+            success_title="Graph Exported",
+        )
+
+    def _import_saved_graph(self) -> None:
+        from hatty.ui.json_export import import_json
+
+        def _apply(payload: dict) -> str:
+            final = self.graph_ctl.import_from_payload(payload)
+            return f"Imported saved graph '{final}'."
+
+        import_json(
+            self,
+            title="Import saved graph",
+            open_button="Import",
+            filters_label="Graph JSON",
+            apply=_apply,
+            success_title="Graph Imported",
+        )
 
     # ── Config persistence ───────────────────────────────────────────────────
 

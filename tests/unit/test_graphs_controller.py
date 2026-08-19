@@ -173,3 +173,59 @@ def test_record_state_skips_unmapped_binary_state():
 def test_record_state_missing_entity_id_is_noop():
     ctl = _controller()
     ctl.record_state({"state": "21.5"})  # no entity_id -> early return, no error
+
+
+# ── export / import ──────────────────────────────────────────────────────────
+
+
+def test_export_payload_shape():
+    ctl = _controller()
+    ctl.saved_graphs = {"Temps": {"entity_ids": ["sensor.a"], "graph_type": "line", "hours": 4.0}}
+    payload = ctl.to_export_payload("Temps")
+    assert payload["hatty_graph"] == 1
+    assert payload["name"] == "Temps"
+    assert payload["graph"] == ctl.saved_graphs["Temps"]
+    # A deep copy, not a live reference.
+    assert payload["graph"] is not ctl.saved_graphs["Temps"]
+
+
+def test_import_round_trip_creates_matching_graph():
+    ctl = _controller()
+    ctl.saved_graphs = {"Temps": {"entity_ids": ["sensor.a"], "graph_type": "line", "hours": 4.0}}
+    payload = ctl.to_export_payload("Temps")
+
+    ctl2 = _controller()
+    final = ctl2.import_from_payload(payload)
+    assert final == "Temps"
+    assert ctl2.saved_graphs["Temps"] == ctl.saved_graphs["Temps"]
+    assert ("saved_graphs",) in ctl2._app.persist_calls
+
+
+def test_import_dedupes_name_on_collision():
+    ctl = _controller()
+    ctl.saved_graphs = {"Temps": {"entity_ids": ["sensor.a"], "graph_type": "line", "hours": 4.0}}
+    payload = ctl.to_export_payload("Temps")
+    final = ctl.import_from_payload(payload)
+    assert final == "Temps (2)"
+    assert "Temps" in ctl.saved_graphs and "Temps (2)" in ctl.saved_graphs
+
+
+def test_import_rejects_wrong_version():
+    ctl = _controller()
+    for bad in ({"hatty_graph": 2, "name": "A", "graph": {"entity_ids": []}}, {}, "not a dict"):
+        try:
+            ctl.import_from_payload(bad)
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
+
+
+def test_import_rejects_missing_entity_ids():
+    ctl = _controller()
+    for bad_graph in (None, "nope", {}, {"graph_type": "line"}):
+        payload = {"hatty_graph": 1, "name": "A", "graph": bad_graph}
+        try:
+            ctl.import_from_payload(payload)
+            assert False, "expected ValueError"
+        except ValueError:
+            pass

@@ -1,11 +1,15 @@
 # hatty — MIT License. See LICENSE file for details.
+import json
+
 from textual.coordinate import Coordinate
+from textual.widgets import Input
+from textual_fspicker import FileOpen, FileSave
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.graph.preview_screen import GraphPreviewScreen
 from hatty.ui.graph.saved_graphs_popup import SavedGraphsPopup, SaveGraphNamePopup
 from hatty.ui.list_selection_popup import ListSelectionPopup
-from tests.conftest import NO_LIST_CONFIG, make_config
+from tests.conftest import NO_LIST_CONFIG, make_config, notified
 
 # Alphabetical order with no list:
 # Row 0: Fan Switch (switch.fan, off)
@@ -485,3 +489,90 @@ async def test_l_on_fullscreen_graph_opens_picker_when_no_list(make_app, sample_
         await pilot.pause()
 
         assert isinstance(app.screen, ListSelectionPopup)
+
+
+# ── export / import ──────────────────────────────────────────────────────────
+
+
+async def test_export_saved_graph_writes_file(make_app, sample_entities, tmp_path):
+    config_data = {
+        **NO_LIST_CONFIG,
+        "saved_graphs": {
+            "Temp Trend": {"entity_ids": ["sensor.temperature"], "graph_type": "line", "hours": 4},
+        },
+    }
+    app = make_app(entities=sample_entities, config_data=config_data)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        assert isinstance(app.screen, FileSave)
+
+        out_path = tmp_path / "export.json"
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(out_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        payload = json.loads(out_path.read_text())
+        assert payload == {
+            "hatty_graph": 1,
+            "name": "Temp Trend",
+            "graph": app.saved_graphs["Temp Trend"],
+        }
+        assert notified(app, title="Graph Exported")
+
+
+async def test_import_saved_graph_from_file(make_app, sample_entities, tmp_path):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    payload = {
+        "hatty_graph": 1,
+        "name": "Imported Graph",
+        "graph": {"entity_ids": ["sensor.temperature"], "graph_type": "scatter", "hours": 12},
+    }
+    in_path = tmp_path / "import.json"
+    in_path.write_text(json.dumps(payload))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, FileOpen)
+
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(in_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert "Imported Graph" in app.saved_graphs
+        assert app.saved_graphs["Imported Graph"] == payload["graph"]
+        assert notified(app, title="Graph Imported")
+        assert not isinstance(app.screen, (FileOpen, SavedGraphsPopup))
+
+
+async def test_import_saved_graph_rejects_malformed_file(make_app, sample_entities, tmp_path):
+    app = make_app(entities=sample_entities, config_data=NO_LIST_CONFIG)
+    in_path = tmp_path / "bad.json"
+    in_path.write_text(json.dumps({"not": "a graph export"}))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(in_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert notified(app, title="Import Failed")
+        assert app.saved_graphs == {}

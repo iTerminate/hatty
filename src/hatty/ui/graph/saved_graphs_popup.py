@@ -95,6 +95,13 @@ class SavedGraphsPopup(ListPopup):
         if self.selected_name:
             self.dismiss({"action": "delete", "name": self.selected_name})
 
+    def action_export_graph(self) -> None:
+        if self.selected_name:
+            self.dismiss({"action": "export", "name": self.selected_name})
+
+    def action_import_graph(self) -> None:
+        self.dismiss({"action": "import"})
+
     def action_cancel(self) -> None:
         rename_input = self.query_one("#saved_graph_rename_input", Input)
         if rename_input.display:

@@ -1440,7 +1440,7 @@
     "file": "src/hatty/ui/graph/saved_graphs_popup.py",
     "class": "SavedGraphsPopup",
     "lineno": 45,
-    "count": 4,
+    "count": 6,
     "entries": [
       {
         "form": "tuple",
@@ -1454,6 +1454,20 @@
         "key": "delete",
         "action": "delete_graph",
         "description": "Delete",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "x",
+        "action": "export_graph",
+        "description": "Export",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "i",
+        "action": "import_graph",
+        "description": "Import",
         "__tuple_form__": true
       },
       {
@@ -1528,7 +1542,7 @@
     "file": "src/hatty/ui/list_selection_popup.py",
     "class": "ListSelectionPopup",
     "lineno": 20,
-    "count": 10,
+    "count": 12,
     "entries": [
       {
         "form": "tuple",
@@ -1563,6 +1577,20 @@
         "key": "v",
         "action": "view_as_dashboard",
         "description": "View as Dashboard",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "x",
+        "action": "export_list",
+        "description": "Export",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "i",
+        "action": "import_list",
+        "description": "Import",
         "__tuple_form__": true
       },
       {

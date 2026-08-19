@@ -143,6 +143,13 @@ class ListSelectionPopup(ListPopup):
         if self.selected_name and self.selected_name != "View All":
             self.dismiss({"action": "view_as_dashboard", "list_name": self.selected_name})
 
+    def action_export_list(self) -> None:
+        if self.selected_name and self.selected_name != "View All":
+            self.dismiss({"action": "export", "list_name": self.selected_name})
+
+    def action_import_list(self) -> None:
+        self.dismiss({"action": "import"})
+
     def action_toggle_notify(self) -> None:
         # Acts in place (like _move below) rather than dismissing, so several
         # lists can be toggled in one visit to the popup.
