@@ -17,3 +17,16 @@ log_hours: 24
 # keybindings:
 #   log.toggle: "A"
 #   nav.back: "backspace"
+# Backup & Sync, also editable from Configuration > Backup & Sync in the app.
+# Exports lists/dashboards/saved_graphs/entity_names/settings/keybindings as a
+# directory of JSON files under "path" (never the token above or the ntfy
+# password); optionally treats that directory as a git repo.
+# backup:
+#   path: "/home/you/hatty-backup"
+#   sections: ["lists", "dashboards", "saved_graphs", "entity_names", "settings", "keybindings"]
+#   git_enabled: true
+#   pull_on_start: true
+#   import_on_pull: true
+#   commit_on_exit: true
+#   push_on_exit: true
+#   pull_rebase: false
