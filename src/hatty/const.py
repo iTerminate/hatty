@@ -201,6 +201,7 @@ CONFIG_KEY_NOTIFY_LISTS = "notify_lists"
 CONFIG_KEY_TERMINAL_TITLE_ENABLED = "terminal_title_enabled"
 CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
 CONFIG_KEY_KEYBINDINGS = "keybindings"
+CONFIG_KEY_BACKUP = "backup"
 
 # Fallback/default value for the "terminal_title" config key (issue: set tmux
 # title to hatty or pref).
@@ -224,4 +225,19 @@ DEFAULT_NOTIFICATIONS = {
     "ntfy_topic": "",
     "ntfy_username": "",
     "ntfy_password": "",
+}
+
+# Default Backup & Sync preferences (config key "backup"), merged over by
+# BackupController whenever a config predates a given key. "sections" is
+# spelled out literally (matching backup.SECTIONS) rather than imported, so
+# const.py stays free of imports from the rest of the app.
+DEFAULT_BACKUP = {
+    "path": "",  # export directory; "" = feature idle
+    "sections": ["lists", "dashboards", "saved_graphs", "entity_names", "settings", "keybindings"],
+    "git_enabled": False,
+    "pull_on_start": False,  # pull + import at boot
+    "import_on_pull": True,  # after a successful pull, load the files back in
+    "commit_on_exit": False,  # export + commit at quit
+    "push_on_exit": False,  # ...and push (implies commit)
+    "pull_rebase": False,
 }

@@ -39,6 +39,7 @@ from hatty.const import (
     DEFAULT_TERMINAL_TITLE,
     TOGGLABLE_DOMAINS,
 )
+from hatty.controllers.backup import BackupController
 from hatty.controllers.connection import ConnectionController
 from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
@@ -114,6 +115,7 @@ class HACLI(App):
         self.notify_ctl = NotificationController(self)
         self.log_ctl = LogbookController(self)
         self.keys_ctl = KeybindingController(self)
+        self.backup_ctl = BackupController(self)
 
         self.all_entities: list = []
         self.entity_registry: list = []
@@ -316,6 +318,11 @@ class HACLI(App):
 
         self._apply_terminal_title(cfg)
         self.keys_ctl.apply(cfg)
+        self.backup_ctl.apply(cfg)
+        # Only at boot/restart (this method's three call sites), never on a
+        # plain reconnect from the config screen — pull_on_start() is itself a
+        # no-op in demo mode and when the pref is off.
+        self.spawn(self.backup_ctl.pull_on_start())
 
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(cfg.get(CONFIG_KEY_GRAPH_TYPE))
 
@@ -1650,6 +1657,7 @@ class HACLI(App):
         self.columns = result.get(CONFIG_KEY_COLUMNS, list(DEFAULT_COLUMNS))
         self.entity_names = result.get(CONFIG_KEY_ENTITY_NAMES, {})
         self.keys_ctl.apply(result)
+        self.backup_ctl.apply(result)
         self.set_title_based_on_focused_ui()
         new_graph_type = result.get(CONFIG_KEY_GRAPH_TYPE)
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(new_graph_type)
