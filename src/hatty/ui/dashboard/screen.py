@@ -45,7 +45,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container, Grid, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -55,6 +54,7 @@ from textual.widgets import Footer, Header, Static
 from textual_fspicker import FileOpen, FileSave, Filters
 
 from hatty.const import CONFIG_KEY_GRAPH_TYPE
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.dashboard.cursor import GridCursor
@@ -205,8 +205,22 @@ class DashboardScreen(Screen):
     # log_window/log_title_suffix hooks live below with the rest of the log actions.
     LOG_PANEL_ID: str = "dashboard_log_panel"
     LOG_SUPPORTS_LIVE: bool = True
-    _LOG_HINT = "v scope · f maximize · [ / ] older/newer · a close"
-    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · ←/→ older/newer · a close"
+
+    @property
+    def _LOG_HINT(self) -> str:
+        d = self.app.keys_ctl.display
+        return (
+            f"{d('log.scope')} scope · {d('log.maximize')} maximize · "
+            f"{d('dashboard.log_older')}/{d('dashboard.log_newer')} older/newer · {d('log.toggle')} close"
+        )
+
+    @property
+    def _LOG_HINT_MAXIMIZED(self) -> str:
+        d = self.app.keys_ctl.display
+        return (
+            f"↑/↓ select · {d('log.maximize')} exit · "
+            f"{d('dashboard.log_older')}/{d('dashboard.log_newer')} older/newer · {d('log.toggle')} close"
+        )
 
     IDLE_TIMEOUT: float = 5.0
 
@@ -215,43 +229,7 @@ class DashboardScreen(Screen):
     # scrolls instead of squishing every cell below readability.
     CELL_MIN_HEIGHT: int = 8
 
-    BINDINGS = [
-        Binding("up", "move_cursor(-1, 0)", "Up", show=False),
-        Binding("down", "move_cursor(1, 0)", "Down", show=False),
-        Binding("left", "move_cursor(0, -1)", "Left", show=False),
-        Binding("right", "move_cursor(0, 1)", "Right", show=False),
-        # Use mode
-        Binding("enter", "toggle_slot", "Toggle"),
-        Binding("e", "expand_slot", "Controls"),
-        Binding("E", "enter_edit", "Edit"),
-        Binding("r", "rename_slot_entity", "Rename"),
-        # Edit mode
-        Binding("a", "edit_slot", "Assign"),
-        Binding("delete", "clear_slot", "Clear Slot"),
-        Binding("enter", "grab_move", "Move"),
-        Binding("ctrl+right", "resize_slot(0, 1)", "Wider", show=False),
-        Binding("ctrl+left", "resize_slot(0, -1)", "Narrower", show=False),
-        Binding("ctrl+down", "resize_slot(1, 0)", "Taller", show=False),
-        Binding("ctrl+up", "resize_slot(-1, 0)", "Shorter", show=False),
-        Binding("s", "split_slot", "Split"),
-        Binding("u", "unsplit_slot", "Unsplit", show=False),
-        Binding("f", "fill_split", "Fill"),
-        # Activity log (Use mode only; `a`/`f` double up with Edit mode above,
-        # gated apart by check_action like enter's toggle_slot/grab_move split)
-        Binding("a", "toggle_activity_log", "Activity Log", show=False),
-        Binding("v", "show_log_scope", "Log Scope", show=False),
-        Binding("f", "maximize_log", "Maximize Log", show=False),
-        Binding("left_square_bracket", "log_older", "Older Events", show=False),
-        Binding("right_square_bracket", "log_newer", "Newer Events", show=False),
-        # Both modes
-        Binding("l", "show_list_popup", "Back to List", show=False),
-        Binding("d", "manage_dashboards", "Dashboards"),
-        Binding("D", "show_device_tree", "Device Tree"),
-        Binding("t", "cycle_graph_type", "Graph Type", show=False),
-        Binding("G", "graph_fullscreen", "Full Graph"),
-        Binding("question_mark", "show_help", "Help"),
-        Binding("escape", "go_back", "Back"),
-    ]
+    BINDINGS = bindings_for("dashboard")
 
     # Groups the help page under the same Use/Edit split the bindings above are
     # already commented with (issue #7); unlike GraphPreviewScreen this page
@@ -448,9 +426,14 @@ class DashboardScreen(Screen):
         banner = self.query_one("#dashboard_mode_banner", Static)
         for cls in ("-mode-edit", "-mode-grab", "-mode-widget"):
             banner.remove_class(cls)
+        # Esc is the only key in these banners that tracks the live keymap
+        # (nav.back, curated/rebindable) — every other key here belongs to a
+        # fixed, non-rebindable dashboard-local binding (or, for "r: manage
+        # panel", a raw on_key handler with no registry id at all).
+        back = self.app.keys_ctl.display("nav.back")
         if self._widget_active:
             banner.add_class("-mode-widget")
-            banner.update("WIDGET · interacting — ↑↓: adjust  Esc: exit")
+            banner.update(f"WIDGET · interacting — ↑↓: adjust  {back}: exit")
         elif not self.edit_mode:
             banner.update("USE · operate widgets — Enter: use  e: edit")
         elif self._grabbed is not None:
@@ -460,7 +443,7 @@ class DashboardScreen(Screen):
             banner.add_class("-mode-edit")
             banner.update(
                 "EDIT · arrange — a: assign (enters a split)  Del: clear  Enter: move"
-                "  Ctrl+arrows: resize  s/u: split/unsplit  f: fill  r: manage panel  Esc: done"
+                f"  Ctrl+arrows: resize  s/u: split/unsplit  f: fill  r: manage panel  {back}: done"
             )
 
     def _reset_idle_timer(self) -> None:

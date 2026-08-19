@@ -1,10 +1,10 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Label, SelectionList
 from textual.widgets.selection_list import Selection
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.entity_table import COLUMNS
 from hatty.ui.popup_base import PopupScreen
 
@@ -12,13 +12,7 @@ from hatty.ui.popup_base import PopupScreen
 class ColumnConfigPopup(PopupScreen):
     AUTO_FOCUS = "#column_selection"
 
-    BINDINGS = [
-        ("escape", "save_and_close", "Save & Close"),
-        Binding("q", "save_and_close", "Save & Close", show=False),
-        Binding("enter", "save_and_close", "Save & Close", priority=True),
-        Binding("shift+up", "move_up", "Move Up", priority=True),
-        Binding("shift+down", "move_down", "Move Down", priority=True),
-    ]
+    BINDINGS = bindings_for("column_config")
 
     DEFAULT_CSS = """
     #column_config_container Label {

@@ -42,13 +42,13 @@ keeps its own native left/right.
 from typing import TYPE_CHECKING, cast
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.events import Key
 from textual.timer import Timer
 from textual.widgets import Button, Checkbox, DataTable, Footer, Input, Label, ListItem, ListView, OptionList, Select
 
 from hatty.const import LAST_CHANGED_WIDGET_TYPES, WIDGET_TYPES
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.dashboard.widget_match import compatible_widget_types, entity_matches_widget_type
 from hatty.ui.dashboard.widgets.base import build_slot_content
 from hatty.ui.entity_table import EntitiesTable, entity_matches, get_display_name
@@ -87,23 +87,16 @@ class DashboardSlotPopup(PopupScreen):
     # mirrors light_screen.py/media_player_screen.py's _BUTTON_ROW_IDS convention).
     BUTTON_ROW_IDS = ("type_step_buttons",)
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-        # Panel/fill's accumulated-entities box (issue #254): reorder and remove
-        # only apply while that box is focused (guarded in the actions below), so
-        # these are plain (non-priority) bindings — a priority binding on "delete"
-        # would intercept it ahead of Input's own delete_right while the search
-        # box is focused, breaking forward-delete text editing there.
-        Binding("shift+up", "reorder_selected(-1)", "Move Up", show=False),
-        Binding("shift+down", "reorder_selected(1)", "Move Down", show=False),
-        Binding("delete", "remove_selected", "Remove", show=False),
-        # Priority so up/down always move focus instead of being swallowed by the
-        # entity table's/selected-list's own cursor; check_action releases it while
-        # those (or an open type dropdown) are focused so their cursor keeps working.
-        Binding("up", "nav_focus(-1)", "Focus Up", show=False, priority=True),
-        Binding("down", "nav_focus(1)", "Focus Down", show=False, priority=True),
-    ]
+    # Panel/fill's accumulated-entities box (issue #254): reorder and remove
+    # only apply while that box is focused (guarded in the actions below), so
+    # those are plain (non-priority) bindings — a priority binding on "delete"
+    # would intercept it ahead of Input's own delete_right while the search
+    # box is focused, breaking forward-delete text editing there. up/down are
+    # priority so they always move focus instead of being swallowed by the
+    # entity table's/selected-list's own cursor; check_action releases it
+    # while those (or an open type dropdown) are focused so their cursor
+    # keeps working.
+    BINDINGS = bindings_for("slot_popup")
 
     DEFAULT_CSS = """
     #dashboard_slot_container {

@@ -39,10 +39,16 @@ taking an injected app reference: `controllers/lists.py` (`app.list_ctl`), `dash
 (`app.dash_ctl`), `graphs.py` (`app.graph_ctl`), `connection.py` (`app.conn_ctl` — the HA websocket
 message pump, `handle_ha_message`/`_HA_MESSAGE_HANDLERS`), `notifications.py` (`app.notify_ctl`),
 `logbook.py` (`app.log_ctl` — the activity log's scope/paging/fetch/subscription state machine,
-shared by `HACLI`'s docked panel, `GraphPreviewScreen`'s, and `DashboardScreen`'s). **`HACLI` keeps its old attribute surface
-via property pairs** (`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so
-screens and tests read/assign through the app unchanged; new UI code should call controllers
-directly instead (`self.app.dash_ctl.set_slot(...)`).
+shared by `HACLI`'s docked panel, `GraphPreviewScreen`'s, and `DashboardScreen`'s), `keybindings.py`
+(`app.keys_ctl` — owns the user's keybinding overrides and pushes the resulting keymap onto the
+running app via `App.set_keymap`; every screen's `BINDINGS` is `bindings_for(scope)` from this
+module's `REGISTRY`, the single source of truth for all ~220 bindings in the app, rebindable from
+Configuration ▸ Keybindings). Like `const.py`/`types.py`, `keybindings.py`'s registry half is
+cycle-safe (no `hatty.ui`/`hatty.main` imports) since it's imported at class-definition time by
+every screen module. **`HACLI` keeps its old attribute surface via property pairs**
+(`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so screens and tests
+read/assign through the app unchanged; new UI code should call controllers directly instead
+(`self.app.dash_ctl.set_slot(...)`).
 
 **Two-tier config persistence.** `config.yaml` is lean — connection settings and display
 preferences only. The user-data collections (`lists`, `entity_names`, `dashboards`, `saved_graphs`,
@@ -65,7 +71,7 @@ params typed as `Entity` (not bare `dict`) and read `total=False` fields via `.g
 - `src/hatty/main.py` — the `HACLI` Textual app: keybindings, message routing, entity-table state,
   cross-cutting plumbing (`spawn(coro)` for tracked fire-and-forget tasks — never bare
   `asyncio.create_task`; `persist(*keys)` to mirror + save a collection).
-- `src/hatty/controllers/` — the four controllers above.
+- `src/hatty/controllers/` — the controllers above.
 - `src/hatty/client.py` — `HAClient`: websocket auth/requests, REST history/logbook fetchers (swallow
   errors, return `None`).
 - `src/hatty/config.py` / `storage.py` — YAML config and SQLite collection persistence.

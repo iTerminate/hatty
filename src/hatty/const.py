@@ -121,6 +121,7 @@ def binary_state_label(state: str, device_class: str) -> str:
         return off_label
     return state
 
+
 # Dashboard slot widget types offered by DashboardSlotPopup ("split" is not
 # assignable — split slots are created via SplitSlotPopup).
 WIDGET_TYPES = [
@@ -169,6 +170,11 @@ DEFAULT_GRAPH_HOURS = 4
 # Fallback for the global "log_hours" config value (the activity log's window size).
 DEFAULT_LOG_HOURS = 24
 
+# GraphPreviewScreen's shift+left/shift+right "fast page" multiplier over the
+# normal left/right page. Lives here (not preview_screen.py) so the keybinding
+# registry can reference it in a binding description without an import cycle.
+FAST_PAGE_MULTIPLIER = 6
+
 # Canonical names for the top-level app_config keys, so a rename is one edit and a
 # typo is a NameError instead of a silent None. config.default_config() and
 # storage.PERSISTED reference these, keeping them the single literal definition.
@@ -194,6 +200,7 @@ CONFIG_KEY_NOTIFICATIONS = "notifications"
 CONFIG_KEY_NOTIFY_LISTS = "notify_lists"
 CONFIG_KEY_TERMINAL_TITLE_ENABLED = "terminal_title_enabled"
 CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
+CONFIG_KEY_KEYBINDINGS = "keybindings"
 
 # Fallback/default value for the "terminal_title" config key (issue: set tmux
 # title to hatty or pref).

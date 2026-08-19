@@ -1,11 +1,11 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Input, Label
 
 from hatty.client import probe_connection
+from hatty.controllers.keybindings import bindings_for
 
 
 class OnboardingScreen(Screen):
@@ -17,12 +17,7 @@ class OnboardingScreen(Screen):
     parse — that decision lives in main.py via config.needs_onboarding.
     """
 
-    BINDINGS = [
-        Binding("ctrl+t", "test_connection", "Test Connection"),
-        Binding("ctrl+s", "save", "Save & Connect"),
-        Binding("ctrl+v", "toggle_token", "Show/Hide Token"),
-        Binding("escape", "cancel", "Cancel"),
-    ]
+    BINDINGS = bindings_for("onboarding")
 
     DEFAULT_CSS = """
     OnboardingScreen {

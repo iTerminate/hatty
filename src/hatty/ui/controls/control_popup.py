@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from textual import events
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Button, Footer, Input, Label, Select
 
 from hatty.const import NUMERIC_INPUT_TYPES
+from hatty.controllers.keybindings import bindings_for
 
 if TYPE_CHECKING:
     from textual.widgets._input import InputType
@@ -19,11 +19,7 @@ from hatty.ui.popup_base import PopupScreen
 
 
 class EntityControlPopup(PopupScreen):
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-        Binding("enter", "save", "Save"),
-    ]
+    BINDINGS = bindings_for("control_popup")
 
     DEFAULT_CSS = """
     #control_container {

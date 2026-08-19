@@ -54,11 +54,12 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Label
 from textual_plotext import PlotextPlot
 
+from hatty.const import FAST_PAGE_MULTIPLIER
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.activity_log_panel import ActivityLogPanel
 from hatty.ui.entity_table import entity_title, entity_unit, get_display_name
 from hatty.ui.graph.binary_history import binary_stats, value_to_state
@@ -98,9 +99,6 @@ def _color_hint(color: str) -> str:
     return f"{swatch_markup(color)} [tab: next line · c/C: {color}]"
 
 
-_FAST_PAGE_MULTIPLIER = 6
-
-
 class GraphPreviewScreen(Screen):
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
@@ -123,40 +121,7 @@ class GraphPreviewScreen(Screen):
     }
     """
 
-    BINDINGS = [
-        Binding("t", "cycle_plot_type", "Graph Type"),
-        Binding("left", "scroll_back", "Older"),
-        Binding("left", "cursor_prev", "Prev Sample"),
-        Binding("right", "scroll_forward", "Newer"),
-        Binding("right", "cursor_next", "Next Sample"),
-        Binding("shift+left", "scroll_back_fast", f"Older ×{_FAST_PAGE_MULTIPLIER}"),
-        Binding("shift+left", "cursor_prev_fast", "Prev Sample ×10%"),
-        Binding("shift+right", "scroll_forward_fast", f"Newer ×{_FAST_PAGE_MULTIPLIER}"),
-        Binding("shift+right", "cursor_next_fast", "Next Sample ×10%"),
-        Binding("plus", "zoom_in", "Zoom In"),
-        Binding("minus", "zoom_out", "Zoom Out"),
-        Binding("home", "snap_live", "Now"),
-        Binding("home", "cursor_home", "Oldest Sample"),
-        Binding("end", "cursor_end", "Newest Sample"),
-        Binding("enter", "toggle_cursor_mode", "Inspect"),
-        Binding("enter", "exit_cursor_mode", "Exit Inspect"),
-        Binding("S", "save_graph", "Save As"),
-        Binding("u", "update_graph", "Update"),
-        Binding("tab", "next_entity", "Next Line", show=False),
-        Binding("c", "cycle_color", "Color"),
-        Binding("C", "pick_color", "Color Picker"),
-        Binding("l", "show_list_popup", "Back to List", show=False),
-        Binding("a", "toggle_event_log", "Activity Log"),
-        Binding("v", "show_log_scope", "Log View"),
-        Binding("f", "maximize_log", "Maximize Log", show=False),
-        Binding("question_mark", "show_help", "Help"),
-        Binding("escape", "exit_cursor_mode", "Exit Inspect"),
-        Binding("escape", "close_event_log", "Close Log"),
-        Binding("escape", "go_back", "Back"),
-        Binding("q", "exit_cursor_mode", "Exit Inspect", show=False),
-        Binding("q", "close_event_log", "Close Log", show=False),
-        Binding("q", "go_back", "Back", show=False),
-    ]
+    BINDINGS = bindings_for("graph")
 
     # App-level actions that still make sense on top of this screen — everything
     # else in HACLI.BINDINGS is main-table-only and is denied by HACLI.check_action
@@ -421,10 +386,10 @@ class GraphPreviewScreen(Screen):
         self._page_forward(self._window_hours() / 2)
 
     def action_scroll_back_fast(self) -> None:
-        self._page_back(self._window_hours() * _FAST_PAGE_MULTIPLIER)
+        self._page_back(self._window_hours() * FAST_PAGE_MULTIPLIER)
 
     def action_scroll_forward_fast(self) -> None:
-        self._page_forward(self._window_hours() * _FAST_PAGE_MULTIPLIER)
+        self._page_forward(self._window_hours() * FAST_PAGE_MULTIPLIER)
 
     def action_cursor_prev(self) -> None:
         self._move_cursor(-1)
@@ -448,8 +413,8 @@ class GraphPreviewScreen(Screen):
     def _fast_cursor_stride(self) -> int:
         """Cursor-mode fast step: at least 10% of the plotted samples so ~10 fast
         presses cross a dense (multi-thousand-point) window, never below the
-        familiar small-plot step of _FAST_PAGE_MULTIPLIER."""
-        return max(_FAST_PAGE_MULTIPLIER, round(len(self._data) * 0.10))
+        familiar small-plot step of FAST_PAGE_MULTIPLIER."""
+        return max(FAST_PAGE_MULTIPLIER, round(len(self._data) * 0.10))
 
     def _page_back(self, hours: float) -> None:
         self._window.page_back(hours, datetime.now(timezone.utc))
@@ -766,8 +731,15 @@ class GraphPreviewScreen(Screen):
         self.app.log_ctl.close(self)
         self._redraw()
 
-    _LOG_HINT = "v scope · f max · a close · ←/→ page with the graph"
-    _LOG_HINT_MAXIMIZED = "↑/↓ select · f exit · a close · ←/→ page with the graph"
+    @property
+    def _LOG_HINT(self) -> str:
+        d = self.app.keys_ctl.display
+        return f"{d('log.scope')} scope · {d('log.maximize')} max · {d('log.toggle')} close · ←/→ page with the graph"
+
+    @property
+    def _LOG_HINT_MAXIMIZED(self) -> str:
+        d = self.app.keys_ctl.display
+        return f"↑/↓ select · {d('log.maximize')} exit · {d('log.toggle')} close · ←/→ page with the graph"
 
     def action_close_event_log(self) -> None:
         """escape/q — a further escape/toggle closes; a maximized panel gets

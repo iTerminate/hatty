@@ -57,6 +57,7 @@ highlight to the newest entry, same as the ticker."""
 
 from collections import deque
 
+from rich.markup import escape
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
@@ -182,7 +183,11 @@ class ActivityLogPanel(Widget):
         self.query_one("#log_title", Label).update(text)
 
     def set_hint(self, text: str) -> None:
-        self.query_one("#log_hint", Label).update(text)
+        # Escaped: hint text is assembled from live keybinding display strings
+        # that can include literal "["/"]" (e.g. the bracket keys), which
+        # Rich's markup parser can misread as a style tag once adjacent
+        # fragments combine (e.g. "[" + "/" + "]" -> "[/]").
+        self.query_one("#log_hint", Label).update(escape(text))
 
     @property
     def title_text(self) -> str:

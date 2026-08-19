@@ -1,10 +1,10 @@
 # hatty — MIT License. See LICENSE file for details.
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Label, OptionList
 from textual.widgets.option_list import Option
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import PopupScreen
 
 # plotext named color -> ANSI 0-15 code. plotext resolves its named colors
@@ -77,10 +77,7 @@ def swatch_markup(plotext_color: str) -> str:
 class GraphColorPopup(PopupScreen):
     """Pick a plotext color for one graph line; dismisses with the color name or None."""
 
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("graph_color")
 
     DEFAULT_CSS = """
     #graph_color_container {

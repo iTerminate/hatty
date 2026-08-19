@@ -11,6 +11,7 @@ from textual.screen import Screen
 from textual.widgets import (
     Button,
     ContentSwitcher,
+    DataTable,
     Footer,
     Header,
     Input,
@@ -33,6 +34,7 @@ from hatty.const import (
     CONFIG_KEY_GRAPH_HOURS,
     CONFIG_KEY_GRAPH_TYPE,
     CONFIG_KEY_HOME_ASSISTANT,
+    CONFIG_KEY_KEYBINDINGS,
     CONFIG_KEY_LISTS,
     CONFIG_KEY_NOTIFICATIONS,
     CONFIG_KEY_SAVED_GRAPHS,
@@ -45,8 +47,10 @@ from hatty.const import (
     DEFAULT_NOTIFICATIONS,
     DEFAULT_TERMINAL_TITLE,
 )
+from hatty.controllers import keybindings as keybindings_module
 from hatty.controllers.notifications import send_test_ntfy
 from hatty.ui.entity_table import COLUMNS
+from hatty.ui.key_capture_popup import KeyCapturePopup
 
 if TYPE_CHECKING:
     from hatty.main import HACLI
@@ -85,7 +89,12 @@ _CATEGORIES = [
     ("Appearance", "cat_appearance", "Theme, graph defaults, visible columns", "#cfg_theme"),
     ("Notifications", "cat_notifications", "Toast/beep/desktop/ntfy alerts", "#cfg_notify"),
     ("Data & Collections", "cat_data", "Lists, name overrides, dashboards, saved graphs", "#cat_data"),
+    ("Keybindings", "cat_keybindings", "Rebind keys for navigation, lists, log and graph", "#cfg_keys"),
 ]
+
+# Row key prefix for a non-interactive section-header row in #cfg_keys, so
+# on_data_table_row_selected can tell it apart from a real rebindable id.
+_KEYS_SECTION_ROW_PREFIX = "section:"
 
 
 class ConfigScreen(Screen):
@@ -185,6 +194,12 @@ class ConfigScreen(Screen):
         self._raw_config = raw_config
         self._config_path = config_path
         self._token_visible = False
+        # Working copy of keybinding overrides, edited live by KeyCapturePopup
+        # (unlike every other field here, which is read straight off its widget
+        # at Save time) so the table can re-render its "Key" column immediately
+        # after each rebind, and so keybindings.validate() sees in-progress
+        # edits from earlier in the same session.
+        self._keybindings: dict[str, str] = dict(keybindings_module.sanitize(raw_config.get(CONFIG_KEY_KEYBINDINGS)))
 
     @staticmethod
     def _lists_summary(lists: dict) -> str | Table:
@@ -350,7 +365,62 @@ class ConfigScreen(Screen):
                     yield Static("No saved graphs defined.", classes="read-only-note")
                 yield Label("Use [bold]s[/bold] to manage saved graphs", classes="read-only-note", markup=True)
 
+            with VerticalScroll(id="cat_keybindings", classes="config-pane"):
+                yield Label(
+                    "Select a row and press the new key. Bold keys differ from their default.",
+                    classes="read-only-note",
+                )
+                yield DataTable(id="cfg_keys", cursor_type="row")
+                yield Button("Reset all to defaults", id="cfg_keys_reset")
+
         yield Footer()
+
+    def on_mount(self) -> None:
+        self._populate_keybindings_table()
+
+    def _populate_keybindings_table(self) -> None:
+        """(Re)render #cfg_keys from self._keybindings — called on mount and
+        after every capture/reset so the "Key" column always reflects the
+        working (unsaved) overrides."""
+        table = self.query_one("#cfg_keys", DataTable)
+        table.clear(columns=True)
+        table.add_columns("Action", "Key", "Default")
+        for section, specs in keybindings_module.rebindable():
+            table.add_row(f"[bold]{section}[/bold]", "", "", key=f"{_KEYS_SECTION_ROW_PREFIX}{section}")
+            for spec in specs:
+                current = self._keybindings.get(spec.id, spec.key)
+                current_text = keybindings_module.display_key(current)
+                if current != spec.key:
+                    current_text = f"[bold]{current_text}[/bold]"
+                table.add_row(
+                    spec.label or spec.description,
+                    current_text,
+                    keybindings_module.display_key(spec.key),
+                    key=spec.id,
+                )
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id != "cfg_keys":
+            return
+        spec_id = event.row_key.value
+        if spec_id is None or spec_id.startswith(_KEYS_SECTION_ROW_PREFIX):
+            return
+        spec = keybindings_module.BY_ID[spec_id][0]
+        current = self._keybindings.get(spec_id, spec.key)
+        self.app.push_screen(
+            KeyCapturePopup(spec, current, self._keybindings),
+            lambda new_key, spec_id=spec_id: self._on_key_captured(spec_id, new_key),
+        )
+
+    def _on_key_captured(self, spec_id: str, new_key: str | None) -> None:
+        if new_key is None:
+            return
+        default_key = keybindings_module.BY_ID[spec_id][0].key
+        if new_key == default_key:
+            self._keybindings.pop(spec_id, None)
+        else:
+            self._keybindings[spec_id] = new_key
+        self._populate_keybindings_table()
 
     def show_category(self, pane_id: str) -> None:
         """Drill into a category pane ("cat_menu" to go back to the top-level
@@ -389,6 +459,9 @@ class ConfigScreen(Screen):
             self.action_stop_watching_all()
         elif event.button.id == "cfg_ntfy_test":
             self.action_test_ntfy()
+        elif event.button.id == "cfg_keys_reset":
+            self._keybindings = {}
+            self._populate_keybindings_table()
 
     def action_stop_watching_all(self) -> None:
         # A live write (like the l/d/s popups edit their own collections directly)
@@ -488,6 +561,7 @@ class ConfigScreen(Screen):
         new_config[CONFIG_KEY_TERMINAL_TITLE] = title_text
         new_config[CONFIG_KEY_COLUMNS] = columns if columns else existing
         new_config[CONFIG_KEY_NOTIFICATIONS] = notifications
+        new_config[CONFIG_KEY_KEYBINDINGS] = dict(self._keybindings)
 
         # Collections live in SQLite; this screen only edits connection settings +
         # display preferences, so keep them out of the lean YAML it writes. The

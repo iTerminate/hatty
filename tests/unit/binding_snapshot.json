@@ -1,0 +1,1726 @@
+[
+  {
+    "file": "src/hatty/main.py",
+    "class": "HACLI",
+    "lineno": 91,
+    "count": 31,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "/",
+        "action": "toggle_search",
+        "description": "Search"
+      },
+      {
+        "form": "Binding",
+        "key": "e",
+        "action": "expand_entity",
+        "description": "Controls"
+      },
+      {
+        "form": "Binding",
+        "key": "space",
+        "action": "toggle_list_membership",
+        "description": "In List"
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "move_entity_in_list(-1)",
+        "description": "Move Up",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "move_entity_in_list(1)",
+        "description": "Move Down",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "o",
+        "action": "toggle_list_sort",
+        "description": "Sort Order",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "L",
+        "action": "toggle_list_lock",
+        "description": "Lock List",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "r",
+        "action": "rename_entity",
+        "description": "Rename",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "u",
+        "action": "undo",
+        "description": "Undo",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+r",
+        "action": "redo",
+        "description": "Redo",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "l",
+        "action": "show_list_selection_popup",
+        "description": "Lists",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "c",
+        "action": "show_column_config",
+        "description": "Columns",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "toggle_activity_log",
+        "description": "Activity Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "i",
+        "action": "toggle_entity_log",
+        "description": "Entity Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "v",
+        "action": "show_log_scope",
+        "description": "Log Scope",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "f",
+        "action": "maximize_log",
+        "description": "Maximize Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "left",
+        "action": "log_older",
+        "description": "Older Events",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "right",
+        "action": "log_newer",
+        "description": "Newer Events",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "g",
+        "action": "toggle_graph",
+        "description": "Graph",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "G",
+        "action": "graph_fullscreen",
+        "description": "Full Graph",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "+",
+        "action": "add_to_graph",
+        "description": "Compare",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "d",
+        "action": "show_dashboard",
+        "description": "Dashboard",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "D",
+        "action": "show_device_tree",
+        "description": "Device Tree",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "s",
+        "action": "show_saved_graphs_popup",
+        "description": "Saved Graphs",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "t",
+        "action": "cycle_graph_type",
+        "description": "Graph Type"
+      },
+      {
+        "form": "Binding",
+        "key": "T",
+        "action": "show_graph_duration",
+        "description": "Duration",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "n",
+        "action": "search_next",
+        "description": "Next Match",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "N",
+        "action": "search_prev",
+        "description": "Prev Match",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "go_back",
+        "description": "Back/Clear"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+q",
+        "action": "quit",
+        "description": "Quit",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/column_config_popup.py",
+    "class": "ColumnConfigPopup",
+    "lineno": 15,
+    "count": 5,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "save_and_close",
+        "description": "Save & Close",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "save_and_close",
+        "description": "Save & Close",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "save_and_close",
+        "description": "Save & Close",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "move_up",
+        "description": "Move Up",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "move_down",
+        "description": "Move Down",
+        "priority": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/config_screen.py",
+    "class": "ConfigScreen",
+    "lineno": 100,
+    "count": 5,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "ctrl+s",
+        "action": "save_and_close",
+        "description": "Save"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Back/Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+o",
+        "action": "open_in_editor",
+        "description": "Editor"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+v",
+        "action": "toggle_token",
+        "description": "Show/Hide Token"
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/confirm_popup.py",
+    "class": "ConfirmPopup",
+    "lineno": 11,
+    "count": 4,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "y",
+        "action": "confirm",
+        "description": "Yes",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "n",
+        "action": "cancel",
+        "description": "No",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "No",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "No",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/controls/control_popup.py",
+    "class": "EntityControlPopup",
+    "lineno": 22,
+    "count": 3,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "save",
+        "description": "Save"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/controls/entity_picker_modal.py",
+    "class": "EntityPickerModal",
+    "lineno": 19,
+    "count": 2,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/controls/light_screen.py",
+    "class": "ColorPickerModal",
+    "lineno": 92,
+    "count": 2,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/controls/light_screen.py",
+    "class": "LightControlScreen",
+    "lineno": 138,
+    "count": 11,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "close",
+        "description": "Close"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "close",
+        "description": "Close",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "space",
+        "action": "toggle_power",
+        "description": "On/Off",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "1",
+        "action": "white_preset(0)",
+        "description": "Warm",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "2",
+        "action": "white_preset(1)",
+        "description": "Neutral",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "3",
+        "action": "white_preset(2)",
+        "description": "Cool",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "p",
+        "action": "open_color_picker",
+        "description": "Pick Color",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "t",
+        "action": "cycle_tab",
+        "description": "Next Tab"
+      },
+      {
+        "form": "Binding",
+        "key": "up",
+        "action": "nav_focus(-1)",
+        "description": "Focus Up",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "down",
+        "action": "nav_focus(1)",
+        "description": "Focus Down",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/controls/media_player_screen.py",
+    "class": "MediaPlayerControlScreen",
+    "lineno": 65,
+    "count": 7,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "close",
+        "description": "Close"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "close",
+        "description": "Close",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "space",
+        "action": "toggle_play_pause",
+        "description": "Play/Pause",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "s",
+        "action": "stop_playback",
+        "description": "Stop",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "up",
+        "action": "nav_focus(-1)",
+        "description": "Focus Up",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "down",
+        "action": "nav_focus(1)",
+        "description": "Focus Down",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/dashboard/panel_manage_popup.py",
+    "class": "PanelManagePopup",
+    "lineno": 26,
+    "count": 7,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "done",
+        "description": "Done"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "done",
+        "description": "Done",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "move(-1)",
+        "description": "Move up"
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "move(1)",
+        "description": "Move down"
+      },
+      {
+        "form": "Binding",
+        "key": "delete",
+        "action": "remove",
+        "description": "Remove"
+      },
+      {
+        "form": "Binding",
+        "key": "x",
+        "action": "remove",
+        "description": "Remove"
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "add",
+        "description": "Add"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/dashboard/screen.py",
+    "class": "DashboardScreen",
+    "lineno": 218,
+    "count": 30,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "up",
+        "action": "move_cursor(-1, 0)",
+        "description": "Up",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "down",
+        "action": "move_cursor(1, 0)",
+        "description": "Down",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "left",
+        "action": "move_cursor(0, -1)",
+        "description": "Left",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "right",
+        "action": "move_cursor(0, 1)",
+        "description": "Right",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "toggle_slot",
+        "description": "Toggle"
+      },
+      {
+        "form": "Binding",
+        "key": "e",
+        "action": "expand_slot",
+        "description": "Controls"
+      },
+      {
+        "form": "Binding",
+        "key": "E",
+        "action": "enter_edit",
+        "description": "Edit"
+      },
+      {
+        "form": "Binding",
+        "key": "r",
+        "action": "rename_slot_entity",
+        "description": "Rename"
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "edit_slot",
+        "description": "Assign"
+      },
+      {
+        "form": "Binding",
+        "key": "delete",
+        "action": "clear_slot",
+        "description": "Clear Slot"
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "grab_move",
+        "description": "Move"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+right",
+        "action": "resize_slot(0, 1)",
+        "description": "Wider",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+left",
+        "action": "resize_slot(0, -1)",
+        "description": "Narrower",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+down",
+        "action": "resize_slot(1, 0)",
+        "description": "Taller",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+up",
+        "action": "resize_slot(-1, 0)",
+        "description": "Shorter",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "s",
+        "action": "split_slot",
+        "description": "Split"
+      },
+      {
+        "form": "Binding",
+        "key": "u",
+        "action": "unsplit_slot",
+        "description": "Unsplit",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "f",
+        "action": "fill_split",
+        "description": "Fill"
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "toggle_activity_log",
+        "description": "Activity Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "v",
+        "action": "show_log_scope",
+        "description": "Log Scope",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "f",
+        "action": "maximize_log",
+        "description": "Maximize Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "left_square_bracket",
+        "action": "log_older",
+        "description": "Older Events",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "right_square_bracket",
+        "action": "log_newer",
+        "description": "Newer Events",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "l",
+        "action": "show_list_popup",
+        "description": "Back to List",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "d",
+        "action": "manage_dashboards",
+        "description": "Dashboards"
+      },
+      {
+        "form": "Binding",
+        "key": "D",
+        "action": "show_device_tree",
+        "description": "Device Tree"
+      },
+      {
+        "form": "Binding",
+        "key": "t",
+        "action": "cycle_graph_type",
+        "description": "Graph Type",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "G",
+        "action": "graph_fullscreen",
+        "description": "Full Graph"
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "go_back",
+        "description": "Back"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/dashboard/selection_popup.py",
+    "class": "DashboardSelectionPopup",
+    "lineno": 18,
+    "count": 9,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "delete",
+        "action": "delete_dashboard",
+        "description": "Delete",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "e",
+        "action": "edit_dashboard",
+        "description": "Edit",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "d",
+        "action": "set_default",
+        "description": "Set as Default",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "x",
+        "action": "export_dashboard",
+        "description": "Export",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "i",
+        "action": "import_dashboard",
+        "description": "Import",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "move_up",
+        "description": "Move Up",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "move_down",
+        "description": "Move Down",
+        "priority": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/dashboard/slot_popup.py",
+    "class": "DashboardSlotPopup",
+    "lineno": 90,
+    "count": 7,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "reorder_selected(-1)",
+        "description": "Move Up",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "reorder_selected(1)",
+        "description": "Move Down",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "delete",
+        "action": "remove_selected",
+        "description": "Remove",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "up",
+        "action": "nav_focus(-1)",
+        "description": "Focus Up",
+        "show": false,
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "down",
+        "action": "nav_focus(1)",
+        "description": "Focus Down",
+        "show": false,
+        "priority": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/dashboard/split_slot_popup.py",
+    "class": "SplitSlotPopup",
+    "lineno": 13,
+    "count": 4,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "v",
+        "action": "split('v')",
+        "description": "Left/Right",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "h",
+        "action": "split('h')",
+        "description": "Top/Bottom",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "q",
+        "action": "split('quad')",
+        "description": "Quarters",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/device_tree_screen.py",
+    "class": "AreaNamePopup",
+    "lineno": 293,
+    "count": 2,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/device_tree_screen.py",
+    "class": "AreaPickerPopup",
+    "lineno": 330,
+    "count": 2,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/device_tree_screen.py",
+    "class": "DeviceInfoPopup",
+    "lineno": 376,
+    "count": 3,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "i",
+        "action": "cancel",
+        "description": "Close",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/device_tree_screen.py",
+    "class": "DeviceTreeScreen",
+    "lineno": 410,
+    "count": 17,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "/",
+        "action": "toggle_search",
+        "description": "Search"
+      },
+      {
+        "form": "Binding",
+        "key": "e",
+        "action": "expand_entity",
+        "description": "Controls"
+      },
+      {
+        "form": "Binding",
+        "key": "G",
+        "action": "graph_fullscreen",
+        "description": "Graph"
+      },
+      {
+        "form": "Binding",
+        "key": "v",
+        "action": "cycle_mode",
+        "description": "View"
+      },
+      {
+        "form": "Binding",
+        "key": "m",
+        "action": "move_device",
+        "description": "Move to Area"
+      },
+      {
+        "form": "Binding",
+        "key": "i",
+        "action": "device_info",
+        "description": "Info"
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "create_area",
+        "description": "New Area"
+      },
+      {
+        "form": "Binding",
+        "key": "r",
+        "action": "rename",
+        "description": "Rename"
+      },
+      {
+        "form": "Binding",
+        "key": "l",
+        "action": "jump_to_list",
+        "description": "Lists"
+      },
+      {
+        "form": "Binding",
+        "key": "d",
+        "action": "open_dashboard",
+        "description": "Dashboard"
+      },
+      {
+        "form": "Binding",
+        "key": "n",
+        "action": "area_to_dashboard",
+        "description": "New Dashboard"
+      },
+      {
+        "form": "Binding",
+        "key": "x",
+        "action": "collapse_all",
+        "description": "Collapse All"
+      },
+      {
+        "form": "Binding",
+        "key": "X",
+        "action": "expand_all",
+        "description": "Expand All"
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      },
+      {
+        "form": "Binding",
+        "key": "space",
+        "action": "toggle_list_membership",
+        "description": "List",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+s",
+        "action": "cycle_scope",
+        "description": "Scope",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "go_back",
+        "description": "Back"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/graph/color_popup.py",
+    "class": "GraphColorPopup",
+    "lineno": 80,
+    "count": 2,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/graph/duration_popup.py",
+    "class": "GraphDurationPopup",
+    "lineno": 31,
+    "count": 3,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "confirm",
+        "description": "Select",
+        "priority": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/graph/preview_screen.py",
+    "class": "GraphPreviewScreen",
+    "lineno": 126,
+    "count": 32,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "t",
+        "action": "cycle_plot_type",
+        "description": "Graph Type"
+      },
+      {
+        "form": "Binding",
+        "key": "left",
+        "action": "scroll_back",
+        "description": "Older"
+      },
+      {
+        "form": "Binding",
+        "key": "left",
+        "action": "cursor_prev",
+        "description": "Prev Sample"
+      },
+      {
+        "form": "Binding",
+        "key": "right",
+        "action": "scroll_forward",
+        "description": "Newer"
+      },
+      {
+        "form": "Binding",
+        "key": "right",
+        "action": "cursor_next",
+        "description": "Next Sample"
+      },
+      {
+        "form": "Binding",
+        "key": "shift+left",
+        "action": "scroll_back_fast",
+        "description": {
+          "__expr__": "f\"Older \u00d7{_FAST_PAGE_MULTIPLIER}\""
+        }
+      },
+      {
+        "form": "Binding",
+        "key": "shift+left",
+        "action": "cursor_prev_fast",
+        "description": "Prev Sample \u00d710%"
+      },
+      {
+        "form": "Binding",
+        "key": "shift+right",
+        "action": "scroll_forward_fast",
+        "description": {
+          "__expr__": "f\"Newer \u00d7{_FAST_PAGE_MULTIPLIER}\""
+        }
+      },
+      {
+        "form": "Binding",
+        "key": "shift+right",
+        "action": "cursor_next_fast",
+        "description": "Next Sample \u00d710%"
+      },
+      {
+        "form": "Binding",
+        "key": "plus",
+        "action": "zoom_in",
+        "description": "Zoom In"
+      },
+      {
+        "form": "Binding",
+        "key": "minus",
+        "action": "zoom_out",
+        "description": "Zoom Out"
+      },
+      {
+        "form": "Binding",
+        "key": "home",
+        "action": "snap_live",
+        "description": "Now"
+      },
+      {
+        "form": "Binding",
+        "key": "home",
+        "action": "cursor_home",
+        "description": "Oldest Sample"
+      },
+      {
+        "form": "Binding",
+        "key": "end",
+        "action": "cursor_end",
+        "description": "Newest Sample"
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "toggle_cursor_mode",
+        "description": "Inspect"
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "exit_cursor_mode",
+        "description": "Exit Inspect"
+      },
+      {
+        "form": "Binding",
+        "key": "S",
+        "action": "save_graph",
+        "description": "Save As"
+      },
+      {
+        "form": "Binding",
+        "key": "u",
+        "action": "update_graph",
+        "description": "Update"
+      },
+      {
+        "form": "Binding",
+        "key": "tab",
+        "action": "next_entity",
+        "description": "Next Line",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "c",
+        "action": "cycle_color",
+        "description": "Color"
+      },
+      {
+        "form": "Binding",
+        "key": "C",
+        "action": "pick_color",
+        "description": "Color Picker"
+      },
+      {
+        "form": "Binding",
+        "key": "l",
+        "action": "show_list_popup",
+        "description": "Back to List",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "toggle_event_log",
+        "description": "Activity Log"
+      },
+      {
+        "form": "Binding",
+        "key": "v",
+        "action": "show_log_scope",
+        "description": "Log View"
+      },
+      {
+        "form": "Binding",
+        "key": "f",
+        "action": "maximize_log",
+        "description": "Maximize Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "exit_cursor_mode",
+        "description": "Exit Inspect"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "close_event_log",
+        "description": "Close Log"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "go_back",
+        "description": "Back"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "exit_cursor_mode",
+        "description": "Exit Inspect",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "close_event_log",
+        "description": "Close Log",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "go_back",
+        "description": "Back",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/graph/saved_graphs_popup.py",
+    "class": "SaveGraphNamePopup",
+    "lineno": 16,
+    "count": 2,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/graph/saved_graphs_popup.py",
+    "class": "SavedGraphsPopup",
+    "lineno": 45,
+    "count": 4,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "r",
+        "action": "rename_graph",
+        "description": "Rename",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "delete",
+        "action": "delete_graph",
+        "description": "Delete",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/help_popup.py",
+    "class": "HelpPopup",
+    "lineno": 150,
+    "count": 7,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "left",
+        "action": "prev_page",
+        "description": "Prev Page"
+      },
+      {
+        "form": "Binding",
+        "key": "right",
+        "action": "next_page",
+        "description": "Next Page"
+      },
+      {
+        "form": "Binding",
+        "key": "/",
+        "action": "focus_filter",
+        "description": "Search"
+      },
+      {
+        "form": "Binding",
+        "key": "a",
+        "action": "toggle_all",
+        "description": "Show All"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "dismiss",
+        "description": "Close"
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "dismiss",
+        "description": "Close",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "dismiss",
+        "description": "Close",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/list_selection_popup.py",
+    "class": "ListSelectionPopup",
+    "lineno": 20,
+    "count": 10,
+    "entries": [
+      {
+        "form": "tuple",
+        "key": "delete",
+        "action": "delete_list",
+        "description": "Delete List",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "r",
+        "action": "rename_list",
+        "description": "Rename",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "d",
+        "action": "set_default",
+        "description": "Set as Default",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "n",
+        "action": "toggle_notify",
+        "description": "Notify",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "v",
+        "action": "view_as_dashboard",
+        "description": "View as Dashboard",
+        "__tuple_form__": true
+      },
+      {
+        "form": "tuple",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "tuple",
+        "key": "/",
+        "action": "toggle_search",
+        "description": "Search",
+        "__tuple_form__": true
+      },
+      {
+        "form": "Binding",
+        "key": "shift+up",
+        "action": "move_up",
+        "description": "Move Up",
+        "priority": true
+      },
+      {
+        "form": "Binding",
+        "key": "shift+down",
+        "action": "move_down",
+        "description": "Move Down",
+        "priority": true
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/log_scope_popup.py",
+    "class": "LogScopePopup",
+    "lineno": 52,
+    "count": 2,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/onboarding_screen.py",
+    "class": "OnboardingScreen",
+    "lineno": 20,
+    "count": 4,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "ctrl+t",
+        "action": "test_connection",
+        "description": "Test Connection"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+s",
+        "action": "save",
+        "description": "Save & Connect"
+      },
+      {
+        "form": "Binding",
+        "key": "ctrl+v",
+        "action": "toggle_token",
+        "description": "Show/Hide Token"
+      },
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/rename_entity_popup.py",
+    "class": "RenameEntityPopup",
+    "lineno": 12,
+    "count": 3,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "cancel",
+        "description": "Cancel"
+      },
+      {
+        "form": "Binding",
+        "key": "q",
+        "action": "cancel",
+        "description": "Cancel",
+        "show": false
+      },
+      {
+        "form": "Binding",
+        "key": "enter",
+        "action": "save_local",
+        "description": "Save Locally"
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/search_input.py",
+    "class": "SearchInput",
+    "lineno": 21,
+    "count": 1,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "tab",
+        "action": "toggle_mode",
+        "description": "Toggle filter/jump",
+        "show": false
+      }
+    ]
+  },
+  {
+    "file": "src/hatty/ui/weather_forecast_screen.py",
+    "class": "WeatherForecastScreen",
+    "lineno": 99,
+    "count": 3,
+    "entries": [
+      {
+        "form": "Binding",
+        "key": "escape",
+        "action": "go_back",
+        "description": "Back"
+      },
+      {
+        "form": "Binding",
+        "key": "t",
+        "action": "cycle_type",
+        "description": "Switch type"
+      },
+      {
+        "form": "Binding",
+        "key": "question_mark",
+        "action": "show_help",
+        "description": "Help"
+      }
+    ]
+  }
+]

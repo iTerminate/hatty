@@ -17,11 +17,11 @@ itself. Entity/device *name* rendering is lazy, done per highlight, reusing
 rather than re-derived here)."""
 
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Footer, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.controllers.logbook import LogScope, LogScopeOption
 from hatty.ui.popup_base import PopupScreen
 
@@ -49,10 +49,7 @@ class LogScopePopup(PopupScreen[str | None]):
     }
     """
 
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("q", "cancel", "Cancel", show=False),
-    ]
+    BINDINGS = bindings_for("log_scope_popup")
 
     def __init__(
         self,

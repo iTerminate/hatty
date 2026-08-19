@@ -1,19 +1,21 @@
 # hatty — MIT License. See LICENSE file for details.
+from typing import TYPE_CHECKING
+
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Footer, Label
 
+from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import PopupScreen
+
+if TYPE_CHECKING:
+    from hatty.main import HACLI
 
 
 class ConfirmPopup(PopupScreen[bool]):
-    BINDINGS = [
-        ("y", "confirm", "Yes"),
-        ("n", "cancel", "No"),
-        ("escape", "cancel", "No"),
-        Binding("q", "cancel", "No", show=False),
-    ]
+    app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
+
+    BINDINGS = bindings_for("confirm")
 
     DEFAULT_CSS = """
     #confirm_container {
@@ -34,7 +36,8 @@ class ConfirmPopup(PopupScreen[bool]):
     def compose(self) -> ComposeResult:
         with Container(id="confirm_container", classes="popup-container"):
             yield Label(self._message, id="confirm_message")
-            yield Label("[y] Yes    [n / Esc] No", id="confirm_hint")
+            back = self.app.keys_ctl.display("nav.back")
+            yield Label(f"[y] Yes    [n / {back}] No", id="confirm_hint")
             yield Footer()
 
     def action_confirm(self) -> None:
