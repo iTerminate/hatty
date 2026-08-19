@@ -15,6 +15,21 @@ from hatty import git_sync
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 
+# tests/conftest.py's autouse _no_real_git_calls stubs git_sync._run_git for
+# every test so the acceptance suite never shells out to git; captured here at
+# import time (before any monkeypatch has run) so this module's own autouse
+# fixture below can restore it.
+_REAL_RUN_GIT = git_sync._run_git
+
+
+@pytest.fixture(autouse=True)
+def _use_real_git(monkeypatch):
+    # Runs after tests/conftest.py's _no_real_git_calls (a parent-conftest
+    # autouse fixture is instantiated before a same-scoped one defined in the
+    # test module itself), so this un-stubs it back to the real binary — the
+    # whole point of this file.
+    monkeypatch.setattr(git_sync, "_run_git", _REAL_RUN_GIT)
+
 
 @pytest.fixture(autouse=True)
 def _isolated_git_config(monkeypatch):

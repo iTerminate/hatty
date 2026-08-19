@@ -206,7 +206,10 @@ class BackupController:
         title = "Backup Imported" if ok else "Backup Import Failed"
         app.notify(msg, title=title, severity="information" if ok else "error")
 
-    async def sync_on_exit(self, timeout: float = 30.0) -> tuple[bool, str]:
+    async def sync_on_exit(self, timeout: float = 75.0) -> tuple[bool, str]:
+        # 75s: room for git_sync's own NETWORK_TIMEOUT (60s) on the push plus a
+        # buffer for the local commit and export, as a belt-and-suspenders cap
+        # so a stalled network can't hang the exit-sync overlay indefinitely.
         if not self.exit_sync_pending():
             return True, ""
         path = self.prefs.get("path") or ""

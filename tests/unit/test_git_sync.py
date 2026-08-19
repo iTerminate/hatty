@@ -10,6 +10,23 @@ import pytest
 
 from hatty import git_sync
 
+# tests/conftest.py's autouse _no_real_git_calls stubs git_sync._run_git for
+# every test (so the acceptance suite never shells out to git); captured here
+# at import time, before any monkeypatch has run, so the fixture below can
+# restore it for this module, which needs the real chokepoint to exercise its
+# own subprocess.run wiring and to let each test install its own fake.
+_REAL_RUN_GIT = git_sync._run_git
+
+
+@pytest.fixture(autouse=True)
+def _use_real_run_git(monkeypatch):
+    # A parent-conftest autouse fixture is instantiated before a same-scoped
+    # one defined in the test module itself, so this runs after (and undoes)
+    # tests/conftest.py's stub. Individual tests below still monkeypatch
+    # _run_git or subprocess.run themselves as needed.
+    monkeypatch.setattr(git_sync, "_run_git", _REAL_RUN_GIT)
+
+
 # ── _git_env / _run_git ──────────────────────────────────────────────────────
 
 

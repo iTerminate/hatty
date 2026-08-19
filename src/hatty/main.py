@@ -136,6 +136,10 @@ class HACLI(App):
         # Fire-and-forget tasks hold a reference here so asyncio can't GC them
         # mid-flight; done tasks remove themselves.
         self._bg_tasks: set[asyncio.Task] = set()
+        # Guards the exit-time git sync against running twice: action_quit is
+        # the primary path, _on_exit_app is a backstop for any exit() call
+        # that bypasses it.
+        self._exit_sync_done = False
 
     # Config key -> the app attribute that is its in-memory working copy, derived
     # from storage.PERSISTED so there is one source of truth (issue #168).
@@ -147,6 +151,25 @@ class HACLI(App):
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
         return task
+
+    async def drain_bg_tasks(self, timeout: float = 5.0) -> bool:
+        """Wait for the fire-and-forget tasks spawn() tracks (notably
+        _save_config_async) to finish, so an exit-time git commit picks up the
+        very last save. True if all completed. Uses asyncio.wait rather than
+        wait_for(gather(...)): the latter would cancel a still-running
+        storage.save_all mid-transaction on timeout, and a half-written
+        hatty.db is worse than a slow quit — stragglers are just left running.
+        Excludes the current task, since the caller (the exit-sync flow) is
+        itself usually running as a spawned task and would otherwise wait on
+        itself forever."""
+        current = asyncio.current_task()
+        pending = {t for t in self._bg_tasks if t is not current and not t.done()}
+        if not pending:
+            return True
+        _done, still_pending = await asyncio.wait(pending, timeout=timeout)
+        if still_pending:
+            self.log.warning(f"{len(still_pending)} background task(s) still running at exit")
+        return not still_pending
 
     def persist(self, *keys: str) -> None:
         """Mirror the named collections from their app attributes into
@@ -250,6 +273,41 @@ class HACLI(App):
                 self.storage.close()
             except Exception as e:
                 self.log.error(f"Error closing storage: {e}")
+
+    async def action_quit(self) -> None:
+        """Overrides Textual's default (a bare `self.exit()`) so a pending
+        `commit_on_exit`/`push_on_exit` git sync gets a visible overlay
+        instead of silently blocking the message pump — this method is itself
+        awaited from inside the still-running pump (Textual's
+        `_check_bindings`), so anything it awaits directly would freeze
+        rendering. ExitSyncScreen does the actual awaiting, from its own
+        `on_mount`, via `self.spawn(...)`."""
+        if self._exit_sync_done or not self.backup_ctl.exit_sync_pending():
+            self.exit()
+            return
+        self._exit_sync_done = True
+        from hatty.ui.exit_sync_screen import ExitSyncScreen
+
+        self.push_screen(ExitSyncScreen())
+
+    async def _on_exit_app(self) -> None:
+        """Backstop for an `exit()` that bypasses action_quit (a future call
+        site, `--press`, test autopilot). Textual's MRO dispatch
+        (`message_pump.py`) invokes `App._on_exit_app` right after this one —
+        do NOT call `super()._on_exit_app()`, or the shutdown sentinel gets
+        posted twice. Unlike action_quit, this runs with no live UI to show
+        progress in, so it just awaits the sync directly (frozen rendering is
+        expected here — the pump is already winding down)."""
+        if self._exit_sync_done or self._demo:
+            return
+        self._exit_sync_done = True
+        if not self.backup_ctl.exit_sync_pending():
+            return
+        try:
+            await self.drain_bg_tasks(timeout=5.0)
+            await self.backup_ctl.sync_on_exit()
+        except Exception as e:
+            self.log.error(f"git sync on exit failed: {e}")
 
     def _storage_db_path(self):
         from pathlib import Path
