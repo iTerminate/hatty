@@ -320,6 +320,61 @@ async def test_sync_on_exit_returns_export_failure_without_touching_git(monkeypa
     assert called == []
 
 
+async def test_sync_on_exit_reports_commit_only_phases(monkeypatch, tmp_path):
+    ctl, app = _controller(path=str(tmp_path), sections=["lists"], git_enabled=True, commit_on_exit=True)
+    app.list_ctl.list_names = []
+
+    async def _fake_commit(_path, _message):
+        return True, "Committed."
+
+    monkeypatch.setattr("hatty.git_sync.commit_all_async", _fake_commit)
+
+    phases = []
+    ok, msg = await ctl.sync_on_exit(status=phases.append)
+    assert ok is True
+    assert msg == "Committed."
+    assert phases == ["Exporting…", "Committing…"]  # push_on_exit is off
+
+
+async def test_sync_on_exit_reports_push_phase_when_enabled(monkeypatch, tmp_path):
+    ctl, app = _controller(path=str(tmp_path), sections=["lists"], git_enabled=True, push_on_exit=True)
+    app.list_ctl.list_names = []
+
+    async def _fake_commit(_path, _message):
+        return True, "Committed."
+
+    async def _fake_push(_path):
+        return True, "Pushed to the remote."
+
+    monkeypatch.setattr("hatty.git_sync.commit_all_async", _fake_commit)
+    monkeypatch.setattr("hatty.git_sync.push_async", _fake_push)
+
+    phases = []
+    ok, msg = await ctl.sync_on_exit(status=phases.append)
+    assert ok is True
+    assert msg == "Pushed to the remote."
+    assert phases == ["Exporting…", "Committing…", "Pushing…"]
+
+
+async def test_sync_on_exit_skips_push_phase_when_commit_fails(monkeypatch, tmp_path):
+    ctl, app = _controller(path=str(tmp_path), sections=["lists"], git_enabled=True, push_on_exit=True)
+    app.list_ctl.list_names = []
+
+    async def _fake_commit(_path, _message):
+        return False, "git rejected the credentials."
+
+    push_called = []
+    monkeypatch.setattr("hatty.git_sync.commit_all_async", _fake_commit)
+    monkeypatch.setattr("hatty.git_sync.push_async", lambda *a: push_called.append(a))
+
+    phases = []
+    ok, msg = await ctl.sync_on_exit(status=phases.append)
+    assert ok is False
+    assert "credentials" in msg
+    assert phases == ["Exporting…", "Committing…"]
+    assert push_called == []
+
+
 async def test_pull_on_start_noop_when_disabled():
     ctl, app = _controller(path="/tmp/x", git_enabled=True, pull_on_start=False)
     await ctl.pull_on_start()

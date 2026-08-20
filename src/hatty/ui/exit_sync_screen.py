@@ -81,8 +81,11 @@ class ExitSyncScreen(Screen):
         try:
             self._set_status("Saving…")
             await self.app.drain_bg_tasks(timeout=5.0)
-            self._set_status("Syncing with git…")
-            ok, msg = await self.app.backup_ctl.sync_on_exit()
+            # sync_on_exit calls this back before each of its own phases
+            # (Exporting…/Committing…/Pushing…), so the overlay always shows
+            # what's actually happening instead of one static message for
+            # however long the whole thing takes.
+            ok, msg = await self.app.backup_ctl.sync_on_exit(status=self._set_status)
             if msg:
                 self._set_status(msg)
                 if not ok:

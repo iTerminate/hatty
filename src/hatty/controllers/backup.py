@@ -6,7 +6,7 @@ git_sync.py against the running app's live state (`app.list_ctl`, `app.dash_ctl`
 mirroring KeybindingController."""
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from hatty import backup as backup_module
@@ -211,20 +211,40 @@ class BackupController:
         title = "Backup Imported" if ok else "Backup Import Failed"
         app.notify(msg, title=title, severity="information" if ok else "error")
 
-    async def sync_on_exit(self, timeout: float = 75.0) -> tuple[bool, str]:
+    async def sync_on_exit(
+        self, status: Callable[[str], None] | None = None, timeout: float = 75.0
+    ) -> tuple[bool, str]:
         # 75s: room for git_sync's own NETWORK_TIMEOUT (60s) on the push plus a
         # buffer for the local commit and export, as a belt-and-suspenders cap
         # so a stalled network can't hang the exit-sync overlay indefinitely.
+        # `status`, if given, is called before each phase — ExitSyncScreen
+        # passes its own label so a slow push doesn't look identical to a
+        # slow commit (issue: show what's happening during a slow exit).
         if not self.exit_sync_pending():
             return True, ""
         path = self.prefs.get("path") or ""
+
+        def _status(text: str) -> None:
+            if status is not None:
+                status(text)
+
+        _status("Exporting…")
         ok, msg = self.export_now()
         if not ok:
             return False, msg
 
         message = git_sync.default_commit_message()
-        op = git_sync.commit_and_push_async if self.prefs.get("push_on_exit") else git_sync.commit_all_async
+        push_on_exit = bool(self.prefs.get("push_on_exit"))
+
+        async def _run() -> tuple[bool, str]:
+            _status("Committing…")
+            ok, msg = await git_sync.commit_all_async(path, message)
+            if not ok or not push_on_exit:
+                return ok, msg
+            _status("Pushing…")
+            return await git_sync.push_async(path)
+
         try:
-            return await asyncio.wait_for(op(path, message), timeout=timeout)
+            return await asyncio.wait_for(_run(), timeout=timeout)
         except asyncio.TimeoutError:
             return False, "Timed out syncing with git."

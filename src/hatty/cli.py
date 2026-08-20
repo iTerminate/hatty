@@ -53,15 +53,18 @@ def _flush_pending_exit_sync(app) -> None:
     from hatty import git_sync
 
     try:
+        print("hatty: exporting backup…")
         ok, msg = app.backup_ctl.export_now()
         if not ok:
             print(f"hatty: backup export failed: {msg}")
             return
         path = app.backup_ctl.prefs.get("path") or ""
         message = git_sync.default_commit_message()
-        print("hatty: syncing backup with git…")
-        op = git_sync.commit_and_push if app.backup_ctl.prefs.get("push_on_exit") else git_sync.commit_all
-        ok, msg = op(path, message)
+        print("hatty: committing…")
+        ok, msg = git_sync.commit_all(path, message)
+        if ok and app.backup_ctl.prefs.get("push_on_exit"):
+            print("hatty: pushing…")
+            ok, msg = git_sync.push(path)
         print(f"hatty: {msg}")
     except Exception as e:
         print(f"hatty: backup sync failed: {e}")
