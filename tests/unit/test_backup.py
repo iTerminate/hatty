@@ -152,11 +152,32 @@ def test_write_export_only_rewrites_changed_files(tmp_path):
     files = backup.build_files(app, ["lists"])
     backup.write_export(tmp_path, files, ["lists"])
 
-    written_again, _removed = backup.write_export(tmp_path, files, ["lists"])
-    # Nothing changed since the last export (aside from exported_at in the
-    # manifest, which always changes) -> the object file is skipped.
-    assert "lists/kitchen.list.json" not in written_again
-    assert backup.MANIFEST_FILENAME in written_again
+    written_again, removed_again = backup.write_export(tmp_path, files, ["lists"])
+    # Truly nothing changed -> nothing is rewritten, not even the manifest's
+    # exported_at/hatty_version, so an unattended exit-time export never looks
+    # like a change to git and never triggers a pointless commit.
+    assert written_again == []
+    assert removed_again == []
+
+
+def test_write_export_manifest_bumps_exported_at_only_when_something_changed(tmp_path):
+    app = _app()
+    app.list_ctl.list_names = ["Kitchen"]
+    app.list_ctl.entity_lists = {"Kitchen": []}
+    backup.write_export(tmp_path, backup.build_files(app, ["lists"]), ["lists"])
+    first_manifest = json.loads((tmp_path / backup.MANIFEST_FILENAME).read_text())
+
+    # A no-op export leaves the manifest byte-identical, including exported_at.
+    backup.write_export(tmp_path, backup.build_files(app, ["lists"]), ["lists"])
+    assert json.loads((tmp_path / backup.MANIFEST_FILENAME).read_text()) == first_manifest
+
+    # A real change (a new list) does bump it.
+    app.list_ctl.list_names.append("Office")
+    app.list_ctl.entity_lists["Office"] = []
+    written, _removed = backup.write_export(tmp_path, backup.build_files(app, ["lists"]), ["lists"])
+    assert backup.MANIFEST_FILENAME in written
+    second_manifest = json.loads((tmp_path / backup.MANIFEST_FILENAME).read_text())
+    assert second_manifest["exported_at"] != first_manifest["exported_at"]
 
 
 def test_write_export_prunes_deleted_object_but_leaves_other_sections(tmp_path):

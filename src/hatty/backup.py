@@ -194,28 +194,52 @@ def _prune_stale(directory: Path, files: dict[str, dict], sections: Sequence[str
     return removed
 
 
+#: Manifest keys that change on every export regardless of content, so they're
+#: excluded when deciding whether an export actually changed anything.
+_VOLATILE_MANIFEST_KEYS = ("exported_at", "hatty_version")
+
+
+def _manifest_content_equal(a: dict, b: dict) -> bool:
+    def _strip(d: dict) -> dict:
+        return {k: v for k, v in d.items() if k not in _VOLATILE_MANIFEST_KEYS}
+
+    return _strip(a) == _strip(b)
+
+
 def write_export(directory: Path, files: dict[str, dict], sections: Sequence[str]) -> tuple[list[str], list[str]]:
     """Write `files` (from `build_files`) under `directory`, merge the
     manifest patch over any existing manifest, and prune object files in the
     exported sections whose object no longer exists. Only rewrites files whose
-    content changed, so git diffs stay minimal. Returns (written, removed),
-    both relative paths."""
+    content changed, so git diffs stay minimal — including the manifest's
+    `exported_at`/`hatty_version`, which only move when something else in the
+    export actually did, so a no-op export (nothing but the clock) never looks
+    like a change to git and never triggers a commit/push on exit. Returns
+    (written, removed), both relative paths."""
     sections = _validate_sections(sections)
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     os.chmod(directory, 0o700)
+
+    data_files = {k: v for k, v in files.items() if k != MANIFEST_FILENAME}
+    written = [path for path, payload in data_files.items() if _write_json_if_changed(directory / path, payload)]
+    removed = _prune_stale(directory, files, sections)
 
     existing_manifest = _read_manifest_tolerant(directory)
     manifest_patch = files.get(MANIFEST_FILENAME, {})
     manifest = {**existing_manifest, **manifest_patch}
     manifest["sections"] = sorted(set(existing_manifest.get("sections") or []) | set(sections))
     manifest["hatty_backup"] = BACKUP_FORMAT_VERSION
-    manifest["exported_at"] = datetime.now(timezone.utc).isoformat()
-    manifest["hatty_version"] = __version__
 
-    to_write = {**files, MANIFEST_FILENAME: manifest}
-    written = [path for path, payload in to_write.items() if _write_json_if_changed(directory / path, payload)]
-    removed = _prune_stale(directory, files, sections)
+    if written or removed or not _manifest_content_equal(existing_manifest, manifest):
+        manifest["exported_at"] = datetime.now(timezone.utc).isoformat()
+        manifest["hatty_version"] = __version__
+    else:
+        manifest["exported_at"] = existing_manifest.get("exported_at", datetime.now(timezone.utc).isoformat())
+        manifest["hatty_version"] = existing_manifest.get("hatty_version", __version__)
+
+    if _write_json_if_changed(directory / MANIFEST_FILENAME, manifest):
+        written.append(MANIFEST_FILENAME)
+
     return written, removed
 
 

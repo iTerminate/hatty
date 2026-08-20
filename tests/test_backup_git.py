@@ -11,7 +11,8 @@ import subprocess
 
 import pytest
 
-from hatty import git_sync
+from hatty import backup, git_sync
+from hatty.controllers.lists import ListController
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 
@@ -148,3 +149,58 @@ def test_pull_ff_only_success(tmp_path):
     ok, msg = git_sync.pull(str(work_b))
     assert ok, msg
     assert '"hatty_backup": 2' in (work_b / "hatty-backup.json").read_text()
+
+
+class _StubNotifyCtl:
+    def __init__(self):
+        self.notify_lists: set[str] = set()
+
+
+class _StubApp:
+    """Just enough of the app surface for ListController.to_export_payload and
+    backup.build_files/write_export to run against real files on disk."""
+
+    def __init__(self, path):
+        self.app_config = {}
+        self.notify_ctl = _StubNotifyCtl()
+        self.list_ctl = ListController(self)
+        self.list_ctl.list_names = ["Kitchen"]
+        self.list_ctl.entity_lists = {"Kitchen": ["light.a"]}
+        self._path = path
+
+    def persist(self, *_keys):
+        pass
+
+    def notify(self, *_a, **_kw):
+        pass
+
+
+def test_commit_on_exit_creates_no_commit_when_only_the_export_date_changed(tmp_path):
+    # The actual bug this guards against: write_export used to bump the
+    # manifest's exported_at on every call, so re-exporting *identical* data
+    # still staged a change and commit_all would create a pointless commit on
+    # every quit, even when nothing the user did actually changed anything.
+    work = tmp_path / "work"
+    work.mkdir()
+    git_sync.init_repo(str(work))
+    app = _StubApp(work)
+
+    written, _removed = backup.write_export(work, backup.build_files(app, ["lists"]), ["lists"])
+    assert written  # first export always writes something
+    ok, msg = git_sync.commit_all(str(work), "first")
+    assert ok, msg
+    log = subprocess.run(["git", "log", "--oneline"], cwd=work, capture_output=True, text=True, check=True)
+    commit_count = len(log.stdout.splitlines())
+    assert commit_count == 1
+
+    # Re-export the exact same data — nothing the user changed.
+    written_again, removed_again = backup.write_export(work, backup.build_files(app, ["lists"]), ["lists"])
+    assert written_again == []
+    assert removed_again == []
+
+    ok, msg = git_sync.commit_all(str(work), "second")
+    assert ok, msg
+    assert "Nothing to commit" in msg
+
+    log = subprocess.run(["git", "log", "--oneline"], cwd=work, capture_output=True, text=True, check=True)
+    assert len(log.stdout.splitlines()) == commit_count  # no new commit was created
