@@ -1,5 +1,8 @@
 # hatty — MIT License. See LICENSE file for details.
-from textual.widgets import ListView
+import json
+
+from textual.widgets import Input, ListView
+from textual_fspicker import FileOpen, FileSave
 
 from hatty.ui.entity_table import EntitiesTable
 from hatty.ui.list_selection_popup import ListSelectionPopup
@@ -425,3 +428,90 @@ async def test_reorder_refused_while_searching(make_app, sample_entities):
 
         assert app.list_names == original_order
         assert notified(app, message_contains="Clear the search")
+
+
+# ── export / import ──────────────────────────────────────────────────────────
+
+
+async def test_export_list_writes_file(make_app, tmp_path):
+    config_data = {
+        **make_config(),
+        "lists": {"list_a": ["switch.fan"]},
+        "manual_lists": ["list_a"],
+        "notify_lists": ["list_a"],
+    }
+    app = make_app(config_data=config_data)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("down", "down")
+        await pilot.press("x")
+        await pilot.pause()
+        assert isinstance(app.screen, FileSave)
+
+        out_path = tmp_path / "export.json"
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(out_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        payload = json.loads(out_path.read_text())
+        assert payload == {
+            "hatty_list": 1,
+            "name": "list_a",
+            "entities": ["switch.fan"],
+            "manual": True,
+            "notify": True,
+        }
+        assert notified(app, title="List Exported")
+
+
+async def test_import_list_from_file(make_app, tmp_path):
+    app = make_app(config_data=NO_LIST_CONFIG)
+    payload = {"hatty_list": 1, "name": "Imported List", "entities": ["switch.fan"], "manual": False, "notify": False}
+    in_path = tmp_path / "import.json"
+    in_path.write_text(json.dumps(payload))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, FileOpen)
+
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(in_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert "Imported List" in app.entity_lists
+        assert app.entity_lists["Imported List"] == ["switch.fan"]
+        assert app.current_list_name == "Imported List"
+        assert notified(app, title="List Imported")
+        assert not isinstance(app.screen, (FileOpen, ListSelectionPopup))
+
+
+async def test_import_list_rejects_malformed_file(make_app, tmp_path):
+    app = make_app(config_data=NO_LIST_CONFIG)
+    in_path = tmp_path / "bad.json"
+    in_path.write_text(json.dumps({"not": "a list export"}))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        input_widget = app.screen.query_one(Input)
+        input_widget.value = str(in_path)
+        input_widget.focus()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert notified(app, title="Import Failed")
+        assert app.current_list_name is None

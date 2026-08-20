@@ -1224,6 +1224,20 @@ REGISTRY: tuple[KeySpec, ...] = (
         description="Delete",
     ),
     KeySpec(
+        id="saved_graphs_popup.export_graph",
+        scope="saved_graphs_popup",
+        key="x",
+        action="export_graph",
+        description="Export",
+    ),
+    KeySpec(
+        id="saved_graphs_popup.import_graph",
+        scope="saved_graphs_popup",
+        key="i",
+        action="import_graph",
+        description="Import",
+    ),
+    KeySpec(
         id="nav.back",
         scope="saved_graphs_popup",
         key="escape",
@@ -1276,6 +1290,20 @@ REGISTRY: tuple[KeySpec, ...] = (
         key="v",
         action="view_as_dashboard",
         description="View as Dashboard",
+    ),
+    KeySpec(
+        id="list_popup.export_list",
+        scope="list_popup",
+        key="x",
+        action="export_list",
+        description="Export",
+    ),
+    KeySpec(
+        id="list_popup.import_list",
+        scope="list_popup",
+        key="i",
+        action="import_list",
+        description="Import",
     ),
     KeySpec(
         id="nav.back",

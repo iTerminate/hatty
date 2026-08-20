@@ -4,6 +4,9 @@
 from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.dashboard.screen import DashboardScreen
 
+#: Bumped if the export payload shape ever changes incompatibly.
+EXPORT_FORMAT_VERSION = 1
+
 
 class ListController:
     """Owns the entity-list collections, selection, and undo/redo for
@@ -89,6 +92,49 @@ class ListController:
                 app.push_screen(DashboardScreen(), lambda _: app.dash_ctl.cleanup_temp_dashboards())
         elif action == "rename":
             self.rename_list(list_name, result.get("new_name"))
+
+    # ── Export / import ──────────────────────────────────────────────────────
+
+    def to_export_payload(self, name: str) -> dict:
+        """A JSON-serializable snapshot of list `name`, versioned so a future
+        format change can be detected on import."""
+        return {
+            "hatty_list": EXPORT_FORMAT_VERSION,
+            "name": name,
+            "entities": list(self.entity_lists.get(name, [])),
+            "manual": name in self.manual_lists,
+            "notify": name in self._app.notify_ctl.notify_lists,
+        }
+
+    def import_from_payload(self, payload: dict) -> str:
+        """Create a new list from a previously exported payload, deduplicating
+        its name against the existing collection. Raises `ValueError` (with a
+        user-facing message) if `payload` isn't a recognizable export. Returns
+        the final list name."""
+        if not isinstance(payload, dict) or payload.get("hatty_list") != EXPORT_FORMAT_VERSION:
+            raise ValueError("Not a valid hatty list export file.")
+        entities = payload.get("entities")
+        if not isinstance(entities, list):
+            raise ValueError("List export is missing its entities.")
+
+        final = self._unique_name(str(payload.get("name") or "Imported"))
+        self.entity_lists[final] = list(entities)
+        self.list_names.append(final)
+        if payload.get("manual"):
+            self.manual_lists.add(final)
+        if payload.get("notify"):
+            self._app.notify_ctl.notify_lists.add(final)
+        self._app.persist("lists", "manual_lists", "notify_lists")
+        return final
+
+    def _unique_name(self, name: str) -> str:
+        """`name`, or `name (2)`, `name (3)`, ... if it's already taken."""
+        final = name
+        suffix = 2
+        while final in self.entity_lists:
+            final = f"{name} ({suffix})"
+            suffix += 1
+        return final
 
     def rename_list(self, old_name: str | None, new_name: str | None) -> None:
         app = self._app

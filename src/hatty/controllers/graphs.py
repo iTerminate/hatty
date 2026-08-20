@@ -2,6 +2,7 @@
 """Graph/history state, the detail panel rendering, and saved graphs,
 extracted from HACLI."""
 
+import copy
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
@@ -13,6 +14,9 @@ from hatty.const import (
 )
 from hatty.types import Entity
 from hatty.ui.graph.entity_detail import EntityDetailPanel
+
+#: Bumped if the export payload shape ever changes incompatibly.
+EXPORT_FORMAT_VERSION = 1
 
 
 def _trim_history(buf: deque, hours: float, ts_of=lambda item: item[0]) -> None:
@@ -268,6 +272,42 @@ class GraphController:
         self.saved_graphs[name] = entry
         self._app.persist("saved_graphs")
         self._app.notify(f"Graph saved as '{name}'.", title="Graph Saved")
+
+    # ── Export / import ──────────────────────────────────────────────────────
+
+    def to_export_payload(self, name: str) -> dict:
+        """A JSON-serializable snapshot of saved graph `name`, versioned so a
+        future format change can be detected on import."""
+        return {
+            "hatty_graph": EXPORT_FORMAT_VERSION,
+            "name": name,
+            "graph": copy.deepcopy(self.saved_graphs[name]),
+        }
+
+    def import_from_payload(self, payload: dict) -> str:
+        """Create a new saved graph from a previously exported payload,
+        deduplicating its name against the existing collection. Raises
+        `ValueError` (with a user-facing message) if `payload` isn't a
+        recognizable export. Returns the final graph name."""
+        if not isinstance(payload, dict) or payload.get("hatty_graph") != EXPORT_FORMAT_VERSION:
+            raise ValueError("Not a valid hatty saved graph export file.")
+        graph = payload.get("graph")
+        if not isinstance(graph, dict) or "entity_ids" not in graph:
+            raise ValueError("Saved graph export is missing entity_ids.")
+
+        final = self._unique_name(str(payload.get("name") or "Imported"))
+        self.saved_graphs[final] = copy.deepcopy(graph)
+        self._app.persist("saved_graphs")
+        return final
+
+    def _unique_name(self, name: str) -> str:
+        """`name`, or `name (2)`, `name (3)`, ... if it's already taken."""
+        final = name
+        suffix = 2
+        while final in self.saved_graphs:
+            final = f"{name} ({suffix})"
+            suffix += 1
+        return final
 
     def handle_saved_graphs_popup_action(self, result: dict) -> None:
         app = self._app
