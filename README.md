@@ -8,6 +8,7 @@ Your whole smart home, live, in a terminal. hatty connects to Home Assistant ove
 - Dedicated live-apply controls for lights, media players, and other entity attributes
 - Sensor/thermostat history as sparklines or a fullscreen graph, with multi-entity comparison and saved configs
 - Customizable **dashboards** of widgets — graphs, gauges, thermostats, panels — freely resized and split across tiles
+- **Backup & Sync** — export lists, dashboards, saved graphs, entity-name overrides, and settings as a directory of small JSON files, one per object, plus a manifest — pick which sections to include, from Configuration ▸ Backup & Sync. Any single list/dashboard/graph can also be exported/imported on its own from its popup (`x`/`i`), in the exact same format, so a hand-shared file just drops into the backup directory. Optionally track that directory as a git repo, with pull-on-start, commit/push-on-exit, and manual init/pull/push — all non-interactive, never prompting for git credentials or hanging on a stalled network
 
 ## Demo
 
