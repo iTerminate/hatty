@@ -309,9 +309,8 @@ class DashboardController:
     def swap_slots(
         self, dashboard_name: str, r1: int, c1: int, r2: int, c2: int, parent: tuple[int, int] | None = None
     ) -> bool:
-        # Move/swap a widget between two cells of the same grid (top-level or one
-        # split's child grid): reassign each present slot's row/col. Handles
-        # occupied↔occupied and occupied↔empty (a missing slot is simply absent).
+        # Move/swap a widget between two cells of the same grid: reassign each
+        # present slot's row/col (handles occupied↔occupied and occupied↔empty).
         # Both slots must fit at their new anchors (span-aware); returns False if not.
         ctx = self.grid_ctx(dashboard_name, parent)
         if ctx is None:

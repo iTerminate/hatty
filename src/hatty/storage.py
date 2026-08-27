@@ -89,13 +89,11 @@ CREATE TABLE IF NOT EXISTS saved_graphs (
 );
 """
 
-# Single source of truth for every persisted config key: key -> (app attribute
-# holding its in-memory working copy, destination). SQLite keys are the growing
-# user-data collections this module owns; YAML keys (just "columns") are display
-# preferences that stay in the lean config.yaml. HACLI derives _PERSIST_ATTRS and
-# _collections_snapshot from this table, and COLLECTION_KEYS below is the sqlite
-# slice — a test in tests/unit/test_storage.py guards that they stay in sync so a
-# new collection can't be half-registered (issue #168).
+# Single source of truth for every persisted config key: key -> (in-memory app
+# attribute, destination). SQLite keys are this module's user-data collections;
+# YAML keys ("columns") are lean display preferences. HACLI derives
+# _PERSIST_ATTRS/_collections_snapshot from this; COLLECTION_KEYS below is the
+# sqlite slice, kept in sync by a test in test_storage.py (issue #168).
 PERSISTED = {
     CONFIG_KEY_LISTS: ("entity_lists", "sqlite"),
     CONFIG_KEY_DEFAULT_LIST: ("default_list_name", "sqlite"),
@@ -116,12 +114,9 @@ class Storage:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
         self._conn: sqlite3.Connection | None = None
-        # A single sqlite3 connection is shared across threads (saves run in
-        # asyncio.to_thread workers, close() runs on the app's main thread).
-        # check_same_thread=False disables sqlite's own guard, so we serialize
-        # every access to the connection ourselves — two concurrent save_all
-        # calls, or a close() racing an in-flight save, are otherwise a C-level
-        # crash rather than a clean error.
+        # One connection shared across threads (saves in to_thread workers, close()
+        # on the main thread): check_same_thread=False disables sqlite's guard, so
+        # this lock serializes access — a concurrent save/close is a C-level crash otherwise.
         self._lock = threading.Lock()
 
     @property

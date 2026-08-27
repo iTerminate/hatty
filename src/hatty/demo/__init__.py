@@ -23,8 +23,7 @@ def demo_config() -> dict:
     cfg["home_assistant"] = {"url": "demo://home-assistant", "token": "demo"}
     cfg["graph_type"] = "line"  # dashboard Graph widgets render as a line, not the block sparkline
     cfg.update(demo_collections())
-    # Enable change-alert notifications (issue #224) — the "Security" list in
-    # demo_collections() is pre-designated (issue #24) so it shows up already in
-    # use — ntfy stays off since demo mode is fully offline.
+    # Enable change-alert notifications (#224) — the "Security" list is
+    # pre-designated (#24) so it shows up already in use; ntfy stays off (offline).
     cfg[const.CONFIG_KEY_NOTIFICATIONS] = {**const.DEFAULT_NOTIFICATIONS}
     return cfg

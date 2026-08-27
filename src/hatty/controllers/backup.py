@@ -214,12 +214,10 @@ class BackupController:
     async def sync_on_exit(
         self, status: Callable[[str], None] | None = None, timeout: float = 75.0
     ) -> tuple[bool, str]:
-        # 75s: room for git_sync's own NETWORK_TIMEOUT (60s) on the push plus a
-        # buffer for the local commit and export, as a belt-and-suspenders cap
-        # so a stalled network can't hang the exit-sync overlay indefinitely.
-        # `status`, if given, is called before each phase — ExitSyncScreen
-        # passes its own label so a slow push doesn't look identical to a
-        # slow commit (issue: show what's happening during a slow exit).
+        # 75s: room for git_sync's NETWORK_TIMEOUT (60s) plus a buffer for commit/
+        # export, so a stalled network can't hang the exit-sync overlay indefinitely.
+        # `status`, if given, is called before each phase so a slow push doesn't
+        # look identical to a slow commit.
         if not self.exit_sync_pending():
             return True, ""
         path = self.prefs.get("path") or ""
