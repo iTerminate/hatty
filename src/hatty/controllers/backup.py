@@ -229,7 +229,9 @@ class BackupController:
                 status(text)
 
         _status("Exporting…")
-        ok, msg = self.export_now()
+        # to_thread so the "Exporting…" frame actually paints before the
+        # (loop-blocking) export runs.
+        ok, msg = await asyncio.to_thread(self.export_now)
         if not ok:
             return False, msg
 

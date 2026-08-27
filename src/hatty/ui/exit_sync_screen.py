@@ -6,6 +6,7 @@ skips the sync and exits immediately, mirroring SplashScreen's "any keypress
 dismisses it" rule for a slow/failing connection."""
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 from textual.app import ComposeResult
@@ -32,7 +33,9 @@ class ExitSyncScreen(Screen):
         background: $background;
     }
     #exit_sync_body {
-        width: auto;
+        /* Not auto: an auto container with only 100%-width children measures 0 wide. */
+        width: 60;
+        max-width: 90%;
         height: auto;
         align: center middle;
     }
@@ -59,6 +62,8 @@ class ExitSyncScreen(Screen):
     def __init__(self) -> None:
         super().__init__()
         self._done = False
+        self._phase = "Saving…"
+        self._phase_started: float = 0.0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="exit_sync_body"):
@@ -67,11 +72,27 @@ class ExitSyncScreen(Screen):
             yield Label("escape to skip and quit now", id="exit_sync_hint")
 
     def on_mount(self) -> None:
+        self.set_interval(1.0, self._render_status)
         self.app.spawn(self._sync())
 
-    def _set_status(self, text: str) -> None:
+    def _set_status(self, text: str, final: bool = False) -> None:
         if self._done:
             return
+        if final:
+            self._update_label(text)
+            return
+        self._phase = text
+        self._phase_started = time.monotonic()
+        self._render_status()
+
+    def _render_status(self) -> None:
+        if self._done:
+            return
+        elapsed = int(time.monotonic() - self._phase_started)
+        text = f"{self._phase}  {elapsed}s" if elapsed >= 1 else self._phase
+        self._update_label(text)
+
+    def _update_label(self, text: str) -> None:
         try:
             self.query_one("#exit_sync_status", Label).update(text)
         except Exception:
@@ -87,7 +108,7 @@ class ExitSyncScreen(Screen):
             # however long the whole thing takes.
             ok, msg = await self.app.backup_ctl.sync_on_exit(status=self._set_status)
             if msg:
-                self._set_status(msg)
+                self._set_status(msg, final=True)
                 if not ok:
                     await asyncio.sleep(2.0)  # let the user read the failure
         except Exception as e:

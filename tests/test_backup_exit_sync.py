@@ -8,6 +8,7 @@ trapping the user."""
 import asyncio
 
 import pytest
+from textual.widgets import Label
 
 from hatty import git_sync
 from hatty.ui.exit_sync_screen import ExitSyncScreen
@@ -96,7 +97,7 @@ async def test_escape_skips_a_slow_sync_and_quits_immediately(make_app, tmp_path
     backup_dir.mkdir()
     app = make_app(config_data=_backup_config(backup_dir, commit_on_exit=True))
 
-    async def _slow_sync(timeout=75.0):
+    async def _slow_sync(status=None, timeout=75.0):
         await asyncio.sleep(10)
         return True, "done"
 
@@ -112,4 +113,70 @@ async def test_escape_skips_a_slow_sync_and_quits_immediately(make_app, tmp_path
         await pilot.pause()
 
     # Reaching here (well under the 10s sync) proves escape didn't wait for it.
+    assert app._exit is True
+
+
+async def test_exit_sync_overlay_is_actually_visible(make_app, tmp_path, monkeypatch):
+    """Regression test for a body that measured 0-wide and rendered as a
+    blank black screen (an `auto`-width container whose only children were
+    all `100%` wide)."""
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+    app = make_app(config_data=_backup_config(backup_dir, commit_on_exit=True))
+
+    async def _slow_sync(status=None, timeout=75.0):
+        await asyncio.sleep(10)
+        return True, "done"
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(app.backup_ctl, "sync_on_exit", _slow_sync)
+
+        await pilot.press("ctrl+q")
+        await pilot.pause()
+        assert isinstance(app.screen, ExitSyncScreen)
+
+        body = app.screen.query_one("#exit_sync_body")
+        status = app.screen.query_one("#exit_sync_status", Label)
+        assert body.size.width > 0
+        assert status.size.width > 0
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+
+async def test_exit_sync_overlay_shows_each_phase(make_app, tmp_path, monkeypatch):
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+    app = make_app(config_data=_backup_config(backup_dir, commit_on_exit=True))
+
+    committing = asyncio.Event()
+    release_committing = asyncio.Event()
+
+    async def _phased_sync(status=None, timeout=75.0):
+        if status:
+            status("Exporting…")
+        await asyncio.sleep(0)
+        if status:
+            status("Committing…")
+        committing.set()
+        await release_committing.wait()
+        return True, "Committed."
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(app.backup_ctl, "sync_on_exit", _phased_sync)
+
+        await pilot.press("ctrl+q")
+        await pilot.pause()
+
+        await asyncio.wait_for(committing.wait(), timeout=2.0)
+        await pilot.pause()
+        status_label = app.screen.query_one("#exit_sync_status", Label)
+        assert str(status_label.content) == "Committing…"
+
+        release_committing.set()
+        await pilot.pause()
+
+    # The sync ran to completion (final "Committed." message) and exited cleanly.
     assert app._exit is True
