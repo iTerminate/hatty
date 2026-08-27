@@ -62,10 +62,8 @@ from hatty.ui.list_selection_popup import ListSelectionPopup
 from hatty.ui.rename_entity_popup import RenameEntityPopup
 from hatty.ui.search_input import SearchInput
 
-# In --demo mode the seeded DemoHAClient answers get_states almost instantly,
-# so the splash would otherwise flash for a fraction of a second — never long
-# enough to be seen (e.g. in the recorded demo screencast). Hold it visible for
-# a moment on that first auto-dismiss only; real-HA boot is unaffected.
+# --demo answers get_states almost instantly, so the splash would otherwise
+# flash for a fraction of a second (invisible in a recorded screencast).
 DEMO_SPLASH_SECONDS = 2.5
 
 
@@ -136,9 +134,8 @@ class HACLI(App):
         # Fire-and-forget tasks hold a reference here so asyncio can't GC them
         # mid-flight; done tasks remove themselves.
         self._bg_tasks: set[asyncio.Task] = set()
-        # Guards the exit-time git sync against running twice: action_quit is
-        # the primary path, _on_exit_app is a backstop for any exit() call
-        # that bypasses it.
+        # Guards the exit-time git sync against running twice (action_quit is
+        # the primary path, _on_exit_app a backstop for any exit() call).
         self._exit_sync_done = False
 
     # Config key -> the app attribute that is its in-memory working copy, derived
@@ -197,9 +194,8 @@ class HACLI(App):
     def log_title_suffix(self, session) -> str:
         return self.log_ctl.range_suffix(session)
 
-    # ── Domain state lives on the controllers; these proxies preserve the app's
-    #    historical surface — screens and tests read *and assign* these directly.
-    #    Each is a real property, so assignment still routes to the controller. ──
+    # ── Domain state lives on the controllers; these proxies preserve the app's old
+    #    attribute surface — screens/tests read/assign directly, routed through the controller. ──
 
     # List state (ListController)
     entity_lists = _controller_proxy("list_ctl", "entity_lists")
@@ -377,9 +373,8 @@ class HACLI(App):
         self._apply_terminal_title(cfg)
         self.keys_ctl.apply(cfg)
         self.backup_ctl.apply(cfg)
-        # Only at boot/restart (this method's three call sites), never on a
-        # plain reconnect from the config screen — pull_on_start() is itself a
-        # no-op in demo mode and when the pref is off.
+        # Only at boot/restart, never on a plain reconnect from the config screen —
+        # pull_on_start() is itself a no-op in demo mode and when the pref is off.
         self.spawn(self.backup_ctl.pull_on_start())
 
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(cfg.get(CONFIG_KEY_GRAPH_TYPE))
@@ -441,10 +436,8 @@ class HACLI(App):
         splash = self._splash_screen()
         if splash is None:
             return
-        # Demo mode: hold the splash up for a moment on its first auto-dismiss
-        # (see DEMO_SPLASH_SECONDS) so it's actually visible instead of a
-        # single-frame flash. A keypress (SplashScreen.on_key) can still skip
-        # it early — the deferred call below just no-ops if that happened.
+        # Demo mode: hold the splash up once (DEMO_SPLASH_SECONDS) so it's actually
+        # visible; a keypress can still dismiss early, in which case this no-ops.
         if self._demo and not self._demo_splash_held:
             self._demo_splash_held = True
             self.set_timer(DEMO_SPLASH_SECONDS, self._dismiss_splash)
@@ -509,9 +502,8 @@ class HACLI(App):
 
     def action_show_list_selection_popup(self) -> None:
         if self.current_list_name is not None and self.search_term:
-            # A list is already active but hidden behind a search filter —
-            # just clear the search and return to it, rather than making the
-            # user re-pick the same list from the popup (issue #211).
+            # A list is already active but hidden behind a search filter — clear the
+            # search and return to it rather than re-picking it from the popup (#211).
             self.pop_to_base_screen()
             self.search_term = ""
             self.set_title_based_on_focused_ui()
@@ -590,10 +582,8 @@ class HACLI(App):
         action = "remove" if entity_id in current_list else "add"
         list_name = self.current_list_name
 
-        # Removing while viewing a locked list requires an unlock confirmation
-        # (issue #214) — but only in pure list-view; an active search is the
-        # "filter list for adding items" path the issue exempts, since there
-        # every displayed entity isn't necessarily a list member.
+        # Removing from a locked list needs an unlock confirmation (#214), but not
+        # during an active search — that's "filter to add items", not list-view.
         if action == "remove" and not self.search_term and self.list_ctl.is_locked(list_name):
 
             def _unlock_and_remove(confirmed: bool | None, _name: str = list_name, _eid: str = entity_id) -> None:
@@ -689,9 +679,8 @@ class HACLI(App):
 
     # ── Help ──────────────────────────────────────────────────────────────────
 
-    # Textual DataTable bindings that leak into the Main page's active_bindings
-    # via the focused EntitiesTable but mean nothing as hatty keybindings (issue
-    # #7) — ↑/↓/PgUp/PgDn/Ctrl+Home/Ctrl+End stay, they're genuinely useful.
+    # Textual DataTable bindings that leak into active_bindings via the focused
+    # EntitiesTable but aren't real hatty keybindings (#7); arrows/paging stay.
     _HELP_HIDDEN_ACTIONS = frozenset({"cursor_left", "cursor_right", "select_cursor", "scroll_home", "scroll_end"})
 
     def action_show_help(self) -> None:
@@ -701,9 +690,8 @@ class HACLI(App):
         from hatty.ui.graph.preview_screen import GraphPreviewScreen
         from hatty.ui.help_popup import action_name, binding_entries, sectioned_rows
 
-        # screen_cls -> its controllers/keybindings.py registry scope, so an
-        # inactive page's static rows go through keys_ctl.static_bindings and
-        # reflect the live keymap rather than the class's hard-coded defaults.
+        # screen_cls -> its keybindings.py registry scope, so an inactive page's
+        # rows reflect the live keymap rather than the class's hard-coded defaults.
         scope_of = {
             None: "app",
             DashboardScreen: "dashboard",
@@ -721,10 +709,9 @@ class HACLI(App):
             ]
 
         def page_rows(screen_cls: type | None, is_active: bool) -> list[tuple[str, str]]:
-            # A screen opting into HELP_ALL_MODES (GraphPreviewScreen) always builds
-            # from its full static BINDINGS plus an app-level "From anywhere" section,
-            # regardless of which mode is active — its help page groups both modes'
-            # bindings side by side instead of only showing whichever is live (#7).
+            # HELP_ALL_MODES (GraphPreviewScreen) always builds from full static
+            # BINDINGS plus an app-level "From anywhere" section, so both modes'
+            # bindings show side by side instead of only whichever is live (#7).
             if screen_cls is not None and getattr(screen_cls, "HELP_ALL_MODES", False):
                 rows = sectioned_rows(
                     binding_entries(self.keys_ctl.static_bindings(scope_of[screen_cls])), screen_cls.HELP_SECTIONS
@@ -773,9 +760,8 @@ class HACLI(App):
                 matched_known_screen = True
             pages.append((title, page_rows(screen_cls, is_active)))
 
-        # A pushed screen that isn't one of the six above (Weather Forecast,
-        # Config, …) used to silently show the unrelated Main page instead of
-        # its own keys (issue #7) — give it a leading page of its own instead.
+        # A pushed screen outside the six above used to silently show the unrelated
+        # Main page instead of its own keys (#7) — give it a leading page instead.
         if not matched_known_screen and self.screen is not self.screen_stack[0]:
             screen_type = type(self.screen)
             title = getattr(screen_type, "HELP_TITLE", screen_type.__name__)
@@ -1104,9 +1090,8 @@ class HACLI(App):
     def action_show_graph_duration(self) -> None:
         from hatty.ui.graph.duration_popup import GraphDurationPopup
 
-        # The two panels are mutually exclusive (opening either closes the
-        # other), so `T` unambiguously targets whichever is open — the
-        # activity log's timeframe when it's visible, the graph's otherwise.
+        # The two panels are mutually exclusive, so `T` unambiguously targets
+        # whichever is open — the log's timeframe when visible, else the graph's.
         if self.log_ctl.is_open(self):
             self._show_log_duration_popup()
             return
@@ -1270,11 +1255,9 @@ class HACLI(App):
     # ── Navigation / back ────────────────────────────────────────────────────
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
-        # The command palette is a cross-screen affordance (Dashboard/Lists/
-        # Configuration/Setup wizard, per HACommandProvider) and must stay
-        # reachable no matter which screen is on top — Dashboard and List are
-        # both primary displays a user switches between via the palette, not
-        # a base view with secondary screens bolted on (#9).
+        # The command palette is a cross-screen affordance and must stay reachable
+        # no matter which screen is on top — Dashboard/List are both primary
+        # displays switched via the palette, not secondary screens bolted on (#9).
         if action == "command_palette":
             return True
         if isinstance(self.screen, DashboardScreen):
@@ -1287,10 +1270,8 @@ class HACLI(App):
 
         if isinstance(self.screen, GraphPreviewScreen):
             return action in GraphPreviewScreen.ALLOWED_APP_ACTIONS
-        # Any other pushed screen (ConfigScreen, LightControlScreen, popups, …)
-        # must not leak main-table bindings to the hidden base table (#187), but
-        # Textual's own tab focus navigation (app.focus_next/previous) operates on
-        # the pushed screen and must stay live so Tab works inside it (#202).
+        # Any other pushed screen must not leak main-table bindings to the hidden
+        # base table (#187), but focus_next/previous must stay live for Tab (#202).
         if self.screen is not self.screen_stack[0] and not isinstance(
             self.screen, (DashboardScreen, DeviceTreeScreen, GraphPreviewScreen)
         ):
@@ -1310,10 +1291,8 @@ class HACLI(App):
                 return False
             domain = entity_id.split(".")[0]
             # "weather" is neither controllable nor graphable but still routes to
-            # WeatherForecastScreen in open_entity_controls (issue #275) — without
-            # this carve-out the binding (and its footer hint) never appears on the
-            # main table for a weather entity, even though the dashboard/device tree
-            # paths reach the same screen fine via their own check_action (#283).
+            # WeatherForecastScreen (#275); without this carve-out the binding never
+            # appears on the main table, though dashboard/device tree reach it (#283).
             return domain in CONTROLLABLE_DOMAINS or domain == "weather" or self.graph_ctl.is_graphable(entity)
         elif action == "cycle_graph_type":
             return self._detail_entity_id is not None
@@ -1458,8 +1437,8 @@ class HACLI(App):
     # ── HA message handling ──────────────────────────────────────────────────
 
     def handle_ha_message(self, msg: dict) -> None:
-        # Public message-callback seam: the client factory is handed this bound
-        # method; the pump itself lives on the ConnectionController.
+        # Message-callback seam: the client factory is handed this bound method;
+        # the pump itself lives on the ConnectionController.
         self.conn_ctl.handle_ha_message(msg)
 
     def _apply_name_override(self, entity: Entity) -> None:
@@ -1617,9 +1596,8 @@ class HACLI(App):
 
             self.push_screen(EntityControlPopup(entity), callback)
         elif domain == "weather":
-            # Fullscreen forecast view (issue #275); a weather entity's state is a
-            # condition slug, not numeric, so it's neither togglable nor graphable
-            # and would otherwise dead-end here.
+            # Fullscreen forecast view (#275) — a weather entity's state is a
+            # condition slug, so it's neither togglable nor graphable elsewhere.
             from hatty.ui.weather_forecast_screen import WeatherForecastScreen
 
             self.push_screen(WeatherForecastScreen(entity))
@@ -1698,9 +1676,8 @@ class HACLI(App):
     # ── Configuration screen ─────────────────────────────────────────────────
 
     def action_show_config(self) -> None:
-        # Pass the live in-memory config: the YAML no longer carries collections
-        # (they're in SQLite now), so a fresh load_config would show empty
-        # lists/dashboards/graphs and its save would drop them.
+        # Pass the live in-memory config: collections live in SQLite now, so a
+        # fresh load_config would show empty lists/dashboards/graphs and drop them.
         self.push_screen(ConfigScreen(dict(self.app_config), self.config_path), self._on_config_saved)
 
     def action_show_onboarding(self) -> None:
