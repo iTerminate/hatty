@@ -1,6 +1,7 @@
 # hatty — MIT License. See LICENSE file for details.
 import os
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from rich.table import Table
@@ -23,11 +24,15 @@ from textual.widgets import (
     Static,
 )
 from textual.widgets.selection_list import Selection
+from textual_fspicker import SelectDirectory
 
+from hatty import backup as backup_module
 from hatty import config as config_module
+from hatty import git_sync
 from hatty import storage as storage_module
 from hatty.client import probe_connection
 from hatty.const import (
+    CONFIG_KEY_BACKUP,
     CONFIG_KEY_COLUMNS,
     CONFIG_KEY_DASHBOARDS,
     CONFIG_KEY_ENTITY_NAMES,
@@ -43,12 +48,14 @@ from hatty.const import (
     CONFIG_KEY_THEME,
     CONFIG_KEY_TOKEN,
     CONFIG_KEY_URL,
+    DEFAULT_BACKUP,
     DEFAULT_GRAPH_HOURS,
     DEFAULT_NOTIFICATIONS,
     DEFAULT_TERMINAL_TITLE,
 )
 from hatty.controllers import keybindings as keybindings_module
 from hatty.controllers.notifications import send_test_ntfy
+from hatty.ui.confirm_popup import ConfirmPopup
 from hatty.ui.entity_table import COLUMNS
 from hatty.ui.key_capture_popup import KeyCapturePopup
 
@@ -81,6 +88,18 @@ _NOTIFY_TOGGLES = [
     ("Highlight changed entity", "highlight"),
 ]
 
+# Backup & Sync git toggles, shown as a SelectionList mirroring the
+# notification channel toggles above. Keys match DEFAULT_BACKUP exactly minus
+# "path"/"sections", which get their own widgets.
+_BACKUP_GIT_TOGGLES = [
+    ("Enable git", "git_enabled"),
+    ("Pull on start", "pull_on_start"),
+    ("Import after a successful pull", "import_on_pull"),
+    ("Commit on exit", "commit_on_exit"),
+    ("Push on exit", "push_on_exit"),
+    ("Rebase on pull (instead of fast-forward only)", "pull_rebase"),
+]
+
 # Top-level category menu (issue #252). Each entry is (display name, pane id,
 # one-line hint, first-focus widget id within the pane). "cat_menu" itself is
 # the ContentSwitcher's built-in first pane and isn't listed here.
@@ -90,6 +109,7 @@ _CATEGORIES = [
     ("Notifications", "cat_notifications", "Toast/beep/desktop/ntfy alerts", "#cfg_notify"),
     ("Data & Collections", "cat_data", "Lists, name overrides, dashboards, saved graphs", "#cat_data"),
     ("Keybindings", "cat_keybindings", "Rebind keys for navigation, lists, log and graph", "#cfg_keys"),
+    ("Backup & Sync", "cat_backup", "Export/import your data, optional git repo", "#cfg_backup_path"),
 ]
 
 # Row key prefix for a non-interactive section-header row in #cfg_keys, so
@@ -187,6 +207,30 @@ class ConfigScreen(Screen):
     #cfg_ntfy_status.-error {
         color: $error;
     }
+    #cfg_backup_path_row {
+        height: auto;
+    }
+    #cfg_backup_path_row Input {
+        width: 1fr;
+    }
+    #cfg_backup_status {
+        margin-top: 1;
+        color: $text;
+    }
+    #cfg_backup_status.-ok {
+        color: $success;
+    }
+    #cfg_backup_status.-error {
+        color: $error;
+    }
+    #cfg_backup_buttons {
+        height: auto;
+        margin-top: 1;
+    }
+    #cfg_backup_buttons Button {
+        margin-right: 2;
+        margin-top: 1;
+    }
     """
 
     def __init__(self, raw_config: dict, config_path: str | None):
@@ -237,6 +281,8 @@ class ConfigScreen(Screen):
         entity_names = self._raw_config.get(CONFIG_KEY_ENTITY_NAMES, {})
         dashboards = self._raw_config.get(CONFIG_KEY_DASHBOARDS, {})
         saved_graphs = self._raw_config.get(CONFIG_KEY_SAVED_GRAPHS, {})
+        backup_prefs = {**DEFAULT_BACKUP, **(self._raw_config.get(CONFIG_KEY_BACKUP) or {})}
+        backup_sections = set(backup_prefs.get("sections") or [])
 
         themes = sorted(self.app.available_themes)
         theme_kwargs: dict = {"allow_blank": True}
@@ -373,6 +419,33 @@ class ConfigScreen(Screen):
                 yield DataTable(id="cfg_keys", cursor_type="row")
                 yield Button("Reset all to defaults", id="cfg_keys_reset")
 
+            with VerticalScroll(id="cat_backup", classes="config-pane"):
+                yield Label("Backup Directory", classes="section-title")
+                with Horizontal(id="cfg_backup_path_row"):
+                    yield Input(value=backup_prefs.get("path", ""), id="cfg_backup_path", placeholder="/path/to/backup")
+                    yield Button("Browse…", id="cfg_backup_browse")
+
+                yield Label("Sections to back up", classes="field-label")
+                section_selections = [
+                    Selection(backup_module.SECTION_LABELS[s], s, s in backup_sections) for s in backup_module.SECTIONS
+                ]
+                yield SelectionList(*section_selections, id="cfg_backup_sections")
+
+                yield Label("Git", classes="section-title")
+                git_selections = [
+                    Selection(label, key, bool(backup_prefs.get(key))) for label, key in _BACKUP_GIT_TOGGLES
+                ]
+                yield SelectionList(*git_selections, id="cfg_backup_git")
+
+                yield Label("", id="cfg_backup_status")
+                with Horizontal(id="cfg_backup_buttons"):
+                    yield Button("Export now", id="cfg_backup_export")
+                    yield Button("Import now", id="cfg_backup_import")
+                    yield Button("Init repo", id="cfg_backup_init")
+                    yield Button("Pull", id="cfg_backup_pull")
+                    yield Button("Push", id="cfg_backup_push")
+                    yield Button("Check status", id="cfg_backup_status_check")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -462,6 +535,20 @@ class ConfigScreen(Screen):
         elif event.button.id == "cfg_keys_reset":
             self._keybindings = {}
             self._populate_keybindings_table()
+        elif event.button.id == "cfg_backup_browse":
+            self.action_backup_browse()
+        elif event.button.id == "cfg_backup_export":
+            self.action_backup_export()
+        elif event.button.id == "cfg_backup_import":
+            self.action_backup_import()
+        elif event.button.id == "cfg_backup_init":
+            self.action_backup_init()
+        elif event.button.id == "cfg_backup_pull":
+            self.action_backup_pull()
+        elif event.button.id == "cfg_backup_push":
+            self.action_backup_push()
+        elif event.button.id == "cfg_backup_status_check":
+            self.action_backup_status_check()
 
     def action_stop_watching_all(self) -> None:
         # A live write (like the l/d/s popups edit their own collections directly)
@@ -515,6 +602,123 @@ class ConfigScreen(Screen):
         ok, message = await send_test_ntfy(prefs, "hatty", "🔔 Test notification from hatty")
         self._set_ntfy_status(message, ok=ok)
 
+    # ── Backup & Sync ─────────────────────────────────────────────────────────
+    # Every action here acts on the currently entered (unsaved) path/sections/git
+    # toggles, the action_test_connection/action_test_ntfy precedent — not on
+    # self.app.backup_ctl.prefs, which only reflects the last *saved* config.
+
+    def _backup_path(self) -> str:
+        return self.query_one("#cfg_backup_path", Input).value.strip()
+
+    def _backup_sections(self) -> list[str]:
+        selected = set(self.query_one("#cfg_backup_sections", SelectionList).selected)
+        return [s for s in backup_module.SECTIONS if s in selected]
+
+    def _backup_git_prefs(self) -> dict:
+        selected = set(self.query_one("#cfg_backup_git", SelectionList).selected)
+        return {key: key in selected for _label, key in _BACKUP_GIT_TOGGLES}
+
+    def _set_backup_status(self, text: str, ok: bool | None = None) -> None:
+        status = self.query_one("#cfg_backup_status", Label)
+        status.update(text)
+        status.set_class(ok is True, "-ok")
+        status.set_class(ok is False, "-error")
+
+    def action_backup_browse(self) -> None:
+        current = self._backup_path() or str(Path.home())
+
+        def _picked(path: Path | None) -> None:
+            if path is not None:
+                self.query_one("#cfg_backup_path", Input).value = str(path)
+
+        self.app.push_screen(SelectDirectory(location=current, title="Backup directory"), _picked)
+
+    def action_backup_export(self) -> None:
+        path = self._backup_path()
+        sections = self._backup_sections()
+        if not path or not sections:
+            self._set_backup_status("Set a directory and at least one section first.", ok=False)
+            return
+        self._set_backup_status("Exporting…")
+        self.run_worker(self._do_backup_export(path, sections), exclusive=True)
+
+    async def _do_backup_export(self, path: str, sections: list[str]) -> None:
+        # Not asyncio.to_thread: export_now/import_now (via the object
+        # controllers' import_from_payload) call app.persist(), which does
+        # asyncio.create_task() — that needs the app's own running loop, which
+        # a thread-pool worker thread doesn't have.
+        ok, msg = self.app.backup_ctl.export_now(path, sections)
+        self._set_backup_status(msg, ok=ok)
+
+    def action_backup_import(self) -> None:
+        path = self._backup_path()
+        sections = self._backup_sections()
+        if not path or not sections:
+            self._set_backup_status("Set a directory and at least one section first.", ok=False)
+            return
+        labels = ", ".join(backup_module.SECTION_LABELS[s] for s in sections)
+
+        def _confirmed(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            self._set_backup_status("Importing…")
+            self.run_worker(self._do_backup_import(path, sections), exclusive=True)
+
+        self.app.push_screen(ConfirmPopup(f"Replace {labels} with the backup in {path}?"), _confirmed)
+
+    async def _do_backup_import(self, path: str, sections: list[str]) -> None:
+        ok, msg, _found = self.app.backup_ctl.import_now(sections, path)
+        self._set_backup_status(msg, ok=ok)
+
+    def action_backup_init(self) -> None:
+        path = self._backup_path()
+        if not path:
+            self._set_backup_status("Set a directory first.", ok=False)
+            return
+        self._set_backup_status("Initializing…")
+        self.run_worker(self._do_backup_init(path), exclusive=True)
+
+    async def _do_backup_init(self, path: str) -> None:
+        ok, msg = await git_sync.init_repo_async(path)
+        self._set_backup_status(msg, ok=ok)
+
+    def action_backup_pull(self) -> None:
+        path = self._backup_path()
+        if not path:
+            self._set_backup_status("Set a directory first.", ok=False)
+            return
+        rebase = "pull_rebase" in self.query_one("#cfg_backup_git", SelectionList).selected
+        self._set_backup_status("Pulling…")
+        self.run_worker(self._do_backup_pull(path, rebase), exclusive=True)
+
+    async def _do_backup_pull(self, path: str, rebase: bool) -> None:
+        ok, msg = await git_sync.pull_async(path, rebase=rebase)
+        self._set_backup_status(msg, ok=ok)
+
+    def action_backup_push(self) -> None:
+        path = self._backup_path()
+        if not path:
+            self._set_backup_status("Set a directory first.", ok=False)
+            return
+        self._set_backup_status("Committing and pushing…")
+        self.run_worker(self._do_backup_push(path), exclusive=True)
+
+    async def _do_backup_push(self, path: str) -> None:
+        ok, msg = await git_sync.commit_and_push_async(path, git_sync.default_commit_message())
+        self._set_backup_status(msg, ok=ok)
+
+    def action_backup_status_check(self) -> None:
+        path = self._backup_path()
+        if not path:
+            self._set_backup_status("Set a directory first.", ok=False)
+            return
+        self._set_backup_status("Checking…")
+        self.run_worker(self._do_backup_status_check(path), exclusive=True)
+
+    async def _do_backup_status_check(self, path: str) -> None:
+        info = await git_sync.repo_info_async(path)
+        self._set_backup_status(info.message, ok=info.ok)
+
     def action_save_and_close(self) -> None:
         url = self.query_one("#cfg_url", Input).value.strip()
         token = self.query_one("#cfg_token", Input).value.strip()
@@ -562,6 +766,11 @@ class ConfigScreen(Screen):
         new_config[CONFIG_KEY_COLUMNS] = columns if columns else existing
         new_config[CONFIG_KEY_NOTIFICATIONS] = notifications
         new_config[CONFIG_KEY_KEYBINDINGS] = dict(self._keybindings)
+        new_config[CONFIG_KEY_BACKUP] = {
+            "path": self._backup_path(),
+            "sections": self._backup_sections(),
+            **self._backup_git_prefs(),
+        }
 
         # Collections live in SQLite; this screen only edits connection settings +
         # display preferences, so keep them out of the lean YAML it writes. The

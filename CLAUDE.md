@@ -43,12 +43,28 @@ shared by `HACLI`'s docked panel, `GraphPreviewScreen`'s, and `DashboardScreen`'
 (`app.keys_ctl` — owns the user's keybinding overrides and pushes the resulting keymap onto the
 running app via `App.set_keymap`; every screen's `BINDINGS` is `bindings_for(scope)` from this
 module's `REGISTRY`, the single source of truth for all ~220 bindings in the app, rebindable from
-Configuration ▸ Keybindings). Like `const.py`/`types.py`, `keybindings.py`'s registry half is
-cycle-safe (no `hatty.ui`/`hatty.main` imports) since it's imported at class-definition time by
-every screen module. **`HACLI` keeps its old attribute surface via property pairs**
-(`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so screens and tests
-read/assign through the app unchanged; new UI code should call controllers directly instead
-(`self.app.dash_ctl.set_slot(...)`).
+Configuration ▸ Keybindings), `backup.py` (`app.backup_ctl` — Backup & Sync: owns the export-scope
+and git prefs, drives `backup.py`/`git_sync.py` against the app's live collections, and fires
+pull-on-start / the exit-time commit-and-push). Like `const.py`/`types.py`, `keybindings.py`'s
+registry half is cycle-safe (no `hatty.ui`/`hatty.main` imports) since it's imported at
+class-definition time by every screen module. **`HACLI` keeps its old attribute surface via
+property pairs** (`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so screens
+and tests read/assign through the app unchanged; new UI code should call controllers directly
+instead (`self.app.dash_ctl.set_slot(...)`).
+
+**Single-object export/import.** Lists, dashboards, and saved graphs each have a matching pair of
+controller methods — `to_export_payload(name)` / `import_from_payload(payload)` on
+`ListController`/`DashboardController`/`GraphController` — producing one small versioned JSON file
+per object (`{"hatty_list": 1, ...}` / `{"hatty_dashboard": 1, ...}` / `{"hatty_graph": 1, ...}`),
+reachable from each object's popup (`x`/`i`). `src/hatty/backup.py`'s directory export (Configuration
+▸ Backup & Sync) is built entirely out of these same payloads — one file per object under
+`lists/`/`dashboards/`/`graphs/` plus a handful of whole-collection files (`entity_names.json`,
+`settings.json`, `keybindings.json`) and a `hatty-backup.json` manifest — so a file written by one
+path is always readable by the other, and dropping a hand-exported object into the backup directory
+just works. `src/hatty/git_sync.py` is a separate, git-agnostic layer that shells out to the `git`
+CLI (hardened against credential prompts and hangs — see its module docstring) to optionally treat
+that directory as a repo; neither module imports the other's caller, `controllers/backup.py` wires
+them together.
 
 **Two-tier config persistence.** `config.yaml` is lean — connection settings and display
 preferences only. The user-data collections (`lists`, `entity_names`, `dashboards`, `saved_graphs`,
@@ -77,6 +93,10 @@ params typed as `Entity` (not bare `dict`) and read `total=False` fields via `.g
 - `src/hatty/config.py` / `storage.py` — YAML config and SQLite collection persistence.
 - `src/hatty/const.py` / `types.py` / `service_calls.py` — shared constants, entity TypedDicts, and
   the pure per-domain functions that build `call_service` data for entity controls.
+- `src/hatty/backup.py` — Backup & Sync's directory export/import: builds/writes/reads the JSON
+  files described above, no git involved.
+- `src/hatty/git_sync.py` — the git CLI layer for Backup & Sync: init/commit/pull/push over the
+  export directory, every invocation non-interactive and time-bounded.
 - `src/hatty/ui/` — screens and popups, one module per surface (entity table, dashboard grid +
   widgets, device/area tree, graph panel/fullscreen/preview, per-domain control screens, config,
   onboarding). Each module's own docstring is the source of truth for its behavior — read the file

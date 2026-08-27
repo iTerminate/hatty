@@ -39,6 +39,7 @@ from hatty.const import (
     DEFAULT_TERMINAL_TITLE,
     TOGGLABLE_DOMAINS,
 )
+from hatty.controllers.backup import BackupController
 from hatty.controllers.connection import ConnectionController
 from hatty.controllers.dashboards import DashboardController
 from hatty.controllers.graphs import GraphController, _trim_history  # noqa: F401 (_trim_history re-exported for tests)
@@ -114,6 +115,7 @@ class HACLI(App):
         self.notify_ctl = NotificationController(self)
         self.log_ctl = LogbookController(self)
         self.keys_ctl = KeybindingController(self)
+        self.backup_ctl = BackupController(self)
 
         self.all_entities: list = []
         self.entity_registry: list = []
@@ -134,6 +136,10 @@ class HACLI(App):
         # Fire-and-forget tasks hold a reference here so asyncio can't GC them
         # mid-flight; done tasks remove themselves.
         self._bg_tasks: set[asyncio.Task] = set()
+        # Guards the exit-time git sync against running twice: action_quit is
+        # the primary path, _on_exit_app is a backstop for any exit() call
+        # that bypasses it.
+        self._exit_sync_done = False
 
     # Config key -> the app attribute that is its in-memory working copy, derived
     # from storage.PERSISTED so there is one source of truth (issue #168).
@@ -145,6 +151,25 @@ class HACLI(App):
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
         return task
+
+    async def drain_bg_tasks(self, timeout: float = 5.0) -> bool:
+        """Wait for the fire-and-forget tasks spawn() tracks (notably
+        _save_config_async) to finish, so an exit-time git commit picks up the
+        very last save. True if all completed. Uses asyncio.wait rather than
+        wait_for(gather(...)): the latter would cancel a still-running
+        storage.save_all mid-transaction on timeout, and a half-written
+        hatty.db is worse than a slow quit — stragglers are just left running.
+        Excludes the current task, since the caller (the exit-sync flow) is
+        itself usually running as a spawned task and would otherwise wait on
+        itself forever."""
+        current = asyncio.current_task()
+        pending = {t for t in self._bg_tasks if t is not current and not t.done()}
+        if not pending:
+            return True
+        _done, still_pending = await asyncio.wait(pending, timeout=timeout)
+        if still_pending:
+            self.log.warning(f"{len(still_pending)} background task(s) still running at exit")
+        return not still_pending
 
     def persist(self, *keys: str) -> None:
         """Mirror the named collections from their app attributes into
@@ -249,6 +274,41 @@ class HACLI(App):
             except Exception as e:
                 self.log.error(f"Error closing storage: {e}")
 
+    async def action_quit(self) -> None:
+        """Overrides Textual's default (a bare `self.exit()`) so a pending
+        `commit_on_exit`/`push_on_exit` git sync gets a visible overlay
+        instead of silently blocking the message pump — this method is itself
+        awaited from inside the still-running pump (Textual's
+        `_check_bindings`), so anything it awaits directly would freeze
+        rendering. ExitSyncScreen does the actual awaiting, from its own
+        `on_mount`, via `self.spawn(...)`."""
+        if self._exit_sync_done or not self.backup_ctl.exit_sync_pending():
+            self.exit()
+            return
+        self._exit_sync_done = True
+        from hatty.ui.exit_sync_screen import ExitSyncScreen
+
+        self.push_screen(ExitSyncScreen())
+
+    async def _on_exit_app(self) -> None:
+        """Backstop for an `exit()` that bypasses action_quit (a future call
+        site, `--press`, test autopilot). Textual's MRO dispatch
+        (`message_pump.py`) invokes `App._on_exit_app` right after this one —
+        do NOT call `super()._on_exit_app()`, or the shutdown sentinel gets
+        posted twice. Unlike action_quit, this runs with no live UI to show
+        progress in, so it just awaits the sync directly (frozen rendering is
+        expected here — the pump is already winding down)."""
+        if self._exit_sync_done or self._demo:
+            return
+        self._exit_sync_done = True
+        if not self.backup_ctl.exit_sync_pending():
+            return
+        try:
+            await self.drain_bg_tasks(timeout=5.0)
+            await self.backup_ctl.sync_on_exit()
+        except Exception as e:
+            self.log.error(f"git sync on exit failed: {e}")
+
     def _storage_db_path(self):
         from pathlib import Path
 
@@ -316,6 +376,11 @@ class HACLI(App):
 
         self._apply_terminal_title(cfg)
         self.keys_ctl.apply(cfg)
+        self.backup_ctl.apply(cfg)
+        # Only at boot/restart (this method's three call sites), never on a
+        # plain reconnect from the config screen — pull_on_start() is itself a
+        # no-op in demo mode and when the pref is off.
+        self.spawn(self.backup_ctl.pull_on_start())
 
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(cfg.get(CONFIG_KEY_GRAPH_TYPE))
 
@@ -461,11 +526,48 @@ class HACLI(App):
 
         def callback(result) -> None:
             if isinstance(result, dict):
-                self.list_ctl.handle_popup_action(result)
+                action = result.get("action")
+                if action == "export":
+                    self._export_list(result["list_name"])
+                elif action == "import":
+                    self._import_list()
+                else:
+                    self.list_ctl.handle_popup_action(result)
             elif isinstance(result, str):
                 self.select_or_create_list(result)
 
         self.push_screen(ListSelectionPopup(), callback)
+
+    def _export_list(self, name: str) -> None:
+        from hatty.ui.json_export import export_json, slugify
+
+        export_json(
+            self,
+            payload=self.list_ctl.to_export_payload(name),
+            default_filename=f"{slugify(name)}.list.json",
+            title="Export list",
+            save_button="Export",
+            filters_label="List JSON",
+            success=lambda path: f"Exported '{name}' to {path}.",
+            success_title="List Exported",
+        )
+
+    def _import_list(self) -> None:
+        from hatty.ui.json_export import import_json
+
+        def _apply(payload: dict) -> str:
+            final = self.list_ctl.import_from_payload(payload)
+            self.select_or_create_list(final)
+            return f"Imported list '{final}'."
+
+        import_json(
+            self,
+            title="Import list",
+            open_button="Import",
+            filters_label="List JSON",
+            apply=_apply,
+            success_title="List Imported",
+        )
 
     def select_or_create_list(self, list_name: str) -> None:
         self.list_ctl.select_or_create(list_name)
@@ -1064,9 +1166,45 @@ class HACLI(App):
 
         def callback(result) -> None:
             if isinstance(result, dict):
-                self.graph_ctl.handle_saved_graphs_popup_action(result)
+                action = result.get("action")
+                if action == "export":
+                    self._export_saved_graph(result["name"])
+                elif action == "import":
+                    self._import_saved_graph()
+                else:
+                    self.graph_ctl.handle_saved_graphs_popup_action(result)
 
         self.push_screen(SavedGraphsPopup(), callback)
+
+    def _export_saved_graph(self, name: str) -> None:
+        from hatty.ui.json_export import export_json, slugify
+
+        export_json(
+            self,
+            payload=self.graph_ctl.to_export_payload(name),
+            default_filename=f"{slugify(name)}.graph.json",
+            title="Export saved graph",
+            save_button="Export",
+            filters_label="Graph JSON",
+            success=lambda path: f"Exported '{name}' to {path}.",
+            success_title="Graph Exported",
+        )
+
+    def _import_saved_graph(self) -> None:
+        from hatty.ui.json_export import import_json
+
+        def _apply(payload: dict) -> str:
+            final = self.graph_ctl.import_from_payload(payload)
+            return f"Imported saved graph '{final}'."
+
+        import_json(
+            self,
+            title="Import saved graph",
+            open_button="Import",
+            filters_label="Graph JSON",
+            apply=_apply,
+            success_title="Graph Imported",
+        )
 
     # ── Config persistence ───────────────────────────────────────────────────
 
@@ -1577,6 +1715,7 @@ class HACLI(App):
         self.columns = result.get(CONFIG_KEY_COLUMNS, list(DEFAULT_COLUMNS))
         self.entity_names = result.get(CONFIG_KEY_ENTITY_NAMES, {})
         self.keys_ctl.apply(result)
+        self.backup_ctl.apply(result)
         self.set_title_based_on_focused_ui()
         new_graph_type = result.get(CONFIG_KEY_GRAPH_TYPE)
         self.query_one("#detail_panel", EntityDetailPanel).apply_saved_graph_type(new_graph_type)

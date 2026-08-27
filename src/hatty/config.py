@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from hatty.const import (
+    CONFIG_KEY_BACKUP,
     CONFIG_KEY_COLUMNS,
     CONFIG_KEY_DASHBOARDS,
     CONFIG_KEY_DEFAULT_DASHBOARD,
@@ -24,6 +25,7 @@ from hatty.const import (
     CONFIG_KEY_THEME,
     CONFIG_KEY_TOKEN,
     CONFIG_KEY_URL,
+    DEFAULT_BACKUP,
     DEFAULT_COLUMNS,
     DEFAULT_GRAPH_HOURS,
     DEFAULT_LOG_HOURS,
@@ -82,6 +84,7 @@ def default_config() -> dict:
         CONFIG_KEY_TERMINAL_TITLE_ENABLED: True,
         CONFIG_KEY_TERMINAL_TITLE: DEFAULT_TERMINAL_TITLE,
         CONFIG_KEY_KEYBINDINGS: {},
+        CONFIG_KEY_BACKUP: dict(DEFAULT_BACKUP),
     }
 
 

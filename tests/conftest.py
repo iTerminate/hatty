@@ -35,6 +35,15 @@ def _no_terminal_title_side_effects(monkeypatch):
     monkeypatch.setattr("hatty.terminal_title.restore", lambda prev: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_git_calls(monkeypatch):
+    """Once commit_on_exit/push_on_exit exist, quitting the real HACLI app can
+    shell out to git. Stub the chokepoint so no acceptance test ever touches a
+    real git binary or the network at quit time; a test that wants the real
+    thing (tests/test_backup_git.py) opts back in with its own monkeypatch."""
+    monkeypatch.setattr("hatty.git_sync._run_git", lambda args, cwd, timeout=None: (0, "", ""))
+
+
 def notified(app, *, title=None, message_contains=None):
     """True if a currently-live notification matches the given title and/or
     message substring. Prefer this over `len(app._notifications) > before`

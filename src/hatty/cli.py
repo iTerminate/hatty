@@ -30,7 +30,44 @@ def main() -> None:
 
     from hatty.main import HACLI  # imported here so TEXTUAL_LOG is set first
 
-    HACLI(config_path=args.config, demo=args.demo).run()
+    app = HACLI(config_path=args.config, demo=args.demo)
+    try:
+        app.run()
+    finally:
+        _flush_pending_exit_sync(app)
+
+
+def _flush_pending_exit_sync(app) -> None:
+    """Last-resort fallback for an exit path that skipped both
+    HACLI.action_quit and HACLI._on_exit_app (a real SIGINT, or a panic) —
+    runs after app.run() returns, with no event loop, so it calls git_sync's
+    plain sync functions directly rather than through their asyncio.to_thread
+    wrappers. A save task started just before this path may have been
+    abandoned mid-flight, so the pushed data can be one save stale; that's
+    unavoidable without an event loop here. Never raises — a failed backup
+    sync must not turn into a crash on the way out."""
+    if app._exit_sync_done or not app.backup_ctl.exit_sync_pending():
+        return
+    app._exit_sync_done = True
+
+    from hatty import git_sync
+
+    try:
+        print("hatty: exporting backup…")
+        ok, msg = app.backup_ctl.export_now()
+        if not ok:
+            print(f"hatty: backup export failed: {msg}")
+            return
+        path = app.backup_ctl.prefs.get("path") or ""
+        message = git_sync.default_commit_message()
+        print("hatty: committing…")
+        ok, msg = git_sync.commit_all(path, message)
+        if ok and app.backup_ctl.prefs.get("push_on_exit"):
+            print("hatty: pushing…")
+            ok, msg = git_sync.push(path)
+        print(f"hatty: {msg}")
+    except Exception as e:
+        print(f"hatty: backup sync failed: {e}")
 
 
 if __name__ == "__main__":

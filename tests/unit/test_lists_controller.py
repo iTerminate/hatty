@@ -337,3 +337,79 @@ def test_handle_popup_rename_routes_to_rename_list():
     ctl.entity_lists = {"Kitchen": []}
     ctl.handle_popup_action({"action": "rename", "list_name": "Kitchen", "new_name": "Study"})
     assert ctl.list_names == ["Study"]
+
+
+# ── export / import ──────────────────────────────────────────────────────────
+
+
+def test_export_payload_shape():
+    ctl = _controller()
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": ["light.a", "light.b"]}
+    ctl.manual_lists = {"Kitchen"}
+    ctl._app.notify_ctl.notify_lists = {"Kitchen"}
+    payload = ctl.to_export_payload("Kitchen")
+    assert payload == {
+        "hatty_list": 1,
+        "name": "Kitchen",
+        "entities": ["light.a", "light.b"],
+        "manual": True,
+        "notify": True,
+    }
+
+
+def test_export_payload_defaults_manual_and_notify_false():
+    ctl = _controller()
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": []}
+    payload = ctl.to_export_payload("Kitchen")
+    assert payload["manual"] is False
+    assert payload["notify"] is False
+
+
+def test_import_round_trip_creates_matching_list():
+    ctl = _controller()
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": ["light.a"]}
+    ctl.manual_lists = {"Kitchen"}
+    ctl._app.notify_ctl.notify_lists = {"Kitchen"}
+    payload = ctl.to_export_payload("Kitchen")
+
+    ctl2 = _controller()
+    final = ctl2.import_from_payload(payload)
+    assert final == "Kitchen"
+    assert ctl2.entity_lists["Kitchen"] == ["light.a"]
+    assert ctl2.manual_lists == {"Kitchen"}
+    assert ctl2._app.notify_ctl.notify_lists == {"Kitchen"}
+    assert ("lists", "manual_lists", "notify_lists") in ctl2._app.persist_calls
+
+
+def test_import_dedupes_name_on_collision():
+    ctl = _controller()
+    ctl.list_names = ["Kitchen"]
+    ctl.entity_lists = {"Kitchen": []}
+    payload = ctl.to_export_payload("Kitchen")
+    final = ctl.import_from_payload(payload)
+    assert final == "Kitchen (2)"
+    assert "Kitchen" in ctl.entity_lists and "Kitchen (2)" in ctl.entity_lists
+
+
+def test_import_rejects_wrong_version():
+    ctl = _controller()
+    for bad in ({"hatty_list": 2, "name": "A", "entities": []}, {}, "not a dict"):
+        try:
+            ctl.import_from_payload(bad)
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
+
+
+def test_import_rejects_missing_entities():
+    ctl = _controller()
+    for bad_entities in (None, "nope", {}):
+        payload = {"hatty_list": 1, "name": "A", "entities": bad_entities}
+        try:
+            ctl.import_from_payload(payload)
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
