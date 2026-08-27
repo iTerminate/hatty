@@ -178,9 +178,8 @@ class EntityDetailPanel(Widget):
             return
 
         now_iso = datetime.now().astimezone().isoformat()
-        # render_binary drops numeric companions (they can't sit on the 0/1 axis;
-        # plotext crashes on a labelled series entirely outside ylim) and extends
-        # each trace to "now".
+        # render_binary drops numeric companions (can't sit on the 0/1 axis; plotext
+        # crashes on a labelled series entirely outside ylim) and extends to "now".
         extras = [
             (get_display_name(extra_entity) if extra_entity else eid, extra_hist, None)
             for eid, (extra_entity, extra_hist) in self._extra_histories.items()

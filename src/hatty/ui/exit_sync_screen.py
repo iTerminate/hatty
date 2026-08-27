@@ -102,10 +102,8 @@ class ExitSyncScreen(Screen):
         try:
             self._set_status("Saving…")
             await self.app.drain_bg_tasks(timeout=5.0)
-            # sync_on_exit calls this back before each of its own phases
-            # (Exporting…/Committing…/Pushing…), so the overlay always shows
-            # what's actually happening instead of one static message for
-            # however long the whole thing takes.
+            # sync_on_exit calls this back before each phase (Exporting/Committing/
+            # Pushing), so the overlay shows what's actually happening, not one static message.
             ok, msg = await self.app.backup_ctl.sync_on_exit(status=self._set_status)
             if msg:
                 self._set_status(msg, final=True)

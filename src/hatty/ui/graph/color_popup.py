@@ -7,21 +7,18 @@ from textual.widgets.option_list import Option
 from hatty.controllers.keybindings import bindings_for
 from hatty.ui.popup_base import PopupScreen
 
-# plotext named color -> ANSI 0-15 code. plotext resolves its named colors
-# through the terminal's own palette (its "orange" is ANSI 3, which most themes
-# render as yellow), so the picker swatch must go through the same codes or it
-# lies about what the plotted line will look like. Imported from plotext's
-# private _utility so the swatch can never drift from the plotter; falls back to
-# an empty map (uncolored swatches) if that internal module ever moves.
+# plotext named color -> ANSI 0-15 code. plotext resolves colors through the
+# terminal's own palette, so the swatch must go through the same codes or it lies
+# about the plotted line. Imported from plotext's private _utility so it can
+# never drift; falls back to an empty map if that internal module moves.
 try:
     from plotext._utility import color_codes as _PLOTEXT_COLOR_CODES
 except ImportError:  # pragma: no cover - defensive against plotext internals moving
     _PLOTEXT_COLOR_CODES = {}
 
-# ANSI 0-15 -> Textual markup color name. Textual's `ansi_*` colors render
-# terminal-native (through the same 16-color palette plotext emits to), so a
-# swatch tagged this way and a plotext line share one palette on every theme.
-# (Rich's `[color(N)]` syntax is NOT valid in Textual's markup dialect.)
+# ANSI 0-15 -> Textual markup color name. `ansi_*` renders terminal-native
+# (same 16-color palette plotext emits to), so a swatch and a plotted line
+# share one palette on every theme. (Rich's `[color(N)]` isn't valid here.)
 _ANSI_MARKUP = {
     0: "ansi_black",
     1: "ansi_red",
@@ -41,10 +38,9 @@ _ANSI_MARKUP = {
     15: "ansi_bright_white",
 }
 
-# Every plotext named color offered by the picker; the `+` suffix is plotext's
-# bright variant. Superset of graph_preview_screen's default cycling palette.
-# Order is deliberate (base hues, then bright variants) and index-sensitive for
-# tests; every entry must be a key of _PLOTEXT_COLOR_CODES (guarded by a test).
+# Every plotext named color offered by the picker (`+` = plotext's bright variant).
+# Order is deliberate and index-sensitive for tests; every entry must be a key
+# of _PLOTEXT_COLOR_CODES (guarded by a test).
 ALL_PLOT_COLORS = [
     "blue",
     "red",

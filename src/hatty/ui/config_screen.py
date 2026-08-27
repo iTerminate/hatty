@@ -88,9 +88,8 @@ _NOTIFY_TOGGLES = [
     ("Highlight changed entity", "highlight"),
 ]
 
-# Backup & Sync git toggles, shown as a SelectionList mirroring the
-# notification channel toggles above. Keys match DEFAULT_BACKUP exactly minus
-# "path"/"sections", which get their own widgets.
+# Backup & Sync git toggles, mirroring the notification toggles above. Keys match
+# DEFAULT_BACKUP exactly minus "path"/"sections", which get their own widgets.
 _BACKUP_GIT_TOGGLES = [
     ("Enable git", "git_enabled"),
     ("Pull on start", "pull_on_start"),
@@ -100,9 +99,8 @@ _BACKUP_GIT_TOGGLES = [
     ("Rebase on pull (instead of fast-forward only)", "pull_rebase"),
 ]
 
-# Top-level category menu (issue #252). Each entry is (display name, pane id,
-# one-line hint, first-focus widget id within the pane). "cat_menu" itself is
-# the ContentSwitcher's built-in first pane and isn't listed here.
+# Top-level category menu (#252): (display name, pane id, hint, first-focus
+# widget id). "cat_menu" itself is the built-in first pane, not listed here.
 _CATEGORIES = [
     ("Home Assistant", "cat_home_assistant", "Connection URL, access token", "#cfg_url"),
     ("Appearance", "cat_appearance", "Theme, graph defaults, visible columns", "#cfg_theme"),
@@ -122,18 +120,15 @@ class ConfigScreen(Screen):
 
     AUTO_FOCUS = "#cfg_category_list"
 
-    # All bindings are modifier-prefixed (mirroring OnboardingScreen). A bare
-    # single-letter binding here would hijack keystrokes the moment focus tabs
-    # onto a non-Input widget (Select/SelectionList/Button) — e.g. a stray "s"
-    # would fire save_and_close and dismiss the screen (issue #192).
+    # All bindings are modifier-prefixed (mirroring OnboardingScreen) — a bare
+    # letter would hijack keystrokes once focus tabs onto a non-Input widget (#192).
     BINDINGS = [
         Binding("ctrl+s", "save_and_close", "Save"),
         Binding("escape", "cancel", "Back/Cancel"),
         Binding("ctrl+o", "open_in_editor", "Editor"),
         Binding("ctrl+v", "toggle_token", "Show/Hide Token"),
-        # "?" is punctuation, not a bare letter, so it doesn't hijack typing the
-        # way the comment above warns about; a focused Input still consumes it
-        # as a keystroke rather than letting it reach this binding.
+        # "?" is punctuation, not a bare letter, so it doesn't hijack typing — a
+        # focused Input still consumes it as a keystroke first.
         Binding("question_mark", "show_help", "Help"),
     ]
 
@@ -239,10 +234,8 @@ class ConfigScreen(Screen):
         self._config_path = config_path
         self._token_visible = False
         # Working copy of keybinding overrides, edited live by KeyCapturePopup
-        # (unlike every other field here, which is read straight off its widget
-        # at Save time) so the table can re-render its "Key" column immediately
-        # after each rebind, and so keybindings.validate() sees in-progress
-        # edits from earlier in the same session.
+        # (unlike every other field, read off its widget at Save time) so the table
+        # re-renders "Key" immediately and validate() sees in-progress edits.
         self._keybindings: dict[str, str] = dict(keybindings_module.sanitize(raw_config.get(CONFIG_KEY_KEYBINDINGS)))
 
     @staticmethod
@@ -267,7 +260,7 @@ class ConfigScreen(Screen):
         current_theme = self._raw_config.get(CONFIG_KEY_THEME) or ""
         current_graph_type = self._raw_config.get(CONFIG_KEY_GRAPH_TYPE) or "line"
         # Guard against a stale persisted type no longer in the option list (e.g. the
-        # removed "bar" mode) — Select raises InvalidSelectValueError on an unknown value.
+        # removed "bar" mode) — Select raises on an unknown value.
         if current_graph_type not in {value for _, value in _GRAPH_OPTIONS}:
             current_graph_type = "line"
         current_graph_hours = self._raw_config.get(CONFIG_KEY_GRAPH_HOURS, DEFAULT_GRAPH_HOURS)
@@ -524,9 +517,8 @@ class ConfigScreen(Screen):
         elif event.button.id == "cfg_save":
             self.action_save_and_close()
         elif event.button.id == "cfg_cancel":
-            # Unconditional dismiss (unlike the back-aware escape binding below) —
-            # the on-screen Cancel button means "abandon changes and close", not
-            # "go back a level", even when pressed from inside a category pane.
+            # Unconditional dismiss (unlike the back-aware escape below) — the
+            # Cancel button means "abandon and close", not "go back a level".
             self.dismiss(None)
         elif event.button.id == "cfg_notify_clear":
             self.action_stop_watching_all()
@@ -551,9 +543,8 @@ class ConfigScreen(Screen):
             self.action_backup_status_check()
 
     def action_stop_watching_all(self) -> None:
-        # A live write (like the l/d/s popups edit their own collections directly)
-        # rather than something staged until Save — there's no "undo" expected here.
-        # Only the notify_lists designation is cleared; list contents are untouched.
+        # A live write, not staged until Save (no "undo" expected here) — only the
+        # notify_lists designation is cleared; list contents are untouched.
         self.app.notify_ctl.stop_watching_all()
         self.query_one("#cfg_notify_count", Static).update("0 entities watched.")
         summary = self.query_one("#cfg_notify_lists_summary", Static)
@@ -588,7 +579,7 @@ class ConfigScreen(Screen):
 
     def action_test_ntfy(self) -> None:
         # Uses the currently entered (unsaved) fields, like action_test_connection,
-        # so the user can verify ntfy config before committing to Save (issue #248).
+        # so the user can verify ntfy config before committing to Save (#248).
         prefs = {
             "ntfy_url": self.query_one("#cfg_ntfy_url", Input).value.strip(),
             "ntfy_topic": self.query_one("#cfg_ntfy_topic", Input).value.strip(),
@@ -604,8 +595,7 @@ class ConfigScreen(Screen):
 
     # ── Backup & Sync ─────────────────────────────────────────────────────────
     # Every action here acts on the currently entered (unsaved) path/sections/git
-    # toggles, the action_test_connection/action_test_ntfy precedent — not on
-    # self.app.backup_ctl.prefs, which only reflects the last *saved* config.
+    # toggles, not self.app.backup_ctl.prefs (only the last *saved* config).
 
     def _backup_path(self) -> str:
         return self.query_one("#cfg_backup_path", Input).value.strip()
@@ -643,10 +633,8 @@ class ConfigScreen(Screen):
         self.run_worker(self._do_backup_export(path, sections), exclusive=True)
 
     async def _do_backup_export(self, path: str, sections: list[str]) -> None:
-        # Not asyncio.to_thread: export_now/import_now (via the object
-        # controllers' import_from_payload) call app.persist(), which does
-        # asyncio.create_task() — that needs the app's own running loop, which
-        # a thread-pool worker thread doesn't have.
+        # Not asyncio.to_thread: export_now/import_now call app.persist(), which
+        # does asyncio.create_task() — a thread-pool worker has no running loop for that.
         ok, msg = self.app.backup_ctl.export_now(path, sections)
         self._set_backup_status(msg, ok=ok)
 
@@ -772,9 +760,8 @@ class ConfigScreen(Screen):
             **self._backup_git_prefs(),
         }
 
-        # Collections live in SQLite; this screen only edits connection settings +
-        # display preferences, so keep them out of the lean YAML it writes. The
-        # dismissed dict still carries them so the app's in-memory state is intact.
+        # Collections live in SQLite; keep them out of the lean YAML this screen
+        # writes. The dismissed dict still carries them so in-memory state is intact.
         to_save = {k: v for k, v in new_config.items() if k not in storage_module.COLLECTION_KEYS}
 
         try:
@@ -786,8 +773,8 @@ class ConfigScreen(Screen):
         self.dismiss(new_config)
 
     def action_cancel(self) -> None:
-        # Back-aware (issue #252): escape/Cancel from inside a category returns
-        # to the top-level menu first; only dismisses the screen from there.
+        # Back-aware (#252): escape/Cancel from inside a category returns to the
+        # top-level menu first; only dismisses the screen from there.
         switcher = self.query_one("#cfg_switcher", ContentSwitcher)
         if switcher.current != "cat_menu":
             self.show_category("cat_menu")

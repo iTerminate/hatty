@@ -23,8 +23,7 @@ from hatty.controllers.keybindings import KeySpec, display_key, validate
 from hatty.ui.popup_base import PopupScreen
 
 # Keys that never reach validate() as a candidate — ctrl+c is the fixed cancel
-# key here (mirroring RESERVED_KEYS' reasoning: the popup must always have a
-# way out), delete is the reset-to-default shortcut.
+# key (the popup must always have a way out), delete resets to default.
 _CANCEL_KEY = "ctrl+c"
 _RESET_KEY = "delete"
 

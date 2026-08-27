@@ -216,9 +216,8 @@ def build_integration_groups(entity_registry: list, device_registry: list) -> li
 
 
 def _label_matches(term: str, label: str) -> bool:
-    # Mirrors entity_matches' skip-word semantics (issue #241): every
-    # whitespace-separated word of the term just has to appear somewhere in the
-    # label, in any order, so "living rm" matches an area labeled "Living Room".
+    # Mirrors entity_matches' skip-word semantics (#241): every word of the term
+    # just has to appear somewhere in the label, in any order.
     haystack = label.lower()
     return all(word in haystack for word in term.split())
 
@@ -397,16 +396,13 @@ class DeviceInfoPopup(PopupScreen):
 class DeviceTreeScreen(Screen):
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    # Space is priority: the focused Tree binds space to toggle_node; the
-    # screen action forwards non-entity nodes there so containers still fold.
-    # ctrl+s is priority so it fires while the search Input is focused (ctrl+s
-    # isn't consumed by Input; tab is already taken by SearchInput.toggle_mode).
+    # Space is priority: the focused Tree binds it to toggle_node, forwarded here
+    # for non-entity nodes. ctrl+s is priority so it fires while search is focused.
     BINDINGS = bindings_for("tree")
 
     _MODES = ("device", "area", "integration")
-    # Scopes offered per view (ctrl+s cycles only within the current view's
-    # tuple, so it never lands on a scope that matches nothing in this grouping).
-    # The first entry is that view's default, applied on a view switch (#206).
+    # Scopes offered per view; ctrl+s cycles only within the current tuple. The
+    # first entry is that view's default, applied on a view switch (#206).
     _VIEW_SCOPES = {
         "device": ("device", "all", "entity"),
         "area": ("area", "all", "device", "entity"),
@@ -428,11 +424,9 @@ class DeviceTreeScreen(Screen):
         self._mode = "device"
         self._filter = ""
         self._scope = self._VIEW_SCOPES[self._mode][0]
-        # entity_id -> its leaf nodes (an entity can appear once, but keep a list
-        # to stay robust to duplicate placements).
+        # entity_id -> its leaf nodes (a list to stay robust to duplicate placements).
         self._entity_nodes: dict[str, list] = {}
-        # device_id -> its device nodes, same shape, for cursor-follow across
-        # grouping-mode switches (issue #153).
+        # device_id -> its device nodes, for cursor-follow across mode switches (#153).
         self._device_nodes: dict[str, list] = {}
         # Entity to cursor after the first build (table -> tree, issue #153).
         self._initial_entity_id = initial_entity_id
@@ -695,9 +689,8 @@ class DeviceTreeScreen(Screen):
         self.app.open_entity_controls(entity_id, fullscreen_graph_fallback=True)
 
     def action_jump_to_list(self) -> None:
-        # Dismiss the tree first so list state never changes behind it, then
-        # reuse the app's jump-or-pick logic (jumps to the last-shown/default
-        # list, only opening the picker when no list exists yet).
+        # Dismiss the tree first so list state never changes behind it, then reuse
+        # the app's jump-or-pick logic (picker only opens if no list exists yet).
         self.app.pop_to_base_screen()
         self.app.action_show_list_selection_popup()
 

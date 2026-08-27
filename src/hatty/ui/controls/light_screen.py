@@ -132,13 +132,10 @@ class LightControlScreen(ModalScreen):
 
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    # space is priority so a focused Button doesn't swallow it (buttons still work
-    # via enter); check_action releases it while the effect filter Input is
-    # focused. up/down are priority so they always move focus instead of being
-    # swallowed by a focused slider's own value-adjust handling (issue #286) —
-    # left/right still adjust the slider in place. check_action releases it
-    # while the effects OptionList is focused, so its own up/down cursor
-    # movement keeps working.
+    # space is priority so a focused Button doesn't swallow it (released while the
+    # effect filter Input is focused). up/down are priority so they move focus
+    # instead of being swallowed by a slider's value-adjust (#286) — left/right
+    # still adjust in place; released while the effects OptionList is focused.
     BINDINGS = bindings_for("light")
 
     DEFAULT_CSS = """
@@ -411,10 +408,8 @@ class LightControlScreen(ModalScreen):
             event.stop()
 
     def on_key(self, event: events.Key) -> None:
-        # Left/right walk the focus chain unless a slider/input owns them — or the tab
-        # bar, where they natively switch panes (issue #88). Up/down are handled as
-        # priority Bindings instead (see nav_focus) so they always move focus rather
-        # than being swallowed by a focused slider's own value-adjust handling.
+        # Left/right walk the focus chain unless a slider/input/tab bar owns them
+        # (#88). Up/down are priority Bindings instead (see nav_focus).
         focused = self.focused
         if isinstance(focused, (Input, PercentageSlider, KelvinSlider, Tabs)):
             return
@@ -457,8 +452,8 @@ class LightControlScreen(ModalScreen):
         self.app.action_show_help()
 
     def action_nav_focus(self, direction: int) -> None:
-        # A focused slider (or any single widget) just steps one at a time; a row
-        # (swatches/presets) is skipped as a whole block (issue #286).
+        # A focused slider (or any single widget) steps one at a time; a row
+        # (swatches/presets) is skipped as a whole block (#286).
         nav_focus(self, _BUTTON_ROW_IDS, direction)
 
     def action_toggle_power(self) -> None:

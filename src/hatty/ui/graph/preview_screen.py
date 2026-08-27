@@ -124,18 +124,14 @@ class GraphPreviewScreen(Screen):
     BINDINGS = bindings_for("graph")
 
     # App-level actions that still make sense on top of this screen — everything
-    # else in HACLI.BINDINGS is main-table-only and is denied by HACLI.check_action
-    # (issue #7: `n`/`N` search, `L`/`u`/`ctrl+r` list editing, `G` full-graph-again,
-    # etc. used to leak through and clutter the Graph help page).
+    # else in HACLI.BINDINGS is main-table-only and denied by HACLI.check_action (#7).
     ALLOWED_APP_ACTIONS = frozenset(
         {"show_dashboard", "show_device_tree", "show_saved_graphs_popup", "show_graph_duration", "quit"}
     )
 
-    # This screen's help page is always built from the full static BINDINGS
-    # rather than whichever mode happens to be active (main.action_show_help),
-    # grouped into these sections — otherwise the inspect-mode twin of every
-    # paging key would never appear on the page unless help was opened from
-    # inside inspect mode (issue #7).
+    # This screen's help page always builds from the full static BINDINGS rather
+    # than whichever mode is active — else the inspect-mode twin of every paging
+    # key would only appear if help was opened from inside inspect mode (#7).
     HELP_ALL_MODES = True
     HELP_SECTIONS = (
         (
@@ -179,7 +175,7 @@ class GraphPreviewScreen(Screen):
         ("Other", frozenset({"show_list_popup", "show_help", "go_back"})),
     )
 
-    # LogHost hooks (LogbookController, issue #38) — see controllers/logbook.py.
+    # LogHost hooks (#38) — see controllers/logbook.py.
     LOG_PANEL_ID: str = "preview_log_panel"
     LOG_SUPPORTS_LIVE: bool = False
 
@@ -200,9 +196,8 @@ class GraphPreviewScreen(Screen):
         )
         self._data: list[tuple[str, float]] = []
         self._all_data: dict[str, list] = {}
-        # Zoom/scroll/live-anchor state lives on a pure GraphWindow; the three
-        # legacy attrs below are delegating properties over it so the rest of the
-        # screen (and the tests) read/assign them unchanged.
+        # Zoom/scroll/live-anchor state lives on a pure GraphWindow; the legacy
+        # attrs below delegate to it so the rest of the screen reads/assigns unchanged.
         self._window = GraphWindow()
         self._is_climate = self._entity_id.split(".")[0] == "climate"
         # Comparison mixing is blocked upstream, so the primary decides for all lines.
@@ -323,10 +318,9 @@ class GraphPreviewScreen(Screen):
             self._all_data = {}
             for eid in self._entity_ids:
                 values = await self.app.graph_ctl.history_fetcher(eid)(eid, hours=self._local_hours, end=now)
-                # A wide-window REST fetch can fail or come back empty for a
-                # single entity (HAClient swallows errors as None); don't blank
-                # an otherwise-good line — fall back to the in-memory store's
-                # recent buffer so it stays visible instead of vanishing (#179).
+                # A wide-window REST fetch can fail or come back empty for a single
+                # entity; fall back to the in-memory store's recent buffer instead
+                # of blanking an otherwise-good line (#179).
                 self._all_data[eid] = values or list(self.app.entity_history.get(eid, []))
         else:
             for eid in self._entity_ids:
@@ -482,8 +476,7 @@ class GraphPreviewScreen(Screen):
             return
         if self._local_hours is not None and self._local_hours > self.app.graph_hours:
             # Zoomed out past the store: `history` is only its recent tail, so a
-            # wholesale replace would shrink the held wide window. Append just the
-            # newest sample instead.
+            # wholesale replace would shrink the held wide window — append just the newest sample.
             buf = self._all_data.get(entity_id)
             if buf is not None and history and (not buf or history[-1][0] > buf[-1][0]):
                 buf.append(history[-1])
@@ -750,9 +743,7 @@ class GraphPreviewScreen(Screen):
             log_panel.set_hint(self._LOG_HINT)
             log_panel.set_maximized(False)
             # The screen itself isn't focusable, so self.focus() would no-op —
-            # explicitly blur (Screen.set_focus(widget) is a no-op unless the
-            # target is focusable, and there's no natural "home" widget here
-            # the way the main table is for HACLI).
+            # explicitly blur instead (there's no natural "home" widget here).
             self.set_focus(None)
             return
         self._close_event_log()
@@ -764,9 +755,7 @@ class GraphPreviewScreen(Screen):
         log_panel.set_maximized(maximizing)
         if not maximizing:
             # The screen itself isn't focusable, so self.focus() would no-op —
-            # explicitly blur (Screen.set_focus(widget) is a no-op unless the
-            # target is focusable, and there's no natural "home" widget here
-            # the way the main table is for HACLI).
+            # explicitly blur instead (there's no natural "home" widget here).
             self.set_focus(None)
 
     def action_go_back(self) -> None:
@@ -816,9 +805,8 @@ class GraphPreviewScreen(Screen):
             await self.app.log_ctl.load(session)
 
     def action_show_list_popup(self) -> None:
-        # Mirror DashboardScreen: dismiss the fullscreen graph and jump straight back
-        # to the last-shown (or default) list; only fall back to the full picker when
-        # there is no list to return to.
+        # Mirror DashboardScreen: dismiss the graph and jump to the last-shown (or
+        # default) list, falling back to the full picker only if none exists.
         from hatty.ui.list_selection_popup import ListSelectionPopup
 
         target = self.app.list_ctl.jump_target()

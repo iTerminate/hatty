@@ -45,9 +45,8 @@ def _is_in_list(entity: Entity, lists, current_list_name) -> bool:
 
 
 def entity_matches(entity: Entity, term: str) -> bool:
-    # Multi-word terms match "skip words" (issue #241): each whitespace-separated
-    # word just has to appear somewhere in the combined haystack, in any order, so
-    # "living lamp" matches "Living Room Lamp" without needing "room" typed too.
+    # Multi-word terms match "skip words" (#241): each word just has to appear
+    # somewhere in the haystack, in any order — "living lamp" matches "Living Room Lamp".
     haystack = " ".join(
         (
             str(entity.get("entity_id", "")),
@@ -59,11 +58,9 @@ def entity_matches(entity: Entity, term: str) -> bool:
 
 
 def apply_pending_suffix(value: str | Text, pending: str | None) -> Text:
-    # Always return a Text (not a raw str): a raw str would be parsed as Rich
-    # markup by Textual, so an HA-derived state like "[red]" restyles the UI and a
-    # bare "[" crashes rendering with MarkupError (#157). The Text constructor does
-    # not parse markup, so a plain-str base is escaped; a Text base (a caller that
-    # pre-styled its content, e.g. the sensor widget's dimmed unit) is preserved.
+    # Always return a Text: a raw str would be parsed as Rich markup by Textual, so
+    # an HA-derived state like "[red]" restyles the UI or crashes rendering (#157).
+    # A plain-str base gets escaped; an already-styled Text base is preserved.
     base = value if isinstance(value, Text) else Text(str(value))
     if pending == "pending":
         out = base.copy()
