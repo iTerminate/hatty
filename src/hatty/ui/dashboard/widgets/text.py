@@ -38,9 +38,8 @@ class TextSlotWidget(EntitySlotWidget):
         # Opportunistic: only shown when the graph store already has history loaded.
         arrow = trend_arrow(list(self.app.entity_history.get(self.entity_id, [])))
 
-        # Build a markup-safe Text: the HA-derived state/unit are appended as plain
-        # runs (no markup parsing, #157); only the unit carries an app-chosen dim
-        # style, applied as a span rather than "[dim]…[/dim]" markup.
+        # Build a markup-safe Text: state/unit are appended as plain runs (no markup
+        # parsing, #157); only the unit gets a dim style, applied as a span.
         value = Text()
         if icon:
             value.append(f"{icon} ")

@@ -62,9 +62,8 @@ if TYPE_CHECKING:
 NO_ENTITY_LABEL = "(no entity)"
 NO_ENTITY_ROW = {"entity_id": "", "attributes": {"friendly_name": NO_ENTITY_LABEL}, "state": ""}
 
-# Layout budget for the side-by-side preview (issue #11): #slot_main stays a
-# fixed 70 cols regardless, so the preview only shows once the terminal can
-# fit it alongside that column plus the popup's own border/padding chrome.
+# Layout budget for the side-by-side preview (#11): #slot_main stays a fixed 70
+# cols, so the preview only shows once the terminal can fit it alongside that plus chrome.
 MAIN_WIDTH = 70
 PREVIEW_WIDTH = 30
 PREVIEW_GAP = 1  # #widget_preview's margin-left
@@ -82,20 +81,16 @@ class DashboardSlotPopup(PopupScreen):
 
     AUTO_FOCUS = "#widget_type_select"
 
-    # The only row where left/right should cycle within it (wrapping) and up/down
-    # should jump out as a block, rather than stepping through each button (issue #36,
-    # mirrors light_screen.py/media_player_screen.py's _BUTTON_ROW_IDS convention).
+    # The only row where left/right cycles within it (wrapping) and up/down jumps
+    # out as a block, rather than stepping button by button (#36, _BUTTON_ROW_IDS convention).
     BUTTON_ROW_IDS = ("type_step_buttons",)
 
-    # Panel/fill's accumulated-entities box (issue #254): reorder and remove
-    # only apply while that box is focused (guarded in the actions below), so
-    # those are plain (non-priority) bindings — a priority binding on "delete"
-    # would intercept it ahead of Input's own delete_right while the search
-    # box is focused, breaking forward-delete text editing there. up/down are
-    # priority so they always move focus instead of being swallowed by the
-    # entity table's/selected-list's own cursor; check_action releases it
-    # while those (or an open type dropdown) are focused so their cursor
-    # keeps working.
+    # Panel/fill's accumulated-entities box (#254): reorder/remove only apply while
+    # it's focused (guarded below), so those are non-priority bindings — a priority
+    # "delete" would break Input's delete_right while the search box is focused.
+    # up/down are priority so they move focus instead of being swallowed by the
+    # entity table's/list's own cursor; check_action releases them while those
+    # (or an open type dropdown) are focused so that cursor keeps working.
     BINDINGS = bindings_for("slot_popup")
 
     DEFAULT_CSS = """
@@ -181,16 +176,15 @@ class DashboardSlotPopup(PopupScreen):
         self._preview_timer: Timer | None = None
 
     def _type_choices(self) -> list[str]:
-        # Fill mode packs one widget per entity into a fresh split; a "panel" is
-        # itself a multi-entity container, so it doesn't make sense as the fill type.
+        # Fill mode packs one widget per entity into a fresh split; "panel" (itself
+        # multi-entity) doesn't make sense as the fill type.
         if self._fill_mode:
             return [wt for wt in WIDGET_TYPES if wt != "panel"]
         return WIDGET_TYPES
 
     def compose(self) -> ComposeResult:
-        # Fall back to the default for types the popup can't assign (a split
-        # pane's "split", or anything unrecognized) — the Select would raise
-        # InvalidSelectValueError on a value outside WIDGET_TYPES.
+        # Fall back to the default for types the popup can't assign ("split", or
+        # anything unrecognized) — Select raises on a value outside WIDGET_TYPES.
         type_choices = self._type_choices()
         current_type = self._slot["widget_type"] if self._slot else type_choices[0]
         if current_type not in type_choices:
@@ -324,9 +318,8 @@ class DashboardSlotPopup(PopupScreen):
 
     def _update_entity_table(self) -> None:
         term = self.query_one("#entity_search_input", SearchInput).value.strip().lower()
-        # Entity-first's entity step runs before any type is chosen, so it
-        # browses every entity unfiltered — and skips the "no entity" row,
-        # since picking a real entity is the whole point of that order.
+        # Entity-first's entity step runs before any type is chosen, so it browses
+        # every entity unfiltered, skipping "no entity" (the whole point of that order).
         if self._entity_first:
             candidates = list(self.parent.all_entities)
         else:
@@ -369,9 +362,8 @@ class DashboardSlotPopup(PopupScreen):
             self._submit(entity_id)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        # Debounced (issue #3): GraphSlotWidget refetches history on every
-        # mount with no cache short-circuit, so previewing on every arrow key
-        # would hit HA once per keystroke.
+        # Debounced (#3): GraphSlotWidget refetches history on every mount with no
+        # cache short-circuit, so previewing on every arrow key would hit HA per keystroke.
         if event.data_table.id != "entity_picker_table" or self._step != "entity":
             return
         entity_id = event.row_key.value or None
@@ -380,17 +372,16 @@ class DashboardSlotPopup(PopupScreen):
         self._preview_timer = self.set_timer(0.3, lambda: self._rebuild_preview(entity_id))
 
     def _apply_preview_visibility(self) -> None:
-        # Ties the dialog's width to the same show/hide decision (issue #36): with
-        # #dashboard_slot_container's width no longer `auto` (see DEFAULT_CSS), this is
-        # what centres it instead of stretching it to the terminal's full width.
+        # Ties the dialog's width to the same show/hide decision (#36): since
+        # #dashboard_slot_container's width isn't `auto`, this centres it instead of stretching.
         show_preview = preview_fits(self.app.size.width)
         self.query_one("#widget_preview").display = show_preview
         width = MAIN_WIDTH + PREVIEW_GAP + PREVIEW_WIDTH + POPUP_CHROME if show_preview else MAIN_WIDTH + POPUP_CHROME
         self.query_one("#dashboard_slot_container").styles.width = width
 
     def on_resize(self, event) -> None:
-        # Terminal resized while the popup is open (issue #11) — re-decide
-        # whether the side-by-side preview fits and repaint it.
+        # Terminal resized while the popup is open (#11) — re-decide whether the
+        # preview fits and repaint it.
         if self.is_mounted:
             self._apply_preview_visibility()
             self._rebuild_preview()
@@ -418,8 +409,8 @@ class DashboardSlotPopup(PopupScreen):
         widget_type = self.query_one("#widget_type_select", Select).value
         result = {"widget_type": widget_type, "entity_id": entity_id}
         if widget_type == "gauge":
-            # Blank inputs mean "auto" (entity min/max attrs, else 0-100); the keys
-            # are only present when overridden so other slots' config shape is unchanged.
+            # Blank means "auto" (entity min/max attrs, else 0-100); keys are only
+            # present when overridden so other slots' config shape is unchanged.
             for key, input_id in (("gauge_min", "#gauge_min_input"), ("gauge_max", "#gauge_max_input")):
                 raw = self.query_one(input_id, Input).value.strip()
                 if raw:
@@ -520,9 +511,8 @@ class DashboardSlotPopup(PopupScreen):
             return
         if self._step == "type":
             self.set_focus(self.query_one("#btn_next_step"))
-            # Entity-first's revisited type step keeps the Select interactive
-            # (unlike type-first's fixed-type entity step), so switching to/from
-            # "gauge" here needs to toggle the bounds row live.
+            # Entity-first's revisited type step keeps the Select interactive, so
+            # switching to/from "gauge" here needs to toggle the bounds row live.
             if self._is_final_step():
                 self._update_mode_visibility()
         self._rebuild_preview()
@@ -550,9 +540,8 @@ class DashboardSlotPopup(PopupScreen):
                 self.set_focus(self.query_one("#entity_search_input"))
                 event.prevent_default()
                 return
-        # A focused Input or an open type dropdown's overlay keep their own native
-        # left/right (cursor movement, option highlight); everything else either
-        # cycles within its enclosing button row or steps focus by one field.
+        # A focused Input or open dropdown overlay keeps its own native left/right;
+        # everything else cycles within its button row or steps focus by one field.
         if event.key not in ("left", "right") or isinstance(focused, (Input, OptionList)):
             return
         row = enclosing_row(focused, self.BUTTON_ROW_IDS)

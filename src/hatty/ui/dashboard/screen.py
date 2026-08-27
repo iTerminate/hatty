@@ -224,17 +224,14 @@ class DashboardScreen(Screen):
 
     IDLE_TIMEOUT: float = 5.0
 
-    # Minimum rows a single grid cell gets: when the dashboard has too many rows
-    # to fit the viewport at this height, the grid overflows and the container
-    # scrolls instead of squishing every cell below readability.
+    # Minimum height a grid cell gets before the container scrolls instead of
+    # squishing cells below readability.
     CELL_MIN_HEIGHT: int = 8
 
     BINDINGS = bindings_for("dashboard")
 
-    # Groups the help page under the same Use/Edit split the bindings above are
-    # already commented with (issue #7); unlike GraphPreviewScreen this page
-    # still switches between active-mode and full-static rows in the usual way
-    # (main.action_show_help) — only the grouping is new.
+    # Groups the help page under the same Use/Edit split as the bindings above
+    # (#7); unlike GraphPreviewScreen it still switches active/static rows normally.
     HELP_SECTIONS = (
         ("Use mode", USE_ONLY_ACTIONS),
         ("Edit mode", EDIT_ONLY_ACTIONS),
@@ -297,10 +294,8 @@ class DashboardScreen(Screen):
 
     def __init__(self):
         super().__init__()
-        # Grid navigation lives on a pure GridCursor (path + step/clamp/descend
-        # math). _cursor_path / cursor_row / cursor_col stay as delegating
-        # properties over it so the rest of the screen and the tests read/assign
-        # them unchanged.
+        # Grid navigation lives on a pure GridCursor; _cursor_path/cursor_row/
+        # cursor_col delegate to it so the rest of the screen reads/assigns unchanged.
         self._cursor = GridCursor()
         self._grabbed: tuple[int, int] | None = None
         # Anchor of the split the grab started in (None = top level); a grab can
@@ -367,15 +362,13 @@ class DashboardScreen(Screen):
         if self._log_cursor_timer is not None:
             self._log_cursor_timer.stop()
             self._log_cursor_timer = None
-        # A session is only ever removed by close() — leaving this out would let a
-        # dismissed screen's live-capable session linger and (via id() reuse) risk
-        # aliasing a later host.
+        # A session is only ever removed by close() — without this a dismissed
+        # screen's live session could linger and, via id() reuse, alias a later host.
         self.app.log_ctl.close(self)
 
     def on_screen_resume(self, event) -> None:
-        # Re-point the singleton WS logbook subscription at this screen's log
-        # (if any) now that it's the one on top — e.g. popping back here from a
-        # pushed GraphPreviewScreen.
+        # Re-point the singleton WS logbook subscription at this screen's log (if
+        # any) now that it's on top again, e.g. popping back from GraphPreviewScreen.
         if self.app.log_ctl.is_open(self):
             self.app.spawn(self.app.log_ctl.resync_subscription())
 
@@ -426,10 +419,8 @@ class DashboardScreen(Screen):
         banner = self.query_one("#dashboard_mode_banner", Static)
         for cls in ("-mode-edit", "-mode-grab", "-mode-widget"):
             banner.remove_class(cls)
-        # Esc is the only key in these banners that tracks the live keymap
-        # (nav.back, curated/rebindable) — every other key here belongs to a
-        # fixed, non-rebindable dashboard-local binding (or, for "r: manage
-        # panel", a raw on_key handler with no registry id at all).
+        # Esc is the only key here that tracks the live keymap (nav.back); every
+        # other key is a fixed, non-rebindable dashboard-local binding.
         back = self.app.keys_ctl.display("nav.back")
         if self._widget_active:
             banner.add_class("-mode-widget")
@@ -587,9 +578,8 @@ class DashboardScreen(Screen):
         if self._widget_active:
             self._exit_widget()
         rows, cols, slots = self._cursor.active_grid_ctx(self._current_dashboard())
-        # The step-past-footprint clamp math lives on the cursor; it returns False
-        # when the footprint runs into the edge (nothing to move to), else settles
-        # the new position and we refresh the DOM highlight + scroll here.
+        # The step-past-footprint clamp lives on the cursor; it returns False when
+        # the edge blocks the move, else settles the position — highlight/scroll here.
         if not self._cursor.move(d_row, d_col, rows, cols, slots):
             return
         self._apply_cursor_highlight()
@@ -640,16 +630,14 @@ class DashboardScreen(Screen):
             split._selected = None
 
     def action_move_cursor(self, d_row: int, d_col: int) -> None:
-        # A maximized log hides the grid and gives the entry list focus (which
-        # itself handles up/down); left/right fall through here to page the
-        # log instead of moving a cursor over a grid the user can't see.
+        # A maximized log hides the grid and gives the entry list focus (up/down);
+        # left/right fall through here to page the log instead.
         if self._log_maximized():
             if d_col:
                 self.app.log_ctl.page(self, d_col)
             return
-        # Widget interaction (thermostat setpoint, panel cursor) only happens after
-        # explicitly entering the widget with Enter/s — arrows always navigate the grid
-        # otherwise. Edit mode always navigates.
+        # Widget interaction (setpoint, panel cursor, …) only happens after entering
+        # the widget with Enter/s; otherwise arrows navigate the grid. Edit mode always navigates.
         if self._widget_active and d_col == 0 and d_row != 0:
             widget = self._content_widget_at_cursor()
             if isinstance(widget, ThermostatSlotWidget):
@@ -664,8 +652,7 @@ class DashboardScreen(Screen):
             if isinstance(widget, MediaPlayerSlotWidget):
                 widget.adjust_volume(-d_row)
                 return
-        # An active media_player widget also repurposes left/right for track skip
-        # instead of grid navigation.
+        # An active media_player widget repurposes left/right for track skip instead.
         if self._widget_active and d_row == 0 and d_col != 0:
             widget = self._content_widget_at_cursor()
             if isinstance(widget, MediaPlayerSlotWidget):
@@ -779,9 +766,8 @@ class DashboardScreen(Screen):
         self.render_dashboard()
 
     def action_fill_split(self) -> None:
-        # Quick-fill (issue #218): always targets the top-level pane under the
-        # cursor, even when currently descended into a split — a child cell
-        # can't itself become a split (one level max).
+        # Quick-fill (#218) always targets the top-level pane under the cursor — a
+        # child cell can't itself become a split (one level max).
         row, col = self._top_cell()
 
         def callback(result: dict | None) -> None:
@@ -796,13 +782,10 @@ class DashboardScreen(Screen):
         self.app.push_screen(DashboardSlotPopup(None, fill_mode=True), callback)
 
     def action_grab_move(self) -> None:
-        # Two-step move: Enter grabs the occupied cell at the cursor, then Enter on a
-        # destination swaps the two cells' contents (Enter on the grabbed cell cancels).
-        # Works across grids too (issue #220) — a: descends into a split while
-        # grabbing, escape ascends without releasing — so a widget can be carried
-        # into or out of a split; dropping on an occupied cell swaps across grids,
-        # dropping on empty just moves. A split itself can never land in a child
-        # grid (no nesting), refused by the controller.
+        # Two-step move: Enter grabs the cell at the cursor, Enter on a destination
+        # swaps contents (Enter on the grabbed cell cancels). Works across grids too
+        # (#220) — a widget can be carried into/out of a split via a/escape while
+        # grabbed; a split itself can never land in a child grid (refused by the controller).
         grab_parent = self._split_anchor() if self._in_split() else None
         cursor_cell = self._cursor_path[-1]
         if self._grabbed is None:
@@ -1170,11 +1153,9 @@ class DashboardScreen(Screen):
         )
 
     def action_go_back(self) -> None:
-        # Esc backs out one level: un-maximize the log, exit active widget, drop
-        # a grabbed widget, ascend out of a split, leave Edit mode, close an open
-        # log, then dismiss the screen. While a widget is grabbed, esc ascends
-        # out of a split first (carrying the grab along — issue #220) and only
-        # releases the grab once back at the top level.
+        # Esc backs out one level: un-maximize log, exit widget, drop grab, ascend
+        # out of a split, leave Edit mode, close log, then dismiss. A grabbed widget
+        # ascends out of a split first, carrying the grab along (#220).
         if self._log_maximized():
             self.action_maximize_log()
             return
