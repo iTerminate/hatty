@@ -297,10 +297,12 @@ class HACLI(App):
         if self._exit_sync_done or self._demo:
             return
         self._exit_sync_done = True
+        # Let queued saves land before on_unmount closes the DB — a save racing
+        # the close silently no-ops (storage.save_all).
+        await self.drain_bg_tasks(timeout=5.0)
         if not self.backup_ctl.exit_sync_pending():
             return
         try:
-            await self.drain_bg_tasks(timeout=5.0)
             await self.backup_ctl.sync_on_exit()
         except Exception as e:
             self.log.error(f"git sync on exit failed: {e}")
@@ -777,10 +779,9 @@ class HACLI(App):
 
     def action_show_dashboard(self) -> None:
         if not self.dashboard_names:
-            self.dash_ctl.create("Main", rows=3, cols=3)
-        elif self.current_dashboard_name not in self.dashboards:
-            target = self.default_dashboard_name if self.default_dashboard_name in self.dashboards else None
-            self.current_dashboard_name = target or self.dashboard_names[0]
+            self.dash_ctl.create("Main", rows=3, cols=3)  # create() sets current itself
+        elif target := self.dash_ctl.open_target():
+            self.current_dashboard_name = target
         self.pop_to_base_screen()
         self.push_screen(DashboardScreen())
 

@@ -967,6 +967,7 @@ class DashboardScreen(Screen):
                 self.render_dashboard()
             elif action == "set_default":
                 self.app.dash_ctl.set_default(result["name"])
+                self._reset_cursor()
                 self.render_dashboard()
             elif action == "resize":
                 self.app.dash_ctl.resize(result["name"], result["rows"], result["cols"])

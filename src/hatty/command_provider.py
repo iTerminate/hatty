@@ -23,7 +23,7 @@ class HACommandProvider(Provider):
             ("Configuration", "Edit hatty settings", app.action_show_config),
         ]
         result.append(("Lists", "Switch to your last-used or default list", app.action_palette_switch_list))
-        result.append(("Dashboard", "Open your last-used or default dashboard", app.action_show_dashboard))
+        result.append(("Dashboard", "Open your default dashboard", app.action_show_dashboard))
         result.append(("Setup wizard", "Re-enter the Home Assistant URL and token", app.action_show_onboarding))
         return result
 

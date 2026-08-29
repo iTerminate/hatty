@@ -41,10 +41,20 @@ class DashboardController:
         if name in self.dashboards:
             self.current_dashboard_name = name
 
+    def open_target(self) -> str | None:
+        """The dashboard to open: the default, falling back to the last viewed,
+        then the first. A configured default always wins."""
+        if self.default_dashboard_name in self.dashboards:
+            return self.default_dashboard_name
+        if self.current_dashboard_name in self.dashboards:
+            return self.current_dashboard_name
+        return self.dashboard_names[0] if self.dashboard_names else None
+
     def set_default(self, name: str) -> None:
         if name not in self.dashboards:
             return
         self.default_dashboard_name = name
+        self.current_dashboard_name = name
         self._app.persist("default_dashboard")
         self._app.notify(f"'{name}' set as default dashboard.", title="Default Dashboard Set")
 
@@ -98,10 +108,10 @@ class DashboardController:
             return
         del self.dashboards[name]
         self.dashboard_names.remove(name)
-        if self.current_dashboard_name == name:
-            self.current_dashboard_name = self.dashboard_names[0]
         if self.default_dashboard_name == name:
             self.default_dashboard_name = None
+        if self.current_dashboard_name == name:
+            self.current_dashboard_name = self.open_target()
         self._app.persist("dashboards", "default_dashboard")
         self._app.notify(f"Dashboard '{name}' deleted.", title="Dashboard Deleted")
 
@@ -217,7 +227,7 @@ class DashboardController:
             self.dashboard_names.remove(name)
         self.temp_dashboard_names.discard(name)
         if self.current_dashboard_name == name:
-            self.current_dashboard_name = self.dashboard_names[0] if self.dashboard_names else None
+            self.current_dashboard_name = self.open_target()
 
     # ── Slot editing ─────────────────────────────────────────────────────────
 

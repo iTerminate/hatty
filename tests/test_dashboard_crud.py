@@ -243,12 +243,45 @@ async def test_set_default_dashboard_via_popup(make_app, open_dashboard):
         await pilot.press("d")
         await pilot.pause()
         assert app.default_dashboard_name == "Office"
+        # setting the default switches to it right away, like lists do
+        assert app.current_dashboard_name == "Office"
 
         # the default is marked with a trailing '*' in the popup list
         await pilot.press("d")
         await pilot.pause()
         labels = [str(item.children[0].content) for item in app.screen.query(ListItem)]
         assert "Office*" in labels
+
+
+async def test_default_dashboard_wins_over_last_viewed(make_app, open_dashboard):
+    config_data = {
+        **make_config(),
+        "lists": {},
+        "dashboards": {
+            "Main": {"rows": 3, "cols": 3, "slots": []},
+            "Office": {"rows": 2, "cols": 2, "slots": []},
+        },
+    }
+    app = make_app(config_data=config_data)
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.press("d")  # set "Office" as default
+        await pilot.pause()
+
+        # view "Main" instead, then leave and come back: the default still wins
+        app.dash_ctl.switch("Main")
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("y")  # confirm "Leave dashboard?"
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert isinstance(app.screen, DashboardScreen)
+        assert app.current_dashboard_name == "Office"
 
 
 async def test_rename_default_dashboard_updates_default(make_app, open_dashboard):
