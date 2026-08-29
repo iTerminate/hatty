@@ -12,9 +12,8 @@ from hatty.ui.entity_table import format_relative
 if TYPE_CHECKING:
     from hatty.main import HACLI
 
-# How often an opted-in slot re-renders its "Nm ago" text on its own — nothing
-# else on the dashboard ticks on a clock, so slots showing elapsed time own a
-# small timer of their own (issue #33).
+# How often an opted-in slot re-renders its "Nm ago" text — nothing else on the
+# dashboard ticks on a clock, so these own a small timer of their own (#33).
 ELAPSED_TICK_SECONDS = 30
 
 
@@ -88,9 +87,8 @@ class EntitySlotWidget(Vertical):
         self.query_one("#slot_name", Label).update("No entity")
 
 
-# widget_type -> factory(slot) -> Widget. The imports stay inside the
-# factories: the widget modules import EntitySlotWidget from this module, so a
-# module-level import here would be circular.
+# widget_type -> factory(slot) -> Widget. Imports stay inside the factories: the
+# widget modules import EntitySlotWidget from here, so a module-level import would cycle.
 
 
 def _wants_elapsed(slot: dict) -> bool:

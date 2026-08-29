@@ -184,9 +184,8 @@ class HelpPopup(PopupScreen):
         self._binding_rows = pages[active_index][1] if pages else []
 
     def _hint_text(self) -> str:
-        # left/right/"/"/a are HelpPopup's own fixed (non-rebindable) keys;
-        # only Esc close tracks the live nav.back key, since HelpPopup's escape
-        # binding shares that id with every other screen's back/cancel key.
+        # left/right/"/"/a are HelpPopup's own fixed keys; only Esc close tracks
+        # the live nav.back key, since it shares that id with every other screen.
         return f"←/→ pages · / search all · a show all · {self.app.keys_ctl.display('nav.back')} close"
 
     def compose(self) -> ComposeResult:
@@ -195,9 +194,8 @@ class HelpPopup(PopupScreen):
             yield Label(self._hint_text(), id="help_hint")
             filter_input = Input(placeholder="Search all pages...", id="help_filter")
             filter_input.display = False
-            # Screen auto-focus scans descendants regardless of `display`, so an
-            # unfocusable-until-shown Input keeps /, a, left/right reaching the
-            # screen's own bindings instead of being swallowed as text entry.
+            # Screen auto-focus scans descendants regardless of `display`, so keeping
+            # this unfocusable until shown lets /, a, left/right reach the screen's bindings.
             filter_input.can_focus = False
             yield filter_input
             with VerticalScroll(id="help_body"):

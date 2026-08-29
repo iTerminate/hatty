@@ -126,6 +126,47 @@ def test_set_default_guarded_by_membership():
     assert ctl.default_dashboard_name == "A"
 
 
+def test_set_default_switches_to_it():
+    ctl = _controller()
+    ctl.create("A", 2, 2)
+    ctl.create("B", 2, 2)
+    ctl.set_default("A")
+    assert ctl.current_dashboard_name == "A"
+
+
+# ── open_target ───────────────────────────────────────────────────────────────
+
+
+def test_open_target_prefers_the_default_over_the_last_viewed():
+    ctl = _controller()
+    ctl.create("A", 2, 2)
+    ctl.create("B", 2, 2)
+    ctl.default_dashboard_name = "A"
+    ctl.current_dashboard_name = "B"
+    assert ctl.open_target() == "A"
+
+
+def test_open_target_falls_back_to_current_then_first():
+    ctl = _controller()
+    ctl.create("A", 2, 2)
+    ctl.create("B", 2, 2)
+    ctl.current_dashboard_name = "B"
+    assert ctl.open_target() == "B"
+    ctl.current_dashboard_name = "Ghost"
+    assert ctl.open_target() == "A"
+
+
+def test_open_target_ignores_a_stale_default():
+    ctl = _controller()
+    ctl.create("A", 2, 2)
+    ctl.default_dashboard_name = "Ghost"
+    assert ctl.open_target() == "A"
+
+
+def test_open_target_without_dashboards_is_none():
+    assert _controller().open_target() is None
+
+
 # ── delete ────────────────────────────────────────────────────────────────────
 
 

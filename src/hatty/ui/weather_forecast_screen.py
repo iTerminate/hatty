@@ -105,10 +105,8 @@ class WeatherForecastScreen(Screen):
         self._entity = entity
         self._entity_id = entity.get("entity_id", "")
         self._attrs = entity.get("attributes", {})
-        # Which weather.get_forecasts `type`s to offer: whatever the entity's
-        # supported_features bitmask advertises, or a bare ["daily"] guess
-        # (still worth trying, then falling back to the attribute) when the
-        # entity carries no supported_features at all.
+        # Which weather.get_forecasts `type`s to offer: whatever supported_features
+        # advertises, or a bare ["daily"] guess when the entity carries none.
         self._types = supported_forecast_types(self._attrs.get("supported_features")) or ["daily"]
         self._type_index = 0
         self._forecast: list[dict] | None = None

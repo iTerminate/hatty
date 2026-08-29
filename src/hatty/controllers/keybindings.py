@@ -83,19 +83,16 @@ class KeySpec(NamedTuple):
     since they're never shown)."""
 
 
-# Never assignable to any action: ctrl+q is the unconditional quit escape
-# hatch, ctrl+p opens Textual's command palette, ctrl+c is the terminal's own
-# interrupt (also KeyCapturePopup's cancel key).
+# Never assignable: ctrl+q is the unconditional quit hatch, ctrl+p opens the
+# command palette, ctrl+c is the terminal interrupt (also KeyCapturePopup's cancel).
 RESERVED_KEYS = frozenset({"ctrl+q", "ctrl+p", "ctrl+c"})
 
 SECTION_ORDER = ("Navigation", "Entities & lists", "Activity log", "Graph")
 
-# One row per original Binding/tuple entry across every migrated screen
-# (config_screen.py is deliberately excluded — its own bindings stay fixed so
-# the config screen can never be rebound into being unreachable). Grouped by
-# scope in file order; within a scope, order matches the screen's original
-# BINDINGS list exactly (guarded by tests/unit/test_keybindings.py against
-# tests/unit/binding_snapshot.json).
+# One row per original Binding/tuple across every migrated screen (config_screen.py
+# excluded — its bindings stay fixed so it can never be rebound unreachable).
+# Grouped by scope in file order, matching each screen's original BINDINGS list
+# (guarded by test_keybindings.py against binding_snapshot.json).
 REGISTRY: tuple[KeySpec, ...] = (
     KeySpec(
         id="nav.search",
@@ -1429,13 +1426,11 @@ for _spec in REGISTRY:
     _by_id.setdefault(_spec.id, []).append(_spec)
 BY_ID: dict[str, tuple[KeySpec, ...]] = {spec_id: tuple(specs) for spec_id, specs in _by_id.items()}
 
-# Distinct ids that default to the *same* key in the *same* scope — the
-# mode-gated twins check_action already keeps mutually exclusive (e.g.
-# dashboard's Use-mode `log.toggle` and Edit-mode `dashboard.edit_slot`, both
-# "a" by default). validate() must never flag these against each other: only
-# one side of most such pairs is even curated/rebindable, and the other stays
-# permanently pinned at that shared default, so the overlap is the accepted
-# baseline, not a conflict to report.
+# Distinct ids that default to the *same* key in the *same* scope — mode-gated
+# twins check_action already keeps mutually exclusive (e.g. dashboard's Use-mode
+# `log.toggle` and Edit-mode `dashboard.edit_slot`, both "a" by default).
+# validate() must never flag these against each other: only one side of most such
+# pairs is curated/rebindable, the other stays pinned at that shared default.
 TWINS: dict[str, frozenset[str]] = {}
 for _scope_specs in BY_SCOPE.values():
     _by_key: dict[str, set[str]] = {}

@@ -23,10 +23,9 @@ class ListController:
         self.manual_lists: set[str] = set()
         self.undo_stack: list[dict] = []
         self.redo_stack: list[dict] = []
-        # Transient (never persisted, issue #214): the one list currently unlocked
-        # for removal, if any. Every list starts locked; entering a list via
-        # `select_or_create` re-locks it, so unlocking never survives a switch
-        # away and back, let alone a restart.
+        # Transient (never persisted, #214): the one list currently unlocked for
+        # removal. Every list starts locked; select_or_create re-locks it, so
+        # unlocking never survives a switch away and back.
         self.unlocked_list: str | None = None
 
     def jump_target(self) -> str | None:
@@ -180,10 +179,8 @@ class ListController:
             if list_name not in self.list_names:
                 self.list_names.append(list_name)
                 self.entity_lists[list_name] = []
-            # An active free-text search would otherwise keep winning over the
-            # list just selected (search_term takes priority in
-            # _currently_displayed_entities), leaving the table stuck showing
-            # stale search results instead of the list (issue #211).
+            # An active free-text search takes priority in _currently_displayed_entities
+            # and would otherwise keep showing stale results instead of the list (#211).
             self._app.search_term = ""
         # Every (re)entry into a list starts locked (issue #214) — unlocking
         # never survives switching away, even back to the same list.
@@ -205,8 +202,8 @@ class ListController:
             self.unlocked_list = None
 
     def apply_membership(self, list_name: str, entity_id: str, action: str) -> None:
-        # `setdefault` re-creates a deleted list on undo rather than erroring; deleting a list
-        # is out of scope for undo/redo, so this is an accepted edge case, not a bug.
+        # `setdefault` re-creates a deleted list on undo rather than erroring; deleting
+        # a list is out of scope for undo/redo, an accepted edge case, not a bug.
         current_list = self.entity_lists.setdefault(list_name, [])
         if action == "add" and entity_id not in current_list:
             current_list.append(entity_id)

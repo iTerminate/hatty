@@ -67,3 +67,25 @@ async def test_set_default_saves_to_config_file(make_app, sample_entities):
 
         saved = app.storage.load_all()
         assert saved["default_list"] == "list_a"
+
+
+async def test_set_default_dashboard_saves_to_storage(make_app, open_dashboard):
+    config_data = {
+        **make_config(),
+        "lists": {},
+        "dashboards": {
+            "Main": {"rows": 3, "cols": 3, "slots": []},
+            "Office": {"rows": 2, "cols": 2, "slots": []},
+        },
+    }
+    app = make_app(config_data=config_data)
+    async with app.run_test() as pilot:
+        await open_dashboard(pilot)
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("down")
+        await pilot.press("d")
+        await pilot.pause()
+
+        saved = app.storage.load_all()
+        assert saved["default_dashboard"] == "Office"

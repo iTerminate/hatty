@@ -151,27 +151,22 @@ class ActivityLogPanel(Widget):
     def compose(self) -> ComposeResult:
         yield Label("Activity Log", id="log_title")
         log = Log(max_lines=_MAX_LOG_LINES, id="log_widget", auto_scroll=True)
-        # Log/ScrollableContainer defaults to can_focus=True with its own
-        # left/right/home/end scroll bindings — a host screen's auto-focus
-        # (Textual scans descendants regardless of `display`, so even hidden
-        # counts) would land here and swallow those keys before the host's
-        # own paging bindings ever see them (the fullscreen graph's `left`/
-        # `right` page the window, not this log). The log is never meant to
-        # take keyboard focus, so keep it out of the focus chain entirely.
+        # Log defaults to can_focus=True with its own scroll bindings — a host
+        # screen's auto-focus (which scans descendants even when hidden) would land
+        # here and swallow keys the host's own paging bindings expect. Keep it
+        # out of the focus chain entirely.
         log.can_focus = False
         yield log
         with Vertical(id="log_browser"):
-            # Same can_focus=False trick as the Log above, and for the same
-            # reason: while docked (not maximized) this must be invisible to
-            # auto-focus even though it's still mounted. set_maximized flips
-            # can_focus on/off in lockstep with the -maximized class.
+            # Same can_focus=False trick as the Log above: while docked this must be
+            # invisible to auto-focus though still mounted. set_maximized flips
+            # can_focus in lockstep with the -maximized class.
             options = LogOptionList(id="log_options", markup=False)
             options.can_focus = False
             yield options
             # VerticalScroll defaults can_focus=True (unlike Vertical above) —
-            # without this it, not the OptionList, is what app-wide AUTO_FOCUS
-            # ("*") lands on first, since it's earlier/equally eligible in the
-            # DOM and never otherwise receives an explicit .focus() call.
+            # without this, app-wide AUTO_FOCUS ("*") would land here instead of
+            # the OptionList, being earlier/equally eligible in the DOM.
             detail_scroll = VerticalScroll(id="log_detail_scroll")
             detail_scroll.can_focus = False
             with detail_scroll:
@@ -183,10 +178,9 @@ class ActivityLogPanel(Widget):
         self.query_one("#log_title", Label).update(text)
 
     def set_hint(self, text: str) -> None:
-        # Escaped: hint text is assembled from live keybinding display strings
-        # that can include literal "["/"]" (e.g. the bracket keys), which
-        # Rich's markup parser can misread as a style tag once adjacent
-        # fragments combine (e.g. "[" + "/" + "]" -> "[/]").
+        # Escaped: hint text is assembled from keybinding display strings that can
+        # include literal "["/"]" (e.g. bracket keys), which Rich's markup parser
+        # can misread as a style tag once adjacent fragments combine.
         self.query_one("#log_hint", Label).update(escape(text))
 
     @property
@@ -198,10 +192,9 @@ class ActivityLogPanel(Widget):
         return (entry["when"], entry["name"], entry["detail"])
 
     def _line_width(self) -> int:
-        # The scrollbar-aware width: Log's CSS is `overflow: scroll`, so its
-        # vertical scrollbar is always shown, and content_size doesn't
-        # subtract it — measuring the true scrollable region is what keeps a
-        # written "…" from landing behind the scrollbar (issue #22).
+        # Log's CSS is `overflow: scroll`, so its scrollbar is always shown and
+        # content_size doesn't subtract it — measure the true scrollable region so
+        # a written "…" doesn't land behind the scrollbar (#22).
         log = self.query_one("#log_widget", Log)
         return max(20, log.scrollable_content_region.width or self.content_size.width or 50)
 
@@ -314,9 +307,8 @@ class ActivityLogPanel(Widget):
         if width == self._rendered_width:
             return
         log = self.query_one("#log_widget", Log)
-        # format_log_line always yields exactly one line per entry, so the
-        # rewritten content has the same line count — scroll position stays
-        # meaningful across the clear()/write_lines below.
+        # format_log_line yields exactly one line per entry, so the rewritten
+        # content has the same line count — scroll position stays meaningful.
         at_tail = log.is_vertical_scroll_end
         prior_y = log.scroll_offset.y
         log.clear()
@@ -339,15 +331,12 @@ class ActivityLogPanel(Widget):
             options.focus()
         else:
             # can_focus must drop before the class does — Textual's auto-focus
-            # rescans regardless of `display`, so a focused, still-focusable
-            # OptionList behind a display:none body would keep intercepting
-            # keys the host's own bindings expect (see the compose() comment).
+            # rescans regardless of `display`, so a still-focusable OptionList
+            # behind a hidden body would keep intercepting the host's keys.
             options.can_focus = False
             self.set_class(False, "-maximized")
-        # Belt-and-braces: on_resize normally handles this already, but
-        # call_after_refresh (post-layout) + the rendered-width guards make
-        # this a free no-op when it did, and a correct fallback when a
-        # class-driven resize doesn't queue for some reason.
+        # Belt-and-braces: on_resize normally handles this already; the
+        # rendered-width guards make this a free no-op when it did.
         self.call_after_refresh(self._reflow_lines)
 
     def clear(self) -> None:

@@ -90,10 +90,9 @@ def demo_entities() -> list[dict]:
         e("binary_sensor.smoke_detector", "off", {"friendly_name": "Smoke Detector", "device_class": "smoke"}),
         e("binary_sensor.washing_machine", "on", {"friendly_name": "Washing Machine", "device_class": "running"},
           changed_min_ago=22),
-        # A Zigbee button has no meaningful state beyond its battery — but the
-        # device log (`i` then `v`) is reached from an entity row, so it needs
-        # one to be reachable at all. Its interest is its device events (issue #17):
-        # button presses never show up as a state change.
+        # A Zigbee button has no meaningful state beyond its battery, but the device
+        # log needs one to be reachable from an entity row; its interest is its
+        # device events (#17) — button presses never show up as a state change.
         e("sensor.living_room_button_battery", "87",
           {"friendly_name": "Living Room Button Battery", "unit_of_measurement": "%", "device_class": "battery"}),
         # ── Covers ──
@@ -103,8 +102,7 @@ def demo_entities() -> list[dict]:
         e("lock.front_door", "locked", {"friendly_name": "Front Door Lock"}, changed_min_ago=240),
         # ── Media player ──
         # supported_features 384447 = every MediaPlayerEntityFeature bit this app
-        # controls (const.MEDIA_FEAT's values summed); not imported here to keep
-        # this module free of app imports.
+        # controls; not imported here to keep this module free of app imports.
         e("media_player.living_room_speaker", "playing",
           {"friendly_name": "Living Room Speaker", "supported_features": 384447,
            "volume_level": 0.4, "is_volume_muted": False,
@@ -120,10 +118,9 @@ def demo_entities() -> list[dict]:
         e("input_number.thermostat_offset", "1.5",
           {"friendly_name": "Thermostat Offset", "min": -5, "max": 5, "step": 0.5, "unit_of_measurement": "°C"}),
         # ── Weather ──
-        # supported_features 7 = FORECAST_DAILY(1) | FORECAST_HOURLY(2) | FORECAST_TWICE_DAILY(4),
-        # so the demo entity exercises all three weather.get_forecasts types (issue #283) —
-        # see demo_forecast() below for the per-type payloads; the inline "forecast" attribute
-        # here is the legacy daily shape, kept as the fallback path's demo data.
+        # supported_features 7 = DAILY(1) | HOURLY(2) | TWICE_DAILY(4), so this exercises
+        # all three weather.get_forecasts types (#283) — see demo_forecast() for the
+        # per-type payloads; the inline "forecast" attribute is the legacy fallback shape.
         e("weather.home", "partlycloudy",
           {"friendly_name": "Home Weather", "supported_features": 7,
            "temperature": 18.4, "temperature_unit": "°C",
@@ -143,10 +140,9 @@ def demo_entities() -> list[dict]:
     ]
 
 
-# Per-type weather.get_forecasts payloads (issue #283), keyed by entity_id then
-# forecast type — served by DemoHAClient.fetch_forecast so --demo exercises the
-# same fetch-and-switch path a real HA instance does, rather than only ever
-# reading the legacy inline "forecast" attribute.
+# Per-type weather.get_forecasts payloads (#283), keyed by entity_id then forecast
+# type — served by fetch_forecast so --demo exercises the same fetch-and-switch
+# path real HA does, instead of only ever reading the legacy inline attribute.
 _WEATHER_FORECASTS: dict[str, dict[str, list[dict]]] = {
     "weather.home": {
         "daily": [
@@ -417,9 +413,8 @@ def demo_climate_history(
     return pts
 
 
-# device_id -> plausible zha_event types (issue #17) — a button's presses and
-# a door sensor's connectivity pings never show up as a state change, so these
-# are the demo's proof that the device log (`v`) surfaces more than entities do.
+# device_id -> plausible zha_event types (#17) — button presses and door-sensor
+# pings never show as a state change; proof the device log surfaces more than entities do.
 _DEMO_DEVICE_EVENTS: dict[str, list[str]] = {
     "dev_lr_button": ["remote_button_short_press", "remote_button_double_press", "remote_button_long_press"],
     "dev_front_door": ["device_offline", "device_online"],

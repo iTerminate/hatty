@@ -28,10 +28,9 @@ NETWORK_TIMEOUT = 60.0
 _RC_NO_GIT = -101
 _RC_TIMEOUT = -102
 
-# Applied to every invocation. core.editor=true makes any editor launch exit 0
-# instantly instead of blocking on a TTY; commit.gpgsign=false stops a
-# passphrase prompt from hanging the TUI; gc.auto=0 keeps a commit from
-# triggering a slow background gc the first time timing matters.
+# Applied to every invocation: core.editor=true makes an editor launch exit 0
+# instantly instead of blocking on a TTY; commit.gpgsign=false stops a passphrase
+# prompt from hanging the TUI; gc.auto=0 avoids a slow background gc mid-timing.
 _GLOBAL_FLAGS = [
     "-c",
     "core.editor=true",

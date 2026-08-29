@@ -124,8 +124,7 @@ class GraphController:
         self.detail_entity_id = entity_id
         self._panel().add_class("-visible")
         # Open in the configured default graph type, mirroring the fullscreen graph
-        # (initial_graph_type) and dashboard Graph widgets; None falls back to the
-        # sparkline Max summary, so the historic default is unchanged.
+        # and dashboard Graph widgets; None falls back to the sparkline Max summary.
         self._panel().apply_saved_graph_type(self._app.app_config.get(CONFIG_KEY_GRAPH_TYPE))
         self.render_detail(entity_id, entity)
         self._spawn_history_load(entity_id)
@@ -320,10 +319,9 @@ class GraphController:
                 return
             from hatty.ui.graph.preview_screen import GraphPreviewScreen
 
-            # Replace an already-open fullscreen graph in place instead of stacking a
-            # second one (the SavedGraphsPopup has already dismissed, so app.screen is
-            # the old graph screen here). Pop before overwriting graph_hours so the old
-            # screen never reloads against the new window on its way out.
+            # Replace an already-open fullscreen graph instead of stacking a second one
+            # (app.screen is the old graph screen). Pop before overwriting graph_hours
+            # so the old screen never reloads against the new window on its way out.
             if isinstance(app.screen, GraphPreviewScreen):
                 app.pop_screen()
             app.app_config[CONFIG_KEY_GRAPH_HOURS] = saved.get("hours", DEFAULT_GRAPH_HOURS)

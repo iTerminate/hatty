@@ -77,10 +77,9 @@ class DemoHAClient:
         entity = self._entities.get(entity_id)
         if entity is None:
             return
-        # Snapshot the pre-mutation state (a shallow copy would still share the
-        # nested `attributes` dict `_apply_service` mutates in place) so the
-        # echoed event carries a real old_state — issue #224's change alerts
-        # need one to tell "state changed" from "first seen".
+        # Snapshot pre-mutation (a shallow copy would still share the nested
+        # `attributes` dict `_apply_service` mutates) so the echoed event carries a
+        # real old_state — #224's change alerts need one to detect "first seen".
         old_state = {**entity, "attributes": dict(entity.get("attributes", {}))}
         _apply_service(entity, domain, service, service_data)
         self._emit_state(entity, old_state)
@@ -94,8 +93,7 @@ class DemoHAClient:
 
     async def update_device_registry(self, device_id: str, area_id=_UNSET, name_by_user=_UNSET):
         # Mutate the in-memory device, then ack like the real client — main.py's
-        # handler re-fetches the device registry (served above with the new area
-        # or name) and rebuilds the tree, so the move/rename is interactive in demo.
+        # handler re-fetches the registry and rebuilds the tree, staying interactive.
         for device in self._devices:
             if device.get("id") == device_id:
                 if area_id is not _UNSET:
@@ -107,8 +105,7 @@ class DemoHAClient:
 
     async def create_area(self, name: str):
         # Append to the in-memory areas, then ack like the real client — main.py's
-        # handler re-fetches the area registry (served with the new area), so the
-        # create is interactive in demo.
+        # handler re-fetches the registry, so the create stays interactive.
         area_id = "area_" + "_".join(name.lower().split())
         self._areas.append({"area_id": area_id, "name": name})
         self._result("create_area", None)

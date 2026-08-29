@@ -161,9 +161,8 @@ class ListSelectionPopup(ListPopup):
         self._relabel(self._names, self.parent.default_list_name, markers=self._notify_markers())
 
     def _move(self, delta: int) -> None:
-        # Mirrors ColumnConfigPopup's Shift+up/down reorder (issue #212). The
-        # synthetic "View All" row at index 0 isn't part of list_names and can't
-        # be reordered; a search filter shows a subset, so order is ambiguous.
+        # Mirrors ColumnConfigPopup's Shift+up/down reorder (#212). The synthetic
+        # "View All" row can't be reordered; a search filter makes order ambiguous.
         if self.search_term:
             self.app.notify("Clear the search to reorder lists.", severity="warning")
             return

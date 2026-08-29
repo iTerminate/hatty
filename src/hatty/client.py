@@ -10,22 +10,17 @@ from hatty.const import BINARY_STATE_MAP
 
 RECONNECT_DELAY = 5
 MAX_RECONNECT_DELAY = 60
-# WS ping keepalive interval (seconds). Without this, a silently-dropped
-# network (e.g. WiFi turned off, no TCP FIN/RST) leaves `ws.receive()`
-# blocked forever — neither `ha_disconnect` nor `ha_connect_failed` is ever
-# emitted, so the UI shows stale state indefinitely (issue #250). With a
-# heartbeat, aiohttp pings the server and raises a timeout when pongs stop
-# arriving, which flows through listen()'s except-Exception path instead.
+# WS ping keepalive (seconds): without it a silently-dropped network leaves
+# `ws.receive()` blocked forever and the UI stuck on stale state (issue #250).
 WS_HEARTBEAT = 30
 
 # How long an awaited WS request (`_request`) waits for its `result` frame
 # before giving up — see fetch_logbook's WS-first/REST-fallback split (issue #17).
 WS_REQUEST_TIMEOUT = 10
 
-# Sentinel distinguishing "argument omitted" from an explicit None (which is a
-# meaningful value — clearing a device's area or reverting its user-set name).
-# Shared so the stand-in clients import the *same* object: the parity test in
-# tests/test_fake_client_parity.py compares parameter defaults by identity.
+# Sentinel distinguishing "argument omitted" from an explicit None (a meaningful
+# value — clearing a device's area). Shared so stand-in clients import the same
+# object: test_fake_client_parity.py compares parameter defaults by identity.
 _UNSET = object()
 
 

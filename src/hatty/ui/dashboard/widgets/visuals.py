@@ -51,9 +51,8 @@ def trend_arrow(history: list[tuple[str, float]]) -> str:
     return "→"
 
 
-# hvac_action -> icon/word/CSS class for climate widgets. "idle" carries no
-# class, staying the default muted color; unmapped actions (off, fan, drying,
-# unreported) fall back to showing the plain HVAC mode instead.
+# hvac_action -> icon/word/CSS class. "idle" carries no class (default muted
+# color); unmapped actions fall back to showing the plain HVAC mode.
 HVAC_ACTION_ICONS = {"heating": "🔥", "cooling": "❄", "idle": "•"}
 HVAC_ACTION_WORDS = {"heating": "Heating", "cooling": "Cooling", "idle": "Idle"}
 HVAC_ACTION_CLASSES = {"heating": "-heating", "cooling": "-cooling"}
@@ -74,9 +73,8 @@ SENSOR_CLASS_ICONS = {
 
 
 # domain -> representative glyph for the entity table's opt-in "Icon" column
-# (#217). "lock" matches the padlock-with-key glyph used for the locked state
-# elsewhere (dashboard/widgets/lock.py, dashboard/widgets/binary_sensor.py,
-# controls/control_popup.py) so the domain icon and the locked-state icon agree.
+# (#217). "lock" matches the padlock glyph used for the locked state elsewhere,
+# so the domain icon and locked-state icon agree.
 DOMAIN_GLYPHS = {
     "light": "💡",
     "switch": "🔌",
@@ -109,8 +107,7 @@ DOMAIN_GLYPHS = {
 
 
 # HA weather.* condition -> multi-line ASCII art (wego/wttr.in idiom). Near-identical
-# conditions deliberately share one block (both lightning variants, both windy variants,
-# both "rainy" flavors) rather than drawing 15 distinct scenes.
+# conditions deliberately share one block rather than drawing 15 distinct scenes.
 _ART_SUNNY = """\
    \\   /
     .-.

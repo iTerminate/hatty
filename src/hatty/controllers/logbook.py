@@ -58,9 +58,8 @@ from hatty.ui.entity_table import get_display_name
 # A device log covering a whole list can expand to many sibling entities; cap
 # the set so a single logbook GET's entity= param can't blow up.
 _DEVICE_LOG_MAX_ENTITIES = 200
-# Every device_id widens the WS logbook query's event-type set (HA's
-# async_determine_event_types), making device count the expensive axis — cap
-# it independently of the entity cap above.
+# Every device_id widens the WS logbook query's event-type set, making device
+# count the expensive axis — cap it independently of the entity cap above.
 _DEVICE_LOG_MAX_DEVICES = 50
 
 
@@ -168,9 +167,8 @@ class LogbookController:
         try:
             panel = session.panel()
         except NoMatches:
-            # The host is mid-teardown (e.g. a screen's on_unmount closing its
-            # own session so it can't linger — see LogHost's docstring) and its
-            # children, including the panel, are already gone. Nothing left to
+            # The host is mid-teardown (its own on_unmount closing this session so
+            # it can't linger) and its children are already gone — nothing left to
             # un-visible/un-maximize; still resync the subscription below.
             panel = None
         if panel is not None:
@@ -613,9 +611,8 @@ class LogbookController:
             "entity_id": entity_id,
             "name": get_display_name(new_state),
         }
-        # name is always set above, so entity_names/device_names can stay
-        # empty — resolve_name short-circuits on it (issue #25's transport
-        # consistency: this shares format_log_line/state_detail with the
-        # fetched path instead of writing a raw, unlabeled string).
+        # name is always set above, so entity_names/device_names can stay empty —
+        # resolve_name short-circuits on it, sharing format_log_line/state_detail
+        # with the fetched path instead of writing a raw, unlabeled string (#25).
         entry = normalize_entry(raw, {}, {}, {entity_id: device_class}, {entity_id: unit})
         self._app.call_later(panel.add_log_entry, entry)

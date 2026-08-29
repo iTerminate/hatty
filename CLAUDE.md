@@ -26,7 +26,7 @@ to disk). Nothing is published to PyPI yet.
 hatty is an independent reimplementation of `../ha-cli`'s BUILD_PLAN.md spec — same conventions,
 separate codebase, not a port of ha-cli's source.
 
-## Architecture
+## Architecture & layout
 
 ```
 User Keybindings → HACLI (main.py) → HAClient (client.py) ↔ Home Assistant WebSocket
@@ -34,75 +34,36 @@ User Keybindings → HACLI (main.py) → HAClient (client.py) ↔ Home Assistant
                          _update_entities_display() → EntitiesTable
 ```
 
-Domain state lives on controllers instantiated in `HACLI.__init__`, each holding one slice and
-taking an injected app reference: `controllers/lists.py` (`app.list_ctl`), `dashboards.py`
-(`app.dash_ctl`), `graphs.py` (`app.graph_ctl`), `connection.py` (`app.conn_ctl` — the HA websocket
-message pump, `handle_ha_message`/`_HA_MESSAGE_HANDLERS`), `notifications.py` (`app.notify_ctl`),
-`logbook.py` (`app.log_ctl` — the activity log's scope/paging/fetch/subscription state machine,
-shared by `HACLI`'s docked panel, `GraphPreviewScreen`'s, and `DashboardScreen`'s), `keybindings.py`
-(`app.keys_ctl` — owns the user's keybinding overrides and pushes the resulting keymap onto the
-running app via `App.set_keymap`; every screen's `BINDINGS` is `bindings_for(scope)` from this
-module's `REGISTRY`, the single source of truth for all ~220 bindings in the app, rebindable from
-Configuration ▸ Keybindings), `backup.py` (`app.backup_ctl` — Backup & Sync: owns the export-scope
-and git prefs, drives `backup.py`/`git_sync.py` against the app's live collections, and fires
-pull-on-start / the exit-time commit-and-push). Like `const.py`/`types.py`, `keybindings.py`'s
-registry half is cycle-safe (no `hatty.ui`/`hatty.main` imports) since it's imported at
-class-definition time by every screen module. **`HACLI` keeps its old attribute surface via
-property pairs** (`app.dashboards`, `app.current_list_name`, `app._detail_entity_id`, …) so screens
-and tests read/assign through the app unchanged; new UI code should call controllers directly
-instead (`self.app.dash_ctl.set_slot(...)`).
+Controllers (`src/hatty/controllers/`, instantiated in `HACLI.__init__`; see each docstring):
+`lists.py` (`app.list_ctl`, list state), `dashboards.py` (`app.dash_ctl`, dashboard grid/slots),
+`graphs.py` (`app.graph_ctl`, history/detail/saved graphs), `connection.py` (`app.conn_ctl`, HA
+websocket pump), `notifications.py` (`app.notify_ctl`, change alerts), `logbook.py` (`app.log_ctl`,
+shared activity-log state), `keybindings.py` (`app.keys_ctl`, overrides), `backup.py`
+(`app.backup_ctl`, Backup & Sync prefs).
+`app.keys_ctl` pushes overrides via `App.set_keymap`; every screen's `BINDINGS = bindings_for(scope)`
+from `REGISTRY` (single source for ~220 bindings), whose registry half is cycle-safe — see its
+docstring.
 
-**Single-object export/import.** Lists, dashboards, and saved graphs each have a matching pair of
-controller methods — `to_export_payload(name)` / `import_from_payload(payload)` on
-`ListController`/`DashboardController`/`GraphController` — producing one small versioned JSON file
-per object (`{"hatty_list": 1, ...}` / `{"hatty_dashboard": 1, ...}` / `{"hatty_graph": 1, ...}`),
-reachable from each object's popup (`x`/`i`). `src/hatty/backup.py`'s directory export (Configuration
-▸ Backup & Sync) is built entirely out of these same payloads — one file per object under
-`lists/`/`dashboards/`/`graphs/` plus a handful of whole-collection files (`entity_names.json`,
-`settings.json`, `keybindings.json`) and a `hatty-backup.json` manifest — so a file written by one
-path is always readable by the other, and dropping a hand-exported object into the backup directory
-just works. `src/hatty/git_sync.py` is a separate, git-agnostic layer that shells out to the `git`
-CLI (hardened against credential prompts and hangs — see its module docstring) to optionally treat
-that directory as a repo; neither module imports the other's caller, `controllers/backup.py` wires
-them together.
+`HACLI` keeps its old attribute surface via `_controller_proxy` property pairs (`app.dashboards`,
+`app.current_list_name`, `app._detail_entity_id`, …); new code calls controllers directly
+(`self.app.dash_ctl.set_slot(...)`). **Injection seam**: `HACLI._client_factory` swaps in
+`FakeHAClient`/`DemoHAClient`.
 
-**Two-tier config persistence.** `config.yaml` is lean — connection settings and display
-preferences only. The user-data collections (`lists`, `entity_names`, `dashboards`, `saved_graphs`,
-`manual_lists`, `default_list`, `default_dashboard` — the exact set is `storage.COLLECTION_KEYS`)
-live in SQLite (`src/hatty/storage.py`, `Storage`) at `<config dir>/hatty.db`. SQLite is
-authoritative: on boot the DB's collections are loaded back over the YAML config, and every save
-strips collection keys from the YAML while writing them to the DB in one transaction. See
-`storage.py`'s module docstring for the collection shapes.
+Lists/dashboards/graphs each expose `to_export_payload`/`import_from_payload`; `backup.py`'s
+directory export reuses those payloads and `git_sync.py` optionally treats it as a git repo — see
+their docstrings. `config.yaml` stays lean; user-data collections (`storage.COLLECTION_KEYS`) live
+in SQLite, authoritative over the YAML — see `storage.py`. Entity dicts follow the
+`Entity`/`EntityAttributes` TypedDicts in `types.py`; read `total=False` fields via `.get(...)`;
+`const.py`/`types.py` import nothing from the app (cycle-safe).
 
-**Test/demo injection seam**: `HACLI._client_factory` is where the test suite's `FakeHAClient` and
-`--demo`'s `DemoHAClient` both replace the real `HAClient` — `DemoHAClient` is signature-parity-tested
-against it.
-
-Entity dicts follow the `Entity`/`EntityAttributes` TypedDicts in `src/hatty/types.py`; pass entity
-params typed as `Entity` (not bare `dict`) and read `total=False` fields via `.get(...)`.
-`const.py`/`types.py` import nothing from the app, so they stay cycle-safe.
-
-## Layout
-
-- `src/hatty/main.py` — the `HACLI` Textual app: keybindings, message routing, entity-table state,
-  cross-cutting plumbing (`spawn(coro)` for tracked fire-and-forget tasks — never bare
-  `asyncio.create_task`; `persist(*keys)` to mirror + save a collection).
-- `src/hatty/controllers/` — the controllers above.
-- `src/hatty/client.py` — `HAClient`: websocket auth/requests, REST history/logbook fetchers (swallow
-  errors, return `None`).
-- `src/hatty/config.py` / `storage.py` — YAML config and SQLite collection persistence.
-- `src/hatty/const.py` / `types.py` / `service_calls.py` — shared constants, entity TypedDicts, and
-  the pure per-domain functions that build `call_service` data for entity controls.
-- `src/hatty/backup.py` — Backup & Sync's directory export/import: builds/writes/reads the JSON
-  files described above, no git involved.
-- `src/hatty/git_sync.py` — the git CLI layer for Backup & Sync: init/commit/pull/push over the
-  export directory, every invocation non-interactive and time-bounded.
-- `src/hatty/ui/` — screens and popups, one module per surface (entity table, dashboard grid +
-  widgets, device/area tree, graph panel/fullscreen/preview, per-domain control screens, config,
-  onboarding). Each module's own docstring is the source of truth for its behavior — read the file
-  before describing it.
-- `src/hatty/ui/popup_base.py` — shared modal scaffolding (`PopupScreen`, `ListPopup`); new popups
-  should subclass these rather than hand-rolling styling.
+- `src/hatty/main.py` — `spawn(coro)` for tracked fire-and-forget (never bare
+  `asyncio.create_task`); `persist(*keys)` to mirror + save a collection.
+- `src/hatty/client.py` — `HAClient`: websocket auth/requests, REST history/logbook fetchers.
+- `src/hatty/config.py`/`storage.py` — YAML config + SQLite; `const.py`/`types.py`/
+  `service_calls.py` — constants, TypedDicts, `call_service` builders.
+- `src/hatty/backup.py`/`git_sync.py` — directory export/import + git layer (above).
+- `src/hatty/ui/` — one module per surface; module docstrings are the source of truth (read before
+  describing). `ui/popup_base.py` — subclass `PopupScreen`/`ListPopup`, don't hand-roll styling.
 
 ## Conventions
 
@@ -110,14 +71,11 @@ params typed as `Entity` (not bare `dict`) and read `total=False` fields via `.g
   license header `# hatty — MIT License. See LICENSE file for details.` as the first line (or right
   after a `#!` shebang).
 - `uv run pyright` runs in CI (`.gitea/workflows/test.yml`) and must pass before pushing, alongside
-  `uv run ruff check .`. It's `basic` mode over `src/hatty` with every basic-mode category enabled,
-  including `reportOptionalMemberAccess`/`reportAttributeAccessIssue`/`reportArgumentType` — don't
-  write code that fires any of them.
+  `uv run ruff check .`. It's `basic` mode with every category enabled — see `[tool.pyright]` in
+  `pyproject.toml`; don't write code that fires any pyright diagnostic.
 - Every popup/widget uses inline `DEFAULT_CSS`, no external stylesheets.
-- Commit messages: concise, usually a single line.
-- When implementing a plan with multiple milestones: commit (and push, if asked) after each
-  milestone once its tests pass, and run the full `pytest` suite after the final milestone before
-  reporting the plan complete.
+- Commit messages: concise, usually a single line; after each milestone of a plan, commit (and push
+  if asked) once its tests pass, and run the full `pytest` suite after the final milestone.
 
 ## Testing
 

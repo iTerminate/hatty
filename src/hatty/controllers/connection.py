@@ -41,12 +41,10 @@ class ConnectionController:
             self._handle_failed_result_message(msg)
 
     def _on_ha_event(self, msg: dict) -> None:
-        # logbook/event_stream frames and state_changed frames share the outer
-        # {"type": "event", "event": {...}} envelope; distinguished by shape —
-        # a stream frame's `event` carries an `events` list, not `event_type`/
-        # `data` (issue #19). Dispatching on id isn't safe here: send_json's
-        # await point means a fast HA can deliver the first push before
-        # subscribe_logbook() has returned the id to store.
+        # logbook/event_stream and state_changed frames share the outer envelope;
+        # distinguished by shape — a stream frame's `event` carries `events`, not
+        # `event_type`/`data` (#19). Dispatching on id isn't safe: a fast HA can
+        # deliver the first push before subscribe_logbook() returns the id to store.
         if "events" in msg.get("event", {}):
             self._handle_logbook_stream_message(msg)
         else:
@@ -56,9 +54,8 @@ class ConnectionController:
         app = self._app
         self._connected = True
         app.set_title_based_on_focused_ui()
-        # (Re)load the entity/device/area registries on every (re)connect — they
-        # aren't part of the state stream, so a reconnect would otherwise keep
-        # stale names/areas.
+        # (Re)load the registries on every (re)connect — they aren't part of the
+        # state stream, so a reconnect would otherwise keep stale names/areas.
         app.spawn(app.client.fetch_entity_registry())
         app.spawn(app.client.fetch_device_registry())
         app.spawn(app.client.fetch_area_registry())
@@ -81,10 +78,9 @@ class ConnectionController:
         sub_title = f"Home Assistant unreachable — retry {attempt} pending…"
         splash_status = f"Unreachable — retry {attempt} pending…"
         if self._connected:
-            # The connected→disconnected edge (issue #243): a drop that surfaces as an
-            # exception rather than a clean close. Re-show the splash (over whatever
-            # screen is up) with its status baked in via the constructor — it isn't
-            # mounted yet, so update_status() can't be used here.
+            # Connected→disconnected edge (#243): a drop that surfaces as an exception
+            # rather than a clean close. Re-show the splash with status baked into
+            # the constructor — it isn't mounted yet, so update_status() can't be used.
             self._connected = False
             self._app._show_splash(splash_status)
             self._app.sub_title = sub_title
@@ -217,10 +213,8 @@ class ConnectionController:
 
         app.graph_ctl.record_state(new_state)
         app.notify_ctl.handle_state_change(entity_id, old_state, new_state)
-        # While a logbook/event_stream subscription is active, it already
-        # carries this same state change for most entities (issue #19) —
-        # except continuous sensors, which HA's stream excludes just like
-        # its logbook fetch does (issue #50); log_ctl decides who needs this.
+        # A live logbook/event_stream subscription already carries this state change
+        # for most entities (#19), except continuous sensors (#50); log_ctl decides.
         app.log_ctl.handle_state_change(entity_id, new_state, old_state)
         app._clear_pending_call(entity_id)
         if app._detail_entity_id == entity_id:

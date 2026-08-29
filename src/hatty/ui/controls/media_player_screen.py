@@ -43,11 +43,9 @@ if TYPE_CHECKING:
 
 _STATE_ICONS = {"playing": "▶", "paused": "⏸", "idle": "⏹", "off": "⏹", "buffering": "⏳", "on": "▶"}
 
-# Horizontal button rows where left/right should cycle within the row (wrapping) and
-# up/down should jump out of the row as a block instead of stepping through each button
-# individually (mirrors light_screen.py's #88/#286 patterns). Buttons without a dedicated
-# hotkey (shuffle/repeat) are only reachable this way; the rest (transport) also have
-# space/s/Enter shortcuts.
+# Horizontal button rows where left/right cycle within the row and up/down jump out
+# as a block (mirrors light_screen.py's #88/#286 patterns). Shuffle/repeat have no
+# dedicated hotkey and are only reachable this way; transport also has space/s/Enter.
 _BUTTON_ROW_IDS = ("transport_buttons", "toggle_buttons")
 
 # HA repeat modes, in the order the repeat button cycles through them.
@@ -62,12 +60,10 @@ class MediaPlayerControlScreen(ModalScreen):
 
     app: "HACLI"  # narrow Textual's inherited attr for type-checkers; annotation only, no runtime effect
 
-    # space is priority so a focused Button doesn't swallow it (buttons still work
-    # via enter). up/down are priority so they always move focus instead of being
-    # swallowed by a focused volume slider's own value-adjust handling (issue
-    # #291, mirrors light_screen's #286 fix) — left/right still adjust the slider
-    # in place. check_action releases it while a Select's overlay is focused, so
-    # its own up/down keeps working.
+    # space is priority so a focused Button doesn't swallow it. up/down are priority
+    # so they move focus instead of being swallowed by the volume slider's value-adjust
+    # (#291, mirrors light_screen's #286) — left/right still adjust in place; released
+    # while a Select's overlay is focused, so its own up/down keeps working.
     BINDINGS = bindings_for("media_player")
 
     DEFAULT_CSS = """
@@ -290,10 +286,9 @@ class MediaPlayerControlScreen(ModalScreen):
             self._cycle_repeat()
 
     def on_key(self, event: events.Key) -> None:
-        # Left/right walk the focus chain (row-aware — see _focus_within_row) unless the
-        # volume slider or a Select's expanded overlay owns them (mirrors light_screen.py's
-        # on_key hijack, issue #88). Up/down are handled as priority Bindings instead (see
-        # nav_focus) so they always move focus rather than being swallowed by the slider.
+        # Left/right walk the focus chain (row-aware) unless the volume slider or a
+        # Select's overlay owns them (mirrors light_screen.py, #88). Up/down are
+        # priority Bindings instead (see nav_focus).
         focused = self.focused
         if isinstance(focused, (PercentageSlider, OptionList)):
             return
@@ -328,9 +323,8 @@ class MediaPlayerControlScreen(ModalScreen):
         self.app.action_show_help()
 
     def action_nav_focus(self, direction: int) -> None:
-        # A focused slider (or any other single widget) just steps one at a time; a
-        # button row (transport/toggle) is skipped as a whole block (mirrors
-        # light_screen.py's #286 pattern).
+        # A focused slider steps one at a time; a button row (transport/toggle) is
+        # skipped as a whole block (mirrors light_screen.py's #286 pattern).
         nav_focus(self, _BUTTON_ROW_IDS, direction)
 
     def action_toggle_play_pause(self) -> None:

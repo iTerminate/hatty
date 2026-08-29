@@ -6,16 +6,13 @@ previously scattered across whichever module first needed them. This module
 must not import anything from the app so it stays cycle-safe.
 """
 
-# Domains whose entities can be flipped with a plain homeassistant.toggle-style
-# turn_on/turn_off pair (enter on the entities table). "media_player" is also here,
-# but its enter behavior is media_play_pause, not turn_on/turn_off — see the
-# media_player carve-out at the top of HACLI.toggle_entity.
+# Domains flippable with a plain turn_on/turn_off pair (enter on the entities
+# table). "media_player" is here too, but its enter behavior is media_play_pause
+# — see the carve-out at the top of HACLI.toggle_entity.
 TOGGLABLE_DOMAINS = {"switch", "light", "fan", "media_player"}
 
-# Domains with an attribute-editing UI. "light" and "media_player" are routed to
-# their own dedicated live-apply screens (ui/controls/light_screen.py,
-# ui/controls/media_player_screen.py) by main.py; the EntityControlPopup handles
-# the remaining simple field-based domains.
+# Domains with an attribute-editing UI. "light"/"media_player" route to their own
+# live-apply screens (ui/controls/); EntityControlPopup handles the rest.
 CONTROLLABLE_DOMAINS = {"light", "fan", "climate", "cover", "input_number", "lock", "media_player"}
 
 # Home Assistant MediaPlayerEntityFeature bitmask (only the flags we gate on).
@@ -44,8 +41,7 @@ def media_supports(features: int | None, flag: str) -> bool:
 
 
 # Home Assistant WeatherEntityFeature bitmask — which weather.get_forecasts
-# `type` values (used verbatim as the service call's "type" field) an entity
-# supports. Order here doubles as the preferred default when several are set.
+# `type` values an entity supports; order doubles as the preferred default.
 WEATHER_FEAT = {
     "forecast_daily": 1,
     "forecast_hourly": 2,
@@ -140,9 +136,9 @@ WIDGET_TYPES = [
     "panel",
 ]
 
-# widget_type -> domain its entity picker should be restricted to; absent = unrestricted (panel),
-# "graph"/"gauge" are handled separately since they filter by numeric state rather than domain.
-# Every new WIDGET_TYPES entry must get a mapping here or an explicit carve-out above.
+# widget_type -> domain its entity picker restricts to; absent = unrestricted (panel).
+# "graph"/"gauge" filter by numeric state instead, so they're not mapped here. Every
+# new WIDGET_TYPES entry needs a mapping here or an explicit carve-out above.
 WIDGET_TYPE_DOMAINS = {
     "switch": "switch",
     "light": "light",
@@ -156,9 +152,8 @@ WIDGET_TYPE_DOMAINS = {
     "weather": "weather",
 }
 
-# Widget types that can carry the per-slot "show_last_changed" option: every
-# single-entity widget. "graph" already plots a time axis; "panel"/"split" hold
-# many entities, so there is no single last_changed to show.
+# Widget types that can carry "show_last_changed": every single-entity widget.
+# "graph" plots its own time axis; "panel"/"split" hold many entities, no single one.
 LAST_CHANGED_WIDGET_TYPES = frozenset(WIDGET_TYPES) - {"graph", "panel"}
 
 # Entity table columns shown when the config carries no "columns" key.
@@ -170,16 +165,14 @@ DEFAULT_GRAPH_HOURS = 4
 # Fallback for the global "log_hours" config value (the activity log's window size).
 DEFAULT_LOG_HOURS = 24
 
-# GraphPreviewScreen's shift+left/shift+right "fast page" multiplier over the
-# normal left/right page. Lives here (not preview_screen.py) so the keybinding
-# registry can reference it in a binding description without an import cycle.
+# GraphPreviewScreen's shift+left/right "fast page" multiplier. Lives here (not
+# preview_screen.py) so the keybinding registry can reference it without a cycle.
 FAST_PAGE_MULTIPLIER = 6
 
 # Canonical names for the top-level app_config keys, so a rename is one edit and a
-# typo is a NameError instead of a silent None. config.default_config() and
-# storage.PERSISTED reference these, keeping them the single literal definition.
-# NOTE: "graph_type"/"hours" also appear as keys *inside* saved-graph entry dicts
-# (a different namespace — storage.py, controllers/graphs.py); do NOT reuse
+# typo is a NameError instead of a silent None (config.default_config() and
+# storage.PERSISTED reference these). NOTE: "graph_type"/"hours" also appear as
+# keys *inside* saved-graph entry dicts (a different namespace) — don't reuse
 # CONFIG_KEY_GRAPH_TYPE there.
 CONFIG_KEY_HOME_ASSISTANT = "home_assistant"
 CONFIG_KEY_URL = "url"
@@ -203,13 +196,11 @@ CONFIG_KEY_TERMINAL_TITLE = "terminal_title"
 CONFIG_KEY_KEYBINDINGS = "keybindings"
 CONFIG_KEY_BACKUP = "backup"
 
-# Fallback/default value for the "terminal_title" config key (issue: set tmux
-# title to hatty or pref).
+# Fallback for the "terminal_title" config key.
 DEFAULT_TERMINAL_TITLE = "hatty"
 
-# Legacy reserved list name (issue #224). No longer special — any list can be
-# designated a notification source via `notify_lists` (issue #24) — kept only as
-# the name storage.migrate_reserved_notify_list looks for on a pre-#24 DB.
+# Legacy reserved list name (#224). No longer special — any list can be a
+# notification source via `notify_lists` (#24); kept only for migration lookup.
 NOTIFY_LIST_NAME = "\U0001f514 Notifications"
 
 # Default notification preferences (config key "notifications"), merged over by
@@ -228,9 +219,8 @@ DEFAULT_NOTIFICATIONS = {
 }
 
 # Default Backup & Sync preferences (config key "backup"), merged over by
-# BackupController whenever a config predates a given key. "sections" is
-# spelled out literally (matching backup.SECTIONS) rather than imported, so
-# const.py stays free of imports from the rest of the app.
+# BackupController for a config that predates a key. "sections" is spelled out
+# literally (matching backup.SECTIONS) so const.py stays import-free.
 DEFAULT_BACKUP = {
     "path": "",  # export directory; "" = feature idle
     "sections": ["lists", "dashboards", "saved_graphs", "entity_names", "settings", "keybindings"],

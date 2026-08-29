@@ -144,10 +144,9 @@ def save_config(config: dict, config_path: str | None = None) -> None:
     if not path:
         raise ValueError("Configuration file path not found, cannot save config.")
 
-    # The config holds the long-lived HA token in cleartext, so keep the dir and
-    # file private (issue #156). mkdir's mode= is masked by umask, so chmod it
-    # explicitly; write the file via os.open with 0o600 (no world-readable window
-    # for a fresh file) and chmod afterward to tighten any pre-existing config.
+    # The config holds the HA token in cleartext, so keep dir/file private (#156).
+    # mkdir's mode= is masked by umask, so chmod explicitly; os.open with 0o600
+    # avoids a world-readable window for a fresh file.
     path.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(path.parent, 0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
