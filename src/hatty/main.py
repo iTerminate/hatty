@@ -1,5 +1,7 @@
 # hatty — MIT License. See LICENSE file for details.
 import asyncio
+import copy
+import traceback
 from datetime import datetime
 
 from textual.app import App, ComposeResult
@@ -137,6 +139,10 @@ class HACLI(App):
         # Guards the exit-time git sync against running twice (action_quit is
         # the primary path, _on_exit_app a backstop for any exit() call).
         self._exit_sync_done = False
+        # One save at a time, coalescing bursts (see _save_config_async):
+        # _save_running is a save in flight, _save_dirty a persist() queued behind it.
+        self._save_running = False
+        self._save_dirty = False
 
     # Config key -> the app attribute that is its in-memory working copy, derived
     # from storage.PERSISTED so there is one source of truth (issue #168).
@@ -174,7 +180,10 @@ class HACLI(App):
         the save (for scalar values written straight into app_config)."""
         for key in keys:
             self.app_config[key] = getattr(self, self._PERSIST_ATTRS[key])
-        self.spawn(self._save_config_async())
+        self._save_dirty = True
+        if not self._save_running:
+            self._save_running = True
+            self.spawn(self._save_config_async())
 
     @property
     def graph_hours(self) -> float:
@@ -1201,18 +1210,21 @@ class HACLI(App):
         self.persist()
 
     def _collections_snapshot(self) -> dict:
-        """The collection values to persist, with in-session temp dashboards
-        excluded (they must never reach either the DB or the YAML)."""
+        """A detached copy of the collection values to persist, with in-session
+        temp dashboards excluded (they must never reach either the DB or the
+        YAML). The copies matter: save_all runs in a to_thread worker, so a
+        shallow snapshot had it iterating the very dicts the UI mutates —
+        "dictionary changed size during iteration"."""
         dashboards = self.app_config.get(CONFIG_KEY_DASHBOARDS) or {}
         if self._temp_dashboard_names:
             dashboards = {k: v for k, v in dashboards.items() if k not in self._temp_dashboard_names}
         snapshot = {
-            CONFIG_KEY_LISTS: self.app_config.get(CONFIG_KEY_LISTS) or {},
-            CONFIG_KEY_ENTITY_NAMES: self.app_config.get(CONFIG_KEY_ENTITY_NAMES) or {},
-            CONFIG_KEY_DASHBOARDS: dashboards,
-            CONFIG_KEY_SAVED_GRAPHS: self.app_config.get(CONFIG_KEY_SAVED_GRAPHS) or {},
-            CONFIG_KEY_MANUAL_LISTS: self.app_config.get(CONFIG_KEY_MANUAL_LISTS) or set(),
-            CONFIG_KEY_NOTIFY_LISTS: self.app_config.get(CONFIG_KEY_NOTIFY_LISTS) or set(),
+            CONFIG_KEY_LISTS: copy.deepcopy(self.app_config.get(CONFIG_KEY_LISTS) or {}),
+            CONFIG_KEY_ENTITY_NAMES: copy.deepcopy(self.app_config.get(CONFIG_KEY_ENTITY_NAMES) or {}),
+            CONFIG_KEY_DASHBOARDS: copy.deepcopy(dashboards),
+            CONFIG_KEY_SAVED_GRAPHS: copy.deepcopy(self.app_config.get(CONFIG_KEY_SAVED_GRAPHS) or {}),
+            CONFIG_KEY_MANUAL_LISTS: copy.deepcopy(self.app_config.get(CONFIG_KEY_MANUAL_LISTS) or set()),
+            CONFIG_KEY_NOTIFY_LISTS: copy.deepcopy(self.app_config.get(CONFIG_KEY_NOTIFY_LISTS) or set()),
             CONFIG_KEY_DEFAULT_LIST: self.app_config.get(CONFIG_KEY_DEFAULT_LIST),
             CONFIG_KEY_DEFAULT_DASHBOARD: self.app_config.get(CONFIG_KEY_DEFAULT_DASHBOARD),
         }
@@ -1223,10 +1235,29 @@ class HACLI(App):
         return snapshot
 
     async def _save_config_async(self) -> None:
+        """Save the config file + collections, coalescing bursts: at most one
+        save runs at a time, and a persist() landing mid-save just marks the
+        state dirty for one more pass rather than stacking a second worker.
+        Last-write-wins, so no persist() is ever dropped."""
         if self._demo:
             # Demo mode is disk-free: interactions mutate in-memory state only and
             # must never overwrite the user's real config/DB.
+            self._save_running = False
+            self._save_dirty = False
             return
+        try:
+            while True:
+                self._save_dirty = False
+                await self._save_once()
+                if not self._save_dirty:
+                    break
+        finally:
+            self._save_running = False
+            if self._save_dirty:  # a persist() landed as this pass ended
+                self._save_running = True
+                self.spawn(self._save_config_async())
+
+    async def _save_once(self) -> None:
         collections = self._collections_snapshot()
         # Collections live in SQLite now; keep them out of the lean YAML, which
         # only carries connection settings + display preferences.
@@ -1234,13 +1265,13 @@ class HACLI(App):
         try:
             config.save_config(to_save, self.config_path)
         except Exception as e:
-            self.log.error(f"Error saving configuration: {e}")
+            self.log.error(f"Error saving configuration: {e}\n{traceback.format_exc()}")
             self.notify(f"Error saving configuration: {e}", title="Save Error", severity="error")
         if self.storage is not None:
             try:
                 await asyncio.to_thread(self.storage.save_all, collections)
             except Exception as e:
-                self.log.error(f"Error saving collections to storage: {e}")
+                self.log.error(f"Error saving collections to storage: {e}\n{traceback.format_exc()}")
                 self.notify(f"Error saving data: {e}", title="Save Error", severity="error")
 
     def handle_bindings_clash(self, clashed_bindings: set[Binding], node: DOMNode) -> None:
