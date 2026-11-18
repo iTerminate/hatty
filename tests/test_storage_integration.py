@@ -1,9 +1,12 @@
 # hatty — MIT License. See LICENSE file for details.
 """App-level integration of the SQLite collections storage (issue #63)."""
 
+import asyncio
+import threading
+
 import yaml
 
-from tests.conftest import make_config
+from tests.conftest import make_config, notified
 
 
 async def test_legacy_yaml_collections_migrate_into_the_db(make_app, sample_entities):
@@ -88,3 +91,92 @@ async def test_collections_survive_a_restart(make_app, sample_entities, tmp_path
     async with app2.run_test() as pilot:
         await pilot.pause()
         assert "light.living_room_lamp" not in app2.entity_lists.get("my_list", [])
+
+
+async def test_save_worker_never_iterates_the_live_collections(make_app, sample_entities, monkeypatch):
+    """The DB save runs in an asyncio.to_thread worker while the event loop keeps
+    mutating app state. The snapshot it is handed must be detached — sharing the
+    live dicts made the worker raise "dictionary changed size during iteration"
+    (surfacing as the "Save Error" toast from _save_config_async)."""
+    app = make_app(entities=sample_entities)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        entered = threading.Event()
+        release = threading.Event()
+
+        def slow_save_all(collections):
+            entered.set()
+            for _name in collections["lists"]:  # the iteration that used to race
+                release.wait(2.0)
+
+        monkeypatch.setattr(app.storage, "save_all", slow_save_all)
+
+        app.persist("lists")
+        for _ in range(200):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set(), "the save worker never started"
+
+        app.entity_lists["added_mid_save"] = []  # grows the dict under the worker
+        release.set()
+        await pilot.pause(0.2)
+
+        assert not notified(app, title="Save Error")
+
+
+async def test_overlapping_persists_coalesce_into_one_trailing_save(make_app, sample_entities, monkeypatch):
+    """persist() is fire-and-forget from many call sites; a burst must not stack
+    one full-rewrite save per call, but the trailing state must still be written."""
+    app = make_app(entities=sample_entities)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        calls: list[dict] = []
+        entered = threading.Event()
+        release = threading.Event()
+
+        def counting_save_all(collections):
+            entered.set()
+            release.wait(2.0)
+            calls.append(collections)
+
+        monkeypatch.setattr(app.storage, "save_all", counting_save_all)
+
+        app.persist("lists")
+        for _ in range(200):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set(), "the save worker never started"
+
+        for i in range(5):
+            app.entity_lists[f"burst_{i}"] = []
+            app.persist("lists")  # all coalesce behind the in-flight save
+
+        release.set()
+        for _ in range(200):
+            if not app._save_running:
+                break
+            await asyncio.sleep(0.01)
+        assert await app.drain_bg_tasks(timeout=5.0)
+
+        assert len(calls) == 2  # the in-flight save + the one pass picking up the burst
+        assert {f"burst_{i}" for i in range(5)} <= set(calls[-1]["lists"])
+
+
+async def test_drain_bg_tasks_flushes_a_queued_persist(make_app, sample_entities):
+    """The exit-time drain must still land the last persist (coalescing defers it
+    to the in-flight save's trailing pass rather than starting a new task)."""
+    app = make_app(entities=sample_entities)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.entity_lists["drained"] = ["light.living_room_lamp"]
+        app.persist("lists")
+        await asyncio.sleep(0)  # let the save task start
+        app.entity_lists["drained_again"] = []
+        app.persist("lists")
+
+        assert await app.drain_bg_tasks(timeout=5.0)
+        assert app.storage is not None
+        stored = app.storage.load_all()
+        assert "drained_again" in stored["lists"]
